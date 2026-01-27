@@ -99,6 +99,7 @@ jobs:
           fetch-depth: 0
 
       - name: Free up disk space
+        if: ${{ matrix.variant.gpu == 'true' || matrix.variant.gpu_nvidia == 'true' || matrix.variant.gpu_amd == 'true' }}
         run: |
           echo "Available disk space before cleanup:"
           df -h
@@ -192,6 +193,7 @@ jobs:
           fetch-depth: 0
 
       - name: Free up disk space
+        if: ${{ matrix.variant.gpu == 'true' || matrix.variant.gpu_nvidia == 'true' || matrix.variant.gpu_amd == 'true' }}
         run: |
           echo "Available disk space before cleanup:"
           df -h
@@ -277,6 +279,7 @@ jobs:
           fetch-depth: 0
 
       - name: Free up disk space
+        if: ${{ matrix.variant.gpu == 'true' || matrix.variant.gpu_nvidia == 'true' || matrix.variant.gpu_amd == 'true' }}
         run: |
           echo "Available disk space before cleanup:"
           df -h
