@@ -53,16 +53,7 @@ jobs:
         run: pipenv install --dev --deploy
 
       - name: Install dependencies for mypy
-        run: pipenv run mypy . \
-            --install-types \
-            --non-interactive \
-            --explicit-package-bases \
-            --exclude 'migrations' \
-            --exclude 'build' \
-            --exclude 'scripts' \
-            --exclude 'src/tests' \
-            --exclude 'src/tests/test_routes.py' \
-            --exclude 'src/app/routes.py'
+        run: pipenv run mypy . --install-types --non-interactive --explicit-package-bases --exclude 'migrations' --exclude 'build' --exclude 'scripts' --exclude 'src/tests' --exclude 'src/tests/test_routes.py' --exclude 'src/app/routes.py'
 
       - name: Run pylint
         run: pipenv run pylint src --ignore=migrations,tests
