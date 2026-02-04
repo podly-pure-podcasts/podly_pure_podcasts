@@ -52,14 +52,158 @@ export default function FeedDetail({ feed, onClose, onFeedDeleted }: FeedDetailP
   const isAdmin = !requireAuth || user?.role === 'admin';
   const whitelistedOnly = requireAuth && !isAdmin;
 
-  const decodeEpisodeDescription = (rawDescription: string) => {
+  type DescriptionToken =
+    | { type: 'text'; value: string }
+    | { type: 'link'; href: string; text: string }
+    | { type: 'newline' };
+
+  const tokenizeDescription = (rawDescription: string): DescriptionToken[] => {
     if (typeof document === 'undefined') {
-      return rawDescription;
+      return [{ type: 'text', value: rawDescription }];
     }
-    const textarea = document.createElement('textarea');
-    textarea.innerHTML = rawDescription;
-    return textarea.value;
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(rawDescription, 'text/html');
+    const tokens: DescriptionToken[] = [];
+    const blockTags = new Set(['p', 'div', 'li', 'ul', 'ol']);
+
+    const pushText = (text: string) => {
+      if (!text) {
+        return;
+      }
+      const parts = text.split(/\r?\n/);
+      parts.forEach((part, index) => {
+        if (part) {
+          tokens.push({ type: 'text', value: part });
+        }
+        if (index < parts.length - 1) {
+          tokens.push({ type: 'newline' });
+        }
+      });
+    };
+
+    const visitNode = (node: Node) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        pushText(node.textContent ?? '');
+        return;
+      }
+
+      if (node.nodeType !== Node.ELEMENT_NODE) {
+        return;
+      }
+
+      const element = node as HTMLElement;
+      const tag = element.tagName.toLowerCase();
+
+      if (tag === 'br') {
+        tokens.push({ type: 'newline' });
+        return;
+      }
+
+      if (tag === 'a') {
+        const href = element.getAttribute('href');
+        const text = element.textContent ?? '';
+        if (href) {
+          tokens.push({ type: 'link', href, text: text || href });
+        } else {
+          pushText(text);
+        }
+        return;
+      }
+
+      if (blockTags.has(tag)) {
+        tokens.push({ type: 'newline' });
+        element.childNodes.forEach(visitNode);
+        tokens.push({ type: 'newline' });
+        return;
+      }
+
+      element.childNodes.forEach(visitNode);
+    };
+
+    doc.body.childNodes.forEach(visitNode);
+
+    const normalized: DescriptionToken[] = [];
+    for (const token of tokens) {
+      const last = normalized[normalized.length - 1];
+      if (token.type === 'text') {
+        const cleaned = token.value.replace(/[ \t]+/g, ' ');
+        if (!cleaned) {
+          continue;
+        }
+        if (last?.type === 'text') {
+          last.value += cleaned;
+        } else {
+          normalized.push({ type: 'text', value: cleaned });
+        }
+        continue;
+      }
+
+      if (token.type === 'newline') {
+        if (last?.type !== 'newline') {
+          normalized.push(token);
+        }
+        continue;
+      }
+
+      normalized.push(token);
+    }
+
+    while (normalized[0]?.type === 'newline') {
+      normalized.shift();
+    }
+    while (normalized[normalized.length - 1]?.type === 'newline') {
+      normalized.pop();
+    }
+
+    return normalized;
   };
+
+  const renderDescriptionTokens = (tokens: DescriptionToken[]) =>
+    tokens.map((token, index) => {
+      if (token.type === 'newline') {
+        return (
+          <span key={`newline-${index}`}>
+            {'\n'}
+          </span>
+        );
+      }
+
+      if (token.type === 'link') {
+        return (
+          <a
+            key={`link-${index}`}
+            href={token.href}
+            target="_blank"
+            rel="noreferrer"
+            className="text-blue-600 hover:underline"
+          >
+            {token.text}
+          </a>
+        );
+      }
+
+      return (
+        <span key={`text-${index}`}>
+          {token.value}
+        </span>
+      );
+    });
+
+  const tokensToPlainText = (tokens: DescriptionToken[]) =>
+    tokens
+      .map((token) => {
+        if (token.type === 'text') {
+          return token.value;
+        }
+        if (token.type === 'link') {
+          return token.text;
+        }
+        return ' • ';
+      })
+      .join('')
+      .replace(/\s+/g, ' ')
+      .trim();
 
   const { data: configResponse } = useQuery<ConfigResponse>({
     queryKey: ['config'],
@@ -850,19 +994,34 @@ export default function FeedDetail({ feed, onClose, onFeedDeleted }: FeedDetailP
                     {episode.description && (
                       <div className="text-left">
                         {(() => {
-                          const cleanedDescription = decodeEpisodeDescription(
-                            episode.description.replace(/<[^>]*>/g, '').trim(),
-                          );
+                          const descriptionTokens = tokenizeDescription(episode.description);
+                          const descriptionLength = descriptionTokens.reduce((total, token) => {
+                            if (token.type === 'text') {
+                              return total + token.value.length;
+                            }
+                            if (token.type === 'link') {
+                              return total + token.text.length;
+                            }
+                            return total + 1;
+                          }, 0);
                           const isExpanded = expandedDescriptions.has(episode.guid);
-                          const shouldTruncate = cleanedDescription.length > 300;
-                          const displayText = isExpanded || !shouldTruncate
-                            ? cleanedDescription
-                            : `${cleanedDescription.substring(0, 300)}...`;
+                          const shouldTruncate = descriptionLength > 300;
+                          const isTruncated = !isExpanded && shouldTruncate;
+                          const plainText = tokensToPlainText(descriptionTokens);
+                          const truncatedText = isTruncated
+                            ? `${plainText.slice(0, 300)}…`
+                            : plainText;
                           return (
                             <>
-                              <p className={`text-sm text-gray-500 ${isExpanded ? '' : 'line-clamp-3'}`}>
-                                {displayText}
-                              </p>
+                              {isExpanded ? (
+                                <p className="text-sm text-gray-500 whitespace-pre-line">
+                                  {renderDescriptionTokens(descriptionTokens)}
+                                </p>
+                              ) : (
+                                <p className="text-sm text-gray-500 line-clamp-3">
+                                  {truncatedText}
+                                </p>
+                              )}
                               {shouldTruncate && (
                                 <button
                                   type="button"
