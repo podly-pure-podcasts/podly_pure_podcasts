@@ -1,5 +1,6 @@
 #!/bin/bash
 
+
 # Parse command line arguments
 RUN_INTEGRATION=false
 for arg in "$@"; do
@@ -8,7 +9,11 @@ for arg in "$@"; do
     fi
 done
 
-# format
+# ensure dependencies are installed and are always up to date
+echo '============================================================='
+echo "Running 'pipenv sync --dev'"
+echo '============================================================='
+pipenv sync --dev
 echo '============================================================='
 echo "Running 'pipenv run black .'"
 echo '============================================================='
