@@ -1,12 +1,19 @@
 #!/bin/bash
 
+
+# Parse command line arguments
+RUN_INTEGRATION=false
+for arg in "$@"; do
+    if [ "$arg" = "--int" ]; then
+        RUN_INTEGRATION=true
+    fi
+done
+
 # ensure dependencies are installed and are always up to date
 echo '============================================================='
 echo "Running 'pipenv sync --dev'"
 echo '============================================================='
 pipenv sync --dev
-
-# format
 echo '============================================================='
 echo "Running 'pipenv run black .'"
 echo '============================================================='
@@ -41,3 +48,11 @@ echo '============================================================='
 echo "Running 'pipenv run pytest --disable-warnings'"
 echo '============================================================='
 pipenv run pytest --disable-warnings
+
+# Run integration tests only if --int flag is provided
+if [ "$RUN_INTEGRATION" = true ]; then
+    echo '============================================================='
+    echo "Running integration workflow checks..."
+    echo '============================================================='
+    pipenv run python scripts/check_integration_workflow.py
+fi

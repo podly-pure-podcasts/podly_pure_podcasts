@@ -46,6 +46,12 @@ def whitelist_latest_for_first_member(
     feed: Feed, requested_by_user_id: int | None
 ) -> None:
     """When a feed goes from 0→1 members, whitelist and process the latest post."""
+    # Respect global/per-feed whitelist settings; skip if auto-whitelist is disabled.
+    from app.feeds import _should_auto_whitelist_new_posts
+
+    if not _should_auto_whitelist_new_posts(feed):
+        return
+
     try:
         result = writer_client.action(
             "whitelist_latest_post_for_feed", {"feed_id": feed.id}, wait=True
@@ -75,19 +81,19 @@ def handle_developer_mode_feed(url: str, user: Optional[User]) -> ResponseReturn
     """Handle special developer mode feed creation."""
     try:
         feed_id_str = url.split("/")[-1]
-        feed_num = int(feed_id_str)
+        # Use the feed_id_str directly as an identifier (could be hex string or int)
 
         result = writer_client.action(
             "create_dev_test_feed",
             {
                 "rss_url": url,
-                "title": f"Test Feed {feed_num}",
+                "title": f"Test Feed {feed_id_str}",
                 "image_url": "https://via.placeholder.com/150",
                 "description": "A test feed for development",
                 "author": "Test Author",
                 "post_count": 5,
-                "guid_prefix": f"test-guid-{feed_num}",
-                "download_url_prefix": f"http://test-feed/{feed_num}",
+                "guid_prefix": f"test-guid-{feed_id_str}",
+                "download_url_prefix": f"http://test-feed/{feed_id_str}",
             },
             wait=True,
         )
