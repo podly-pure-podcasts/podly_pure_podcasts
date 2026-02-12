@@ -81,19 +81,19 @@ def handle_developer_mode_feed(url: str, user: Optional[User]) -> ResponseReturn
     """Handle special developer mode feed creation."""
     try:
         feed_id_str = url.split("/")[-1]
-        feed_num = int(feed_id_str)
+        # Use the feed_id_str directly as an identifier (could be hex string or int)
 
         result = writer_client.action(
             "create_dev_test_feed",
             {
                 "rss_url": url,
-                "title": f"Test Feed {feed_num}",
+                "title": f"Test Feed {feed_id_str}",
                 "image_url": "https://via.placeholder.com/150",
                 "description": "A test feed for development",
                 "author": "Test Author",
                 "post_count": 5,
-                "guid_prefix": f"test-guid-{feed_num}",
-                "download_url_prefix": f"http://test-feed/{feed_num}",
+                "guid_prefix": f"test-guid-{feed_id_str}",
+                "download_url_prefix": f"http://test-feed/{feed_id_str}",
             },
             wait=True,
         )
