@@ -54,6 +54,10 @@ class CommandExecutor:
             writer_actions.clear_post_processing_data_action,
         )
         self.register_action(
+            "clear_post_identifications_only",
+            writer_actions.clear_post_identifications_only_action,
+        )
+        self.register_action(
             "cleanup_processed_post", writer_actions.cleanup_processed_post_action
         )
         self.register_action(

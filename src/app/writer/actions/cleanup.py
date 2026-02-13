@@ -174,3 +174,89 @@ def cleanup_processed_post_files_only_action(params: dict[str, Any]) -> dict[str
     )
 
     return {"post_id": post.id}
+
+
+def clear_post_identifications_only_action(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Clear identifications and LLM model calls but preserve transcript segments.
+
+    This allows reprocessing with a different ad detection strategy while
+    reusing the existing transcription (saves time and Whisper API costs).
+
+    Preserves:
+    - TranscriptSegment records
+    - Whisper ModelCall records (model_name starts with whisper)
+    - Post unprocessed_audio_path and duration
+
+    Deletes:
+    - Identification records
+    - Non-Whisper ModelCall records (LLM classification calls)
+    - ProcessingJob records
+    - Refined ad boundaries
+    """
+    post_id = params.get("post_id")
+    post = db.session.get(Post, post_id)
+    if not post:
+        raise ValueError(f"Post {post_id} not found")
+
+    logger.info("[WRITER] clear_post_identifications_only_action: post_id=%s", post_id)
+
+    # Get all transcript segment IDs for this post
+    segment_ids = [
+        row[0]
+        for row in db.session.query(TranscriptSegment.id)
+        .filter_by(post_id=post.id)
+        .all()
+    ]
+
+    # Delete all identifications for these segments
+    if segment_ids:
+        deleted_ids = (
+            db.session.query(Identification)
+            .filter(Identification.transcript_segment_id.in_(segment_ids))
+            .delete(synchronize_session=False)
+        )
+        logger.debug(
+            "[WRITER] clear_post_identifications_only_action: deleted %d identifications",
+            deleted_ids,
+        )
+
+    # Delete non-Whisper model calls (keep transcription records)
+    # Preserve Whisper transcription calls:
+    # - current canonical prompt ("Whisper transcription job")
+    # - legacy/variant model-name formats used by different transcribers
+    #   (e.g. whisper-1, groq_whisper-*, local_base.en, test_whisper)
+    deleted_calls = (
+        db.session.query(ModelCall)
+        .filter(
+            ModelCall.post_id == post.id,
+            ~(ModelCall.prompt == "Whisper transcription job"),
+            ~ModelCall.model_name.like("whisper%"),
+            ~ModelCall.model_name.like("groq:whisper%"),
+            ~ModelCall.model_name.like("groq_whisper%"),
+            ~ModelCall.model_name.like("local_%"),
+            ModelCall.model_name != "test_whisper",
+        )
+        .delete(synchronize_session=False)
+    )
+    logger.debug(
+        "[WRITER] clear_post_identifications_only_action: deleted %d model calls",
+        deleted_calls,
+    )
+
+    # Delete processing jobs
+    db.session.query(ProcessingJob).filter_by(post_guid=post.guid).delete()
+
+    # Clear refined boundaries (will be recalculated)
+    post.refined_ad_boundaries = None
+    post.refined_ad_boundaries_updated_at = None
+
+    # Clear processed path so reprocess does not short-circuit as "already processed".
+    # Keep unprocessed path/duration to preserve any existing source metadata.
+    post.processed_audio_path = None
+
+    logger.info(
+        "[WRITER] clear_post_identifications_only_action: completed post_id=%s",
+        post_id,
+    )
+
+    return {"post_id": post.id, "segments_preserved": len(segment_ids)}
