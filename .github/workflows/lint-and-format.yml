@@ -11,16 +11,13 @@ on:
 jobs:
   lint-format-test:
     runs-on: ubuntu-latest
-    env:
-      PIP_DISABLE_PIP_VERSION_CHECK: "1"
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Set up Python
-        id: python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
           python-version: "3.11"
 
@@ -31,21 +28,16 @@ jobs:
           cache-dependency-glob: "uv.lock"
 
       - name: Install ffmpeg
-        run: sudo apt-get update -y && sudo apt-get install -y --no-install-recommends ffmpeg
-
-      - name: Cache mypy
-        uses: actions/cache@v4
-        with:
-          path: .mypy_cache
-          key: ${{ runner.os }}-mypy-${{ steps.python.outputs.python-version }}-${{ hashFiles('uv.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-mypy-${{ steps.python.outputs.python-version }}-
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
 
       - name: Install dependencies
         run: uv sync --frozen --extra dev
 
       - name: Install dependencies for mypy
-        run: uv run mypy . --install-types --non-interactive --explicit-package-bases --exclude 'migrations' --exclude 'build' --exclude 'scripts' --exclude 'src/tests' --exclude 'src/tests/test_routes.py' --exclude 'src/app/routes.py'
+        run: uv run mypy --install-types --non-interactive
+
+      - name: Run mypy
+        run: uv run mypy src --explicit-package-bases --exclude 'migrations' --exclude 'build' --exclude 'scripts' --exclude 'src/tests' --exclude 'src/tests/test_routes.py' --exclude 'src/app/routes.py'
 
       - name: Run pylint
         run: uv run pylint src --ignore=migrations,tests
