@@ -24,7 +24,7 @@ def _get_default_authkey() -> bytes:
 def _ensure_process_authkey(authkey: bytes) -> None:
     try:
         multiprocessing.current_process().authkey = authkey
-    except Exception:
+    except Exception:  # noqa: BLE001
         # Best-effort: if we can't set it, the explicit authkey passed to the
         # manager will still be used for direct manager connections.
         pass

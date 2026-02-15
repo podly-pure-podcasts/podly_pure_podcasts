@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from app.writer.client import writer_client
 
@@ -13,13 +13,13 @@ def render_prompt_and_upsert_model_call(
     ad_end: float,
     confidence: float,
     context_segments: Any,
-    post_id: Optional[int],
-    first_seq_num: Optional[int],
-    last_seq_num: Optional[int],
+    post_id: int | None,
+    first_seq_num: int | None,
+    last_seq_num: int | None,
     model_name: str,
     logger: logging.Logger,
     log_prefix: str,
-) -> tuple[str, Optional[int]]:
+) -> tuple[str, int | None]:
     prompt = template.render(
         ad_start=ad_start,
         ad_end=ad_end,
@@ -42,14 +42,14 @@ def render_prompt_and_upsert_model_call(
 
 def try_upsert_model_call(
     *,
-    post_id: Optional[int],
-    first_seq_num: Optional[int],
-    last_seq_num: Optional[int],
+    post_id: int | None,
+    first_seq_num: int | None,
+    last_seq_num: int | None,
     model_name: str,
     prompt: str,
     logger: logging.Logger,
     log_prefix: str,
-) -> Optional[int]:
+) -> int | None:
     """Best-effort ModelCall creation.
 
     Returns model_call_id if successfully created/upserted, else None.
@@ -71,18 +71,18 @@ def try_upsert_model_call(
         )
         if res and res.success:
             return (res.data or {}).get("model_call_id")
-    except Exception as exc:  # best-effort
+    except Exception as exc:  # best-effort  # noqa: BLE001
         logger.warning("%s: failed to upsert ModelCall: %s", log_prefix, exc)
 
     return None
 
 
 def try_update_model_call(
-    model_call_id: Optional[int],
+    model_call_id: int | None,
     *,
     status: str,
-    response: Optional[str],
-    error_message: Optional[str],
+    response: str | None,
+    error_message: str | None,
     logger: logging.Logger,
     log_prefix: str,
 ) -> None:
@@ -102,7 +102,7 @@ def try_update_model_call(
             },
             wait=True,
         )
-    except Exception as exc:  # best-effort
+    except Exception as exc:  # best-effort  # noqa: BLE001
         logger.warning(
             "%s: failed to update ModelCall %s: %s",
             log_prefix,

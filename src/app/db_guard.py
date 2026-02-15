@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Any, Iterator
+from typing import Any
 
 from sqlalchemy.exc import OperationalError, PendingRollbackError
 from sqlalchemy.orm import Session, scoped_session
@@ -30,7 +31,7 @@ def reset_session(
         )
     try:
         session.rollback()
-    except Exception as rb_exc:  # pylint: disable=broad-except
+    except Exception as rb_exc:  # noqa: BLE001
         logger.warning(
             "[SESSION_RESET] rollback failed in context=%s: %s", context, rb_exc
         )
@@ -38,7 +39,7 @@ def reset_session(
         remove_fn = getattr(session, "remove", None)
         if callable(remove_fn):
             remove_fn()
-    except Exception as rm_exc:  # pylint: disable=broad-except
+    except Exception as rm_exc:  # noqa: BLE001
         logger.warning(
             "[SESSION_RESET] remove failed in context=%s: %s", context, rm_exc
         )

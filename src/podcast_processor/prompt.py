@@ -1,5 +1,3 @@
-from typing import List
-
 from podcast_processor.cue_detector import CueDetector
 from podcast_processor.model_output import AdSegmentPrediction, AdSegmentPredictionList
 from podcast_processor.transcribe import Segment
@@ -11,7 +9,7 @@ _cue_detector = CueDetector()
 
 
 def transcript_excerpt_for_prompt(
-    segments: List[Segment], includes_start: bool, includes_end: bool
+    segments: list[Segment], includes_start: bool, includes_end: bool
 ) -> str:
 
     excerpts = [
@@ -109,7 +107,6 @@ def generate_system_prompt() -> str:
         includes_end=False,
     )
 
-    # pylint: disable=line-too-long
     return f"""Your job is to identify advertisements in podcast transcript excerpts with high precision, continuity awareness, and content-context sensitivity.
 
 CRITICAL: distinguish external sponsor ads from technical discussion and self-promotion.

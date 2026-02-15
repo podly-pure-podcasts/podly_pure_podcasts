@@ -7,7 +7,7 @@ The test feed system allows instant processing without hitting real APIs.
 import time
 import uuid
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import requests
 
@@ -21,9 +21,9 @@ class PostInfo:
     whitelisted: bool
     has_processed_audio: bool
     has_unprocessed_audio: bool
-    duration: Optional[float] = None
-    processed_audio_path: Optional[str] = None
-    unprocessed_audio_path: Optional[str] = None
+    duration: float | None = None
+    processed_audio_path: str | None = None
+    unprocessed_audio_path: str | None = None
 
 
 @dataclass
@@ -73,7 +73,7 @@ class IntegrationTestClient:
             print(f"Add feed failed with status {resp.status_code}: {resp.text}")
         return resp.status_code in (200, 302)
 
-    def get_feeds(self) -> List[FeedInfo]:
+    def get_feeds(self) -> list[FeedInfo]:
         """Get all feeds."""
         resp = self._get("/feeds")
         resp.raise_for_status()
@@ -82,7 +82,7 @@ class IntegrationTestClient:
             for f in resp.json()
         ]
 
-    def get_feed_by_url(self, rss_url: str) -> Optional[FeedInfo]:
+    def get_feed_by_url(self, rss_url: str) -> FeedInfo | None:
         """Find a feed by its RSS URL."""
         feeds = self.get_feeds()
         for feed in feeds:
@@ -99,17 +99,17 @@ class IntegrationTestClient:
 
     def get_posts(
         self, feed_id: int, page: int = 1, page_size: int = 50
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get posts for a feed (raw dict for flexibility)."""
         resp = self._get(
             f"/api/feeds/{feed_id}/posts",
             params={"page": page, "page_size": page_size},
         )
         resp.raise_for_status()
-        items: List[Dict[str, Any]] = resp.json().get("items", [])
+        items: list[dict[str, Any]] = resp.json().get("items", [])
         return items
 
-    def get_post_info(self, guid: str) -> Optional[PostInfo]:
+    def get_post_info(self, guid: str) -> PostInfo | None:
         """Get detailed post info by GUID."""
         resp = self._get(f"/post/{guid}/json")
         if resp.status_code == 404:
@@ -130,40 +130,40 @@ class IntegrationTestClient:
 
     def whitelist_post(
         self, guid: str, whitelisted: bool = True, trigger_processing: bool = True
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Whitelist a post and optionally trigger processing."""
         resp = self._post(
             f"/api/posts/{guid}/whitelist",
             json={"whitelisted": whitelisted, "trigger_processing": trigger_processing},
         )
         resp.raise_for_status()
-        result: Dict[str, Any] = resp.json()
+        result: dict[str, Any] = resp.json()
         return result
 
-    def process_post(self, guid: str) -> Dict[str, Any]:
+    def process_post(self, guid: str) -> dict[str, Any]:
         """Trigger processing for a post."""
         resp = self._post(f"/api/posts/{guid}/process")
         resp.raise_for_status()
-        result: Dict[str, Any] = resp.json()
+        result: dict[str, Any] = resp.json()
         return result
 
-    def reprocess_post(self, guid: str) -> Dict[str, Any]:
+    def reprocess_post(self, guid: str) -> dict[str, Any]:
         """Clear and reprocess a post (admin only)."""
         resp = self._post(f"/api/posts/{guid}/reprocess")
         resp.raise_for_status()
-        result: Dict[str, Any] = resp.json()
+        result: dict[str, Any] = resp.json()
         return result
 
-    def get_post_status(self, guid: str) -> Optional[Dict[str, Any]]:
+    def get_post_status(self, guid: str) -> dict[str, Any] | None:
         """Get processing status for a post."""
         resp = self._get(f"/api/posts/{guid}/status")
         if resp.status_code == 404:
             return None
         resp.raise_for_status()
-        result: Dict[str, Any] = resp.json()
+        result: dict[str, Any] = resp.json()
         return result
 
-    def get_audio(self, guid: str) -> Optional[requests.Response]:
+    def get_audio(self, guid: str) -> requests.Response | None:
         """Get the processed audio file (returns response for streaming)."""
         resp = self._get(f"/api/posts/{guid}/audio", stream=True)
         if resp.status_code == 404:
@@ -173,26 +173,24 @@ class IntegrationTestClient:
 
     # --- Cleanup ---
 
-    def get_cleanup_preview(
-        self, retention_days: Optional[int] = None
-    ) -> Dict[str, Any]:
+    def get_cleanup_preview(self, retention_days: int | None = None) -> dict[str, Any]:
         """Preview cleanup candidates."""
         params = (
             {"retention_days": retention_days} if retention_days is not None else {}
         )
         resp = self._get("/api/jobs/cleanup/preview", params=params)
         resp.raise_for_status()
-        result: Dict[str, Any] = resp.json()
+        result: dict[str, Any] = resp.json()
         return result
 
-    def run_cleanup(self, retention_days: Optional[int] = None) -> Dict[str, Any]:
+    def run_cleanup(self, retention_days: int | None = None) -> dict[str, Any]:
         """Run cleanup job."""
         params = (
             {"retention_days": retention_days} if retention_days is not None else {}
         )
         resp = self._post("/api/jobs/cleanup/run", params=params)
         resp.raise_for_status()
-        result: Dict[str, Any] = resp.json()
+        result: dict[str, Any] = resp.json()
         return result
 
     # --- Polling helpers ---
@@ -202,7 +200,7 @@ class IntegrationTestClient:
         guid: str,
         timeout: int = 120,
         poll_interval: float = 2.0,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Wait for post processing to complete.
 

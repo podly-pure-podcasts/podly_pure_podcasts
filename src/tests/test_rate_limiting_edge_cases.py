@@ -268,7 +268,7 @@ class TestRateLimitingEdgeCases:
                     limiter.wait_if_needed(messages, "gpt-4")
                     end_time = time.time()
                     results.append((worker_id, i, end_time - start_time))
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 errors.append((worker_id, e))
 
         # Run 10 threads with 20 calls each

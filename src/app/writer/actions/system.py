@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any
 
 from app.extensions import db
 from app.jobs_manager_run_service import get_or_create_singleton_run
@@ -9,7 +9,7 @@ from app.models import DiscordSettings
 logger = logging.getLogger("writer")
 
 
-def ensure_active_run_action(params: Dict[str, Any]) -> Dict[str, Any]:
+def ensure_active_run_action(params: dict[str, Any]) -> dict[str, Any]:
     trigger = params.get("trigger", "system")
     context = params.get("context")
 
@@ -31,7 +31,7 @@ def ensure_active_run_action(params: Dict[str, Any]) -> Dict[str, Any]:
     return {"run_id": run.id}
 
 
-def update_discord_settings_action(params: Dict[str, Any]) -> Dict[str, Any]:
+def update_discord_settings_action(params: dict[str, Any]) -> dict[str, Any]:
     settings = db.session.get(DiscordSettings, 1)
     if settings is None:
         settings = DiscordSettings(id=1)
@@ -52,13 +52,13 @@ def update_discord_settings_action(params: Dict[str, Any]) -> Dict[str, Any]:
     return {"updated": True}
 
 
-def update_combined_config_action(params: Dict[str, Any]) -> Dict[str, Any]:
+def update_combined_config_action(params: dict[str, Any]) -> dict[str, Any]:
     payload = params.get("payload")
     if not isinstance(payload, dict):
         raise ValueError("payload must be a dictionary")
 
     # Import locally to avoid cyclic dependencies
-    from app.config_store import (  # pylint: disable=import-outside-toplevel
+    from app.config_store import (
         hydrate_runtime_config_inplace,
         update_combined,
     )

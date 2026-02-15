@@ -31,28 +31,17 @@ jobs:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
 
-      - name: Cache mypy
-        uses: actions/cache@v4
-        with:
-          path: .mypy_cache
-          key: ${{ runner.os }}-mypy-${{ steps.python.outputs.python-version }}-${{ hashFiles('uv.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-mypy-${{ steps.python.outputs.python-version }}-
-
       - name: Install dependencies
         run: uv sync --frozen --extra dev
 
-      - name: Run mypy
-        run: uv run mypy src --explicit-package-bases --exclude 'migrations' --exclude 'build' --exclude 'scripts' --exclude 'src/tests' --exclude 'src/tests/test_routes.py' --exclude 'src/app/routes.py'
+      - name: Run ty check
+        run: uv run ty check
 
-      - name: Run pylint
-        run: uv run pylint src --ignore=migrations,tests
+      - name: Run ruff check
+        run: uv run ruff check src
 
       - name: Run ruff format
         run: uv run ruff format --check src
-
-      - name: Run ruff import sorting
-        run: uv run ruff check --select I src
 
       - name: Run pytest
         run: uv run pytest --disable-warnings

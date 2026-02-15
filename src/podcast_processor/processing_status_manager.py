@@ -1,7 +1,7 @@
 import logging
 import uuid
 from datetime import datetime
-from typing import Any, Optional, cast
+from typing import Any, cast
 
 from sqlalchemy.orm import object_session
 
@@ -15,7 +15,7 @@ class ProcessingStatusManager:
     Handles all database operations related to job tracking via Writer Service.
     """
 
-    def __init__(self, db_session: Any, logger: Optional[logging.Logger] = None):
+    def __init__(self, db_session: Any, logger: logging.Logger | None = None):
         self.db_session = db_session
         self.logger = logger or logging.getLogger(__name__)
 
@@ -27,10 +27,10 @@ class ProcessingStatusManager:
         self,
         post_guid: str,
         job_id: str,
-        run_id: Optional[str] = None,
+        run_id: str | None = None,
         *,
-        requested_by_user_id: Optional[int] = None,
-        billing_user_id: Optional[int] = None,
+        requested_by_user_id: int | None = None,
+        billing_user_id: int | None = None,
     ) -> ProcessingJob:
         """Create a new pending job record for the provided post."""
         job_data = {
@@ -69,7 +69,7 @@ class ProcessingStatusManager:
         status: str,
         step: int,
         step_name: str,
-        progress: Optional[float] = None,
+        progress: float | None = None,
     ) -> None:
         """Update job status in database."""
         # Cache job attributes before any operations that might expire the object
@@ -114,7 +114,7 @@ class ProcessingStatusManager:
                 progress,
             )
 
-    def mark_cancelled(self, job_id: str, error_message: Optional[str] = None) -> None:
+    def mark_cancelled(self, job_id: str, error_message: str | None = None) -> None:
         writer_client.action(
             "mark_cancelled", {"job_id": job_id, "reason": error_message}, wait=True
         )

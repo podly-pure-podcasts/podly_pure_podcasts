@@ -1,18 +1,18 @@
 import re
 from dataclasses import dataclass
-from typing import Dict, List, Pattern
+from re import Pattern
 
 from app.models import Identification, TranscriptSegment
 
 
 @dataclass
 class AdGroup:
-    segments: List[TranscriptSegment]
-    identifications: List[Identification]
+    segments: list[TranscriptSegment]
+    identifications: list[Identification]
     start_time: float
     end_time: float
     confidence_avg: float
-    keywords: List[str]
+    keywords: list[str]
 
 
 class AdMerger:
@@ -27,11 +27,11 @@ class AdMerger:
 
     def merge(
         self,
-        ad_segments: List[TranscriptSegment],
-        identifications: List[Identification],
+        ad_segments: list[TranscriptSegment],
+        identifications: list[Identification],
         max_gap: float = 8.0,
         min_content_gap: float = 12.0,
-    ) -> List[AdGroup]:
+    ) -> list[AdGroup]:
         """Merge ad segments using content analysis"""
         if not ad_segments:
             return []
@@ -50,16 +50,16 @@ class AdMerger:
 
     def _group_by_proximity(
         self,
-        segments: List[TranscriptSegment],
-        identifications: List[Identification],
+        segments: list[TranscriptSegment],
+        identifications: list[Identification],
         max_gap: float,
-    ) -> List[AdGroup]:
+    ) -> list[AdGroup]:
         """Initial grouping by time proximity"""
-        id_lookup: Dict[int, Identification] = {
+        id_lookup: dict[int, Identification] = {
             i.transcript_segment_id: i for i in identifications
         }
-        groups: List[AdGroup] = []
-        current: List[TranscriptSegment] = []
+        groups: list[AdGroup] = []
+        current: list[TranscriptSegment] = []
 
         for seg in segments:
             if not current or seg.start_time - current[-1].end_time <= max_gap:
@@ -76,8 +76,8 @@ class AdMerger:
 
     def _create_group(
         self,
-        segments: List[TranscriptSegment],
-        id_lookup: Dict[int, Identification],
+        segments: list[TranscriptSegment],
+        id_lookup: dict[int, Identification],
     ) -> AdGroup:
         ids = [id_lookup[s.id] for s in segments if s.id in id_lookup]
         return AdGroup(
@@ -89,10 +89,10 @@ class AdMerger:
             keywords=self._extract_keywords(segments),
         )
 
-    def _extract_keywords(self, segments: List[TranscriptSegment]) -> List[str]:
+    def _extract_keywords(self, segments: list[TranscriptSegment]) -> list[str]:
         """Extract URLs, promo codes, brands"""
         text = " ".join(s.text or "" for s in segments).lower()
-        keywords: List[str] = []
+        keywords: list[str] = []
 
         # URLs
         keywords.extend(self.url_pattern.findall(text))
@@ -106,7 +106,7 @@ class AdMerger:
 
         # Brand names (capitalized words appearing 2+ times)
         words = re.findall(r"\b[A-Z][a-z]+\b", " ".join(s.text for s in segments))
-        counts: Dict[str, int] = {}
+        counts: dict[str, int] = {}
         for word in words:
             if len(word) > 3:
                 counts[word] = counts.get(word, 0) + 1
@@ -115,13 +115,13 @@ class AdMerger:
         return list(set(keywords))
 
     def _refine_by_content(
-        self, groups: List[AdGroup], min_content_gap: float
-    ) -> List[AdGroup]:
+        self, groups: list[AdGroup], min_content_gap: float
+    ) -> list[AdGroup]:
         """Merge groups with shared sponsors"""
         if len(groups) <= 1:
             return groups
 
-        refined: List[AdGroup] = []
+        refined: list[AdGroup] = []
         i = 0
 
         while i < len(groups):

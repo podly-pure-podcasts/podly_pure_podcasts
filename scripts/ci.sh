@@ -19,27 +19,15 @@ echo "Running 'uv run ruff format .'"
 echo '============================================================='
 uv run ruff format .
 echo '============================================================='
-echo "Running 'uv run ruff check --select I --fix .'"
+echo "Running 'uv run ruff check --fix .'"
 echo '============================================================='
-uv run ruff check --select I --fix .
+uv run ruff check --fix .
 
-# lint and type check
+# type check
 echo '============================================================='
-echo "Running 'uv run mypy .'"
+echo "Running 'uv run ty check'"
 echo '============================================================='
-uv run mypy . \
-    --explicit-package-bases \
-    --exclude 'migrations' \
-    --exclude 'build' \
-    --exclude 'scripts' \
-    --exclude 'src/tests' \
-    --exclude 'src/tests/test_routes.py' \
-    --exclude 'src/app/routes.py'
-
-echo '============================================================='
-echo "Running 'uv run pylint src/ --ignore=migrations,tests'"
-echo '============================================================='
-uv run pylint src/ --ignore=migrations,tests
+uv run ty check
 
 # run tests
 echo '============================================================='

@@ -4,14 +4,12 @@ Note: We intentionally share some call-setup patterns with WordBoundaryRefiner.
 Pylint may flag these as R0801 (duplicate-code); we ignore that for this module.
 """
 
-# pylint: disable=duplicate-code
-
 import json
 import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import litellm
 from jinja2 import Template
@@ -33,7 +31,7 @@ class BoundaryRefinement:
 
 
 class BoundaryRefiner:
-    def __init__(self, config: Config, logger: Optional[logging.Logger] = None):
+    def __init__(self, config: Config, logger: logging.Logger | None = None):
         self.config = config
         self.logger = logger or logging.getLogger(__name__)
         self.template = self._load_template()
@@ -59,11 +57,11 @@ Return JSON: {"refined_start": {{ad_start}}, "refined_end": {{ad_end}}, "start_r
         ad_start: float,
         ad_end: float,
         confidence: float,
-        all_segments: List[Dict[str, Any]],
+        all_segments: list[dict[str, Any]],
         *,
-        post_id: Optional[int] = None,
-        first_seq_num: Optional[int] = None,
-        last_seq_num: Optional[int] = None,
+        post_id: int | None = None,
+        first_seq_num: int | None = None,
+        last_seq_num: int | None = None,
     ) -> BoundaryRefinement:
         """Refine ad boundaries using LLM analysis and record the call in ModelCall."""
         self.logger.debug(
@@ -91,8 +89,8 @@ Return JSON: {"refined_start": {{ad_start}}, "refined_end": {{ad_end}}, "start_r
             context_segments=context,
         )
 
-        model_call_id: Optional[int] = None
-        raw_response: Optional[str] = None
+        model_call_id: int | None = None
+        raw_response: str | None = None
 
         # Record the intent to call the LLM when we have enough context to do so
         if (
@@ -114,7 +112,9 @@ Return JSON: {"refined_start": {{ad_start}}, "refined_end": {{ad_end}}, "start_r
                 )
                 if res and res.success:
                     model_call_id = (res.data or {}).get("model_call_id")
-            except Exception as e:  # best-effort; do not block refinement
+            except (
+                Exception  # noqa: BLE001
+            ) as e:  # best-effort; do not block refinement
                 self.logger.warning(
                     "Boundary refine: failed to upsert ModelCall: %s", e
                 )
@@ -166,7 +166,7 @@ Return JSON: {"refined_start": {{ad_start}}, "refined_end": {{ad_end}}, "start_r
                     "LLM full response object",
                     extra={"response_payload": response_payload},
                 )
-            except Exception:
+            except Exception:  # noqa: BLE001
                 self.logger.debug("LLM full response object unavailable", exc_info=True)
             # Persist the raw response immediately so it's available even if parsing fails.
             self._update_model_call(
@@ -178,14 +178,16 @@ Return JSON: {"refined_start": {{ad_start}}, "refined_end": {{ad_end}}, "start_r
             # Parse JSON (strip markdown fences). Log parse diagnostics so failures are actionable.
             cleaned = re.sub(r"```json|```", "", content.strip())
             json_candidates = re.findall(r"\{.*?\}", cleaned, re.DOTALL)
-            parse_error: Optional[str] = None
-            parsed: Optional[Dict[str, Any]] = None
+            parse_error: str | None = None
+            parsed: dict[str, Any] | None = None
 
             for candidate in json_candidates:
                 try:
                     parsed = json.loads(candidate)
                     break
-                except Exception as exc:  # capture the last parse error for logging
+                except (
+                    Exception  # noqa: BLE001
+                ) as exc:  # capture the last parse error for logging
                     parse_error = str(exc)
 
             if parsed:
@@ -247,7 +249,7 @@ Return JSON: {"refined_start": {{ad_start}}, "refined_end": {{ad_end}}, "start_r
                 response=raw_response,
                 error_message=parse_error or "parse_failed",
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self._update_model_call(
                 model_call_id,
                 status="failed_permanent",
@@ -261,11 +263,11 @@ Return JSON: {"refined_start": {{ad_start}}, "refined_end": {{ad_end}}, "start_r
 
     def _update_model_call(
         self,
-        model_call_id: Optional[int],
+        model_call_id: int | None,
         *,
         status: str,
-        response: Optional[str],
-        error_message: Optional[str],
+        response: str | None,
+        error_message: str | None,
     ) -> None:
         """Best-effort ModelCall updater; no-op if call creation failed."""
         if model_call_id is None:
@@ -282,7 +284,7 @@ Return JSON: {"refined_start": {{ad_start}}, "refined_end": {{ad_end}}, "start_r
                 },
                 wait=True,
             )
-        except Exception as exc:  # best-effort; do not block refinement
+        except Exception as exc:  # best-effort; do not block refinement  # noqa: BLE001
             self.logger.warning(
                 "Boundary refine: failed to update ModelCall %s: %s",
                 model_call_id,
@@ -290,8 +292,8 @@ Return JSON: {"refined_start": {{ad_start}}, "refined_end": {{ad_end}}, "start_r
             )
 
     def _get_context(
-        self, ad_start: float, ad_end: float, all_segments: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+        self, ad_start: float, ad_end: float, all_segments: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         """Get ±8 segments around ad"""
         ad_segs = [s for s in all_segments if ad_start <= s["start_time"] <= ad_end]
         if not ad_segs:
@@ -306,7 +308,7 @@ Return JSON: {"refined_start": {{ad_start}}, "refined_end": {{ad_end}}, "start_r
         return all_segments[start_idx:end_idx]
 
     def _heuristic_refine(
-        self, ad_start: float, ad_end: float, context: List[Dict[str, Any]]
+        self, ad_start: float, ad_end: float, context: list[dict[str, Any]]
     ) -> BoundaryRefinement:
         """Simple pattern-based refinement"""
         intro_patterns = ["brought to you", "sponsor", "let me tell you"]

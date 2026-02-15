@@ -137,7 +137,7 @@ def downgrade():
         # drop index if exists
         try:
             op.drop_index("ix_jobs_manager_run_status", table_name="jobs_manager_run")
-        except Exception:
+        except Exception:  # noqa: BLE001
             # ignore if index doesn't exist
             pass
         op.drop_table("jobs_manager_run")

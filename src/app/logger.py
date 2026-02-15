@@ -44,7 +44,7 @@ class ExtraFormatter(logging.Formatter):
         if extras:
             try:
                 extras_json = json.dumps(extras, ensure_ascii=True, default=str)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 extras_json = str(extras)
             return f"{base} | extra={extras_json}"
         return base

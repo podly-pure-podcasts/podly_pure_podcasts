@@ -1,6 +1,6 @@
 """Authorization guard utilities for admin and authenticated user checks."""
 
-from typing import TYPE_CHECKING, Tuple
+from typing import TYPE_CHECKING
 
 import flask
 from flask import current_app, g, jsonify
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 def require_admin(
     action: str = "perform this action",
-) -> Tuple["User | None", flask.Response | None]:
+) -> tuple["User | None", flask.Response | None]:
     """Ensure the current user is an admin when auth is enabled.
 
     When auth is disabled (AUTH_SETTINGS.require_auth == False),

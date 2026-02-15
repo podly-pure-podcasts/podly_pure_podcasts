@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 
 @runtime_checkable
@@ -9,7 +9,7 @@ class Post(Protocol):
 
     id: int
     guid: str
-    download_url: Optional[str]
+    download_url: str | None
     title: str
 
     @property

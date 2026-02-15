@@ -45,23 +45,23 @@ def landing_status() -> flask.Response:
     try:
         settings = flask.current_app.config.get("AUTH_SETTINGS")
         require_auth = bool(settings and settings.require_auth)
-    except Exception:  # pragma: no cover - defensive
+    except Exception:  # pragma: no cover - defensive  # noqa: BLE001
         require_auth = False
 
     try:
         landing_enabled = bool(getattr(config, "enable_public_landing_page", False))
-    except Exception:  # pragma: no cover - defensive
+    except Exception:  # pragma: no cover - defensive  # noqa: BLE001
         landing_enabled = False
 
     try:
         user_count = int(User.query.count())
-    except Exception:  # pragma: no cover - defensive
+    except Exception:  # pragma: no cover - defensive  # noqa: BLE001
         user_count = 0
 
     limit_raw = getattr(config, "user_limit_total", None)
     try:
         user_limit_total = int(limit_raw) if limit_raw is not None else None
-    except Exception:  # pragma: no cover - defensive
+    except Exception:  # pragma: no cover - defensive  # noqa: BLE001
         user_limit_total = None
 
     slots_remaining = None
@@ -117,7 +117,7 @@ def whitelist_all(f_id: str, val: str) -> flask.Response:
         )
         if not result or not result.success:
             raise RuntimeError(getattr(result, "error", "Unknown writer error"))
-    except Exception:  # pylint: disable=broad-except
+    except Exception:  # noqa: BLE001
         return flask.make_response(
             (
                 flask.jsonify(
@@ -147,7 +147,7 @@ def set_whitelist(p_guid: str, val: str) -> flask.Response:
         if not result or not result.success:
             raise RuntimeError(getattr(result, "error", "Unknown writer error"))
         db.session.expire(post)
-    except Exception:  # pylint: disable=broad-except
+    except Exception:  # noqa: BLE001
         return flask.make_response(
             (
                 flask.jsonify(

@@ -1,7 +1,6 @@
 """Filter chapters by title strings to identify ad segments."""
 
 import logging
-from typing import List, Tuple
 
 from podcast_processor.chapter_reader import Chapter
 
@@ -9,9 +8,9 @@ logger = logging.getLogger("global_logger")
 
 
 def filter_chapters_by_strings(
-    chapters: List[Chapter],
-    filter_strings: List[str],
-) -> Tuple[List[Chapter], List[Chapter]]:
+    chapters: list[Chapter],
+    filter_strings: list[str],
+) -> tuple[list[Chapter], list[Chapter]]:
     """
     Filter chapters by title containing any filter string (case-insensitive).
 
@@ -31,8 +30,8 @@ def filter_chapters_by_strings(
     # Normalize filter strings to lowercase
     normalized_filters = [f.strip().lower() for f in filter_strings if f.strip()]
 
-    chapters_to_keep: List[Chapter] = []
-    chapters_to_remove: List[Chapter] = []
+    chapters_to_keep: list[Chapter] = []
+    chapters_to_remove: list[Chapter] = []
 
     for chapter in chapters:
         title_lower = chapter.title.lower()
@@ -53,7 +52,7 @@ def filter_chapters_by_strings(
     return chapters_to_keep, chapters_to_remove
 
 
-def parse_filter_strings(filter_strings_csv: str) -> List[str]:
+def parse_filter_strings(filter_strings_csv: str) -> list[str]:
     """
     Parse comma-separated filter strings into a list.
 

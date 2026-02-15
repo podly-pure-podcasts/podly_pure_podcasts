@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Any, Optional
+from typing import Any
 
 from flask import Blueprint, jsonify, request
 
@@ -15,7 +15,7 @@ logger = logging.getLogger("global_logger")
 billing_bp = Blueprint("billing", __name__)
 
 
-def _get_stripe_client() -> tuple[Optional[Any], Optional[str]]:
+def _get_stripe_client() -> tuple[Any | None, str | None]:
     secret = os.getenv("STRIPE_SECRET_KEY")
     if not secret:
         return None, "Stripe secret key missing"
@@ -27,7 +27,7 @@ def _get_stripe_client() -> tuple[Optional[Any], Optional[str]]:
     return stripe, None
 
 
-def _product_id() -> Optional[str]:
+def _product_id() -> str | None:
     return os.getenv("STRIPE_PRODUCT_ID")
 
 
@@ -121,7 +121,7 @@ def billing_summary() -> Any:
                 price_item = sub["items"]["data"][0].get("price")
                 if price_item:
                     current_amount = price_item.get("unit_amount", 0)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.error("Error fetching subscription details: %s", e)
 
     return jsonify(
@@ -149,7 +149,7 @@ def _build_return_urls() -> tuple[str, str]:
 
 
 @billing_bp.route("/api/billing/subscription", methods=["POST"])
-def update_subscription() -> Any:  # pylint: disable=too-many-statements
+def update_subscription() -> Any:
     """Update subscription amount or create new subscription."""
     user = _require_authenticated_user()
     if user is None:
@@ -346,7 +346,7 @@ def update_subscription() -> Any:  # pylint: disable=too-many-statements
                 "subscription_status": user.feed_subscription_status,
             }
         )
-    except Exception as exc:  # pylint: disable=broad-except
+    except Exception as exc:  # noqa: BLE001
         logger.error("Stripe error updating subscription: %s", exc)
         return jsonify({"error": "STRIPE_ERROR", "message": str(exc)}), 502
 
@@ -392,7 +392,7 @@ def billing_portal_session() -> Any:
             return_url=return_url,
         )
         return jsonify({"url": session["url"]})
-    except Exception as exc:  # pylint: disable=broad-except
+    except Exception as exc:  # noqa: BLE001
         logger.error("Failed to create billing portal session: %s", exc)
         return jsonify({"error": "STRIPE_ERROR", "message": str(exc)}), 502
 
@@ -450,7 +450,7 @@ def stripe_webhook() -> Any:
             payload, sig_header, webhook_secret
         )
         logger.info("Stripe webhook received: %s", event["type"])
-    except Exception as exc:  # pylint: disable=broad-except
+    except Exception as exc:  # noqa: BLE001
         logger.error("Invalid Stripe webhook: %s", exc)
         return jsonify({"error": "INVALID_SIGNATURE"}), 400
 

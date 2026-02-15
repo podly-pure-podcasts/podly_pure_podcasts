@@ -1,12 +1,12 @@
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional
+from typing import Any
 
 from app.extensions import db
 from app.jobs_manager_run_service import recalculate_run_counts
 from app.models import ProcessingJob
 
 
-def dequeue_job_action(params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def dequeue_job_action(params: dict[str, Any]) -> dict[str, Any] | None:
     run_id = params.get("run_id")
 
     # Check for running jobs
@@ -35,7 +35,7 @@ def dequeue_job_action(params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     return {"job_id": job.id, "post_guid": job.post_guid}
 
 
-def cleanup_stale_jobs_action(params: Dict[str, Any]) -> Dict[str, Any]:
+def cleanup_stale_jobs_action(params: dict[str, Any]) -> dict[str, Any]:
     older_than_seconds = params.get("older_than_seconds", 3600)
     cutoff = datetime.utcnow() - timedelta(seconds=older_than_seconds)
 
@@ -48,7 +48,7 @@ def cleanup_stale_jobs_action(params: Dict[str, Any]) -> Dict[str, Any]:
     return {"count": count}
 
 
-def clear_all_jobs_action(params: Dict[str, Any]) -> int:
+def clear_all_jobs_action(params: dict[str, Any]) -> int:
     all_jobs = ProcessingJob.query.all()
     count = len(all_jobs)
     for job in all_jobs:
@@ -56,7 +56,7 @@ def clear_all_jobs_action(params: Dict[str, Any]) -> int:
     return count
 
 
-def create_job_action(params: Dict[str, Any]) -> Dict[str, Any]:
+def create_job_action(params: dict[str, Any]) -> dict[str, Any]:
     job_data = params.get("job_data")
     if not isinstance(job_data, dict):
         raise ValueError("job_data must be a dictionary")
@@ -75,7 +75,7 @@ def create_job_action(params: Dict[str, Any]) -> Dict[str, Any]:
     return {"job_id": job.id}
 
 
-def cancel_existing_jobs_action(params: Dict[str, Any]) -> int:
+def cancel_existing_jobs_action(params: dict[str, Any]) -> int:
     post_guid = params.get("post_guid")
     current_job_id = params.get("current_job_id")
 
@@ -98,7 +98,7 @@ def cancel_existing_jobs_action(params: Dict[str, Any]) -> int:
     return count
 
 
-def update_job_status_action(params: Dict[str, Any]) -> Dict[str, Any]:
+def update_job_status_action(params: dict[str, Any]) -> dict[str, Any]:
     job_id = params.get("job_id")
     status = params.get("status")
     step = params.get("step")
@@ -133,7 +133,7 @@ def update_job_status_action(params: Dict[str, Any]) -> Dict[str, Any]:
     return {"job_id": job.id, "status": job.status}
 
 
-def mark_cancelled_action(params: Dict[str, Any]) -> Dict[str, Any]:
+def mark_cancelled_action(params: dict[str, Any]) -> dict[str, Any]:
     job_id = params.get("job_id")
     reason = params.get("reason")
 
@@ -151,7 +151,7 @@ def mark_cancelled_action(params: Dict[str, Any]) -> Dict[str, Any]:
     return {"job_id": job.id, "status": "cancelled"}
 
 
-def reassign_pending_jobs_action(params: Dict[str, Any]) -> int:
+def reassign_pending_jobs_action(params: dict[str, Any]) -> int:
     run_id = params.get("run_id")
     if not run_id:
         return 0

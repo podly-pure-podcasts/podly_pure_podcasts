@@ -37,7 +37,7 @@ class MockPost:
         guid="test-guid",
         download_url="https://example.com/episode.mp3",
         description="Test description",
-        release_date=datetime.datetime(2023, 1, 1, 12, 0, tzinfo=datetime.timezone.utc),
+        release_date=datetime.datetime(2023, 1, 1, 12, 0, tzinfo=datetime.UTC),
         feed_id=1,
         duration=None,
         image_url=None,
@@ -421,9 +421,8 @@ def test_feed_item(mock_post, app):
     mock_request.environ = mock_environ
     mock_request.is_secure = False
 
-    with app.app_context():
-        with mock.patch("app.feeds.request", mock_request):
-            result = feed_item(mock_post)
+    with app.app_context(), mock.patch("app.feeds.request", mock_request):
+        result = feed_item(mock_post)
 
     # Verify the result
     assert isinstance(result, PyRSS2Gen.RSSItem)
@@ -454,9 +453,8 @@ def test_feed_item_with_reverse_proxy(mock_post, app):
     mock_request.headers = mock_headers
     mock_request.environ = mock_environ
 
-    with app.app_context():
-        with mock.patch("app.feeds.request", mock_request):
-            result = feed_item(mock_post)
+    with app.app_context(), mock.patch("app.feeds.request", mock_request):
+        result = feed_item(mock_post)
 
     # Verify the result
     assert isinstance(result, PyRSS2Gen.RSSItem)
@@ -487,9 +485,8 @@ def test_feed_item_with_reverse_proxy_custom_port(mock_post, app):
     mock_request.headers = mock_headers
     mock_request.environ = mock_environ
 
-    with app.app_context():
-        with mock.patch("app.feeds.request", mock_request):
-            result = feed_item(mock_post)
+    with app.app_context(), mock.patch("app.feeds.request", mock_request):
+        result = feed_item(mock_post)
 
     # Verify the result
     assert isinstance(result, PyRSS2Gen.RSSItem)
@@ -650,9 +647,7 @@ def test_generate_feed_xml_includes_all_when_autoprocess_enabled(
                 download_url="http://example.com/good.mp3",
                 processed_audio_path="/tmp/good.mp3",
                 whitelisted=True,
-                release_date=datetime.datetime(
-                    2024, 1, 3, tzinfo=datetime.timezone.utc
-                ),
+                release_date=datetime.datetime(2024, 1, 3, tzinfo=datetime.UTC),
             )
             unprocessed = Post(
                 feed_id=feed.id,
@@ -661,9 +656,7 @@ def test_generate_feed_xml_includes_all_when_autoprocess_enabled(
                 download_url="http://example.com/bad1.mp3",
                 processed_audio_path=None,
                 whitelisted=True,
-                release_date=datetime.datetime(
-                    2024, 1, 2, tzinfo=datetime.timezone.utc
-                ),
+                release_date=datetime.datetime(2024, 1, 2, tzinfo=datetime.UTC),
             )
             not_whitelisted = Post(
                 feed_id=feed.id,
@@ -672,9 +665,7 @@ def test_generate_feed_xml_includes_all_when_autoprocess_enabled(
                 download_url="http://example.com/bad2.mp3",
                 processed_audio_path="/tmp/bad2.mp3",
                 whitelisted=False,
-                release_date=datetime.datetime(
-                    2024, 1, 1, tzinfo=datetime.timezone.utc
-                ),
+                release_date=datetime.datetime(2024, 1, 1, tzinfo=datetime.UTC),
             )
 
             db.session.add_all([processed, unprocessed, not_whitelisted])

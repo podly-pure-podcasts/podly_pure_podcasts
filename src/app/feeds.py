@@ -1,8 +1,9 @@
 import datetime
 import logging
 import uuid
+from collections.abc import Iterable
 from email.utils import format_datetime, parsedate_to_datetime
-from typing import Any, Iterable, Optional, cast
+from typing import Any, cast
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import feedparser  # type: ignore[import-untyped]
@@ -44,7 +45,7 @@ def is_feed_active_for_user(feed_id: int, user: User) -> bool:
     return False
 
 
-def _should_auto_whitelist_new_posts(feed: Feed, post: Optional[Post] = None) -> bool:
+def _should_auto_whitelist_new_posts(feed: Feed, post: Post | None = None) -> bool:
     """Return True when new posts should default to whitelisted for this feed."""
     override = getattr(feed, "auto_whitelist_new_episodes_override", None)
     if override is not None:
@@ -272,8 +273,8 @@ class ItunesRSSItem(PyRSS2Gen.RSSItem):  # type: ignore[misc]
         enclosure: PyRSS2Gen.Enclosure,
         description: str,
         guid: str,
-        pubDate: Optional[str],
-        image_url: Optional[str] = None,
+        pubDate: str | None,
+        image_url: str | None = None,
         **kwargs: Any,
     ) -> None:
         self.image_url = image_url
@@ -352,7 +353,7 @@ def generate_feed_xml(feed: Feed) -> Any:
     base_url = _get_base_url()
     link = _append_feed_token_params(f"{base_url}/feed/{feed.id}")
 
-    last_build_date = format_datetime(datetime.datetime.now(datetime.timezone.utc))
+    last_build_date = format_datetime(datetime.datetime.now(datetime.UTC))
 
     rss_feed = PyRSS2Gen.RSS2(
         title="[podly] " + feed.title,
@@ -370,7 +371,7 @@ def generate_feed_xml(feed: Feed) -> Any:
     return rss_feed.to_xml("utf-8")
 
 
-def generate_aggregate_feed_xml(user: Optional[User]) -> Any:
+def generate_aggregate_feed_xml(user: User | None) -> Any:
     """Generate RSS XML for a user's aggregate feed (last 3 processed posts per feed)."""
     username = user.username if user else "Public"
     user_id = user.id if user else 0
@@ -382,7 +383,7 @@ def generate_aggregate_feed_xml(user: Optional[User]) -> Any:
     base_url = _get_base_url()
     link = _append_feed_token_params(f"{base_url}/feed/user/{user_id}")
 
-    last_build_date = format_datetime(datetime.datetime.now(datetime.timezone.utc))
+    last_build_date = format_datetime(datetime.datetime.now(datetime.UTC))
 
     if current_app.config.get("REQUIRE_AUTH") and user:
         feed_title = f"Podly Podcasts - {user.username}"
@@ -516,14 +517,12 @@ def make_post(feed: Feed, entry: feedparser.FeedParserDict) -> Post:
     )
 
 
-def _get_entry_field(entry: feedparser.FeedParserDict, field: str) -> Optional[Any]:
+def _get_entry_field(entry: feedparser.FeedParserDict, field: str) -> Any | None:
     value = getattr(entry, field, None)
     return value if value is not None else entry.get(field)
 
 
-def _parse_datetime_string(
-    value: Optional[str], field: str
-) -> Optional[datetime.datetime]:
+def _parse_datetime_string(value: str | None, field: str) -> datetime.datetime | None:
     if not value:
         return None
     try:
@@ -533,7 +532,7 @@ def _parse_datetime_string(
         return None
 
 
-def _parse_struct_time(value: Optional[Any], field: str) -> Optional[datetime.datetime]:
+def _parse_struct_time(value: Any | None, field: str) -> datetime.datetime | None:
     if not value:
         return None
     try:
@@ -547,17 +546,17 @@ def _parse_struct_time(value: Optional[Any], field: str) -> Optional[datetime.da
     return dt
 
 
-def _normalize_to_utc(dt: Optional[datetime.datetime]) -> Optional[datetime.datetime]:
+def _normalize_to_utc(dt: datetime.datetime | None) -> datetime.datetime | None:
     if dt is None:
         return None
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=datetime.timezone.utc)
-    return dt.astimezone(datetime.timezone.utc)
+        dt = dt.replace(tzinfo=datetime.UTC)
+    return dt.astimezone(datetime.UTC)
 
 
 def _parse_release_date(
     entry: feedparser.FeedParserDict,
-) -> Optional[datetime.datetime]:
+) -> datetime.datetime | None:
     """Parse a release datetime from a feed entry and normalize to UTC."""
     for field in ("published", "updated"):
         dt = _parse_datetime_string(_get_entry_field(entry, field), field)
@@ -574,15 +573,15 @@ def _parse_release_date(
     return None
 
 
-def _format_pub_date(release_date: Optional[datetime.datetime]) -> Optional[str]:
+def _format_pub_date(release_date: datetime.datetime | None) -> str | None:
     if not release_date:
         return None
 
     normalized = release_date
     if normalized.tzinfo is None:
-        normalized = normalized.replace(tzinfo=datetime.timezone.utc)
+        normalized = normalized.replace(tzinfo=datetime.UTC)
 
-    return format_datetime(normalized.astimezone(datetime.timezone.utc))
+    return format_datetime(normalized.astimezone(datetime.UTC))
 
 
 # sometimes feed entry ids are the post url or something else
@@ -595,10 +594,10 @@ def get_guid(entry: feedparser.FeedParserDict) -> str:
         return str(uuid.uuid5(uuid.NAMESPACE_URL, dlurl))
 
 
-def get_duration(entry: feedparser.FeedParserDict) -> Optional[int]:
+def get_duration(entry: feedparser.FeedParserDict) -> int | None:
     try:
         return int(entry["itunes_duration"])
-    except Exception:  # pylint: disable=broad-except
+    except Exception:  # noqa: BLE001
         logger.error("Failed to get duration")
         logger.error("Failed to get duration")
         return None

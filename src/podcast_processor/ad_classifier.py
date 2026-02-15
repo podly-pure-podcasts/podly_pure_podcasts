@@ -1,10 +1,8 @@
 import logging
 import math
 import time
-
-# pylint: disable=too-many-lines
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any
 
 import litellm
 from jinja2 import Template
@@ -64,10 +62,10 @@ class AdClassifier:
     def __init__(
         self,
         config: Config,
-        logger: Optional[logging.Logger] = None,
-        model_call_query: Optional[Any] = None,
-        identification_query: Optional[Any] = None,
-        db_session: Optional[Any] = None,
+        logger: logging.Logger | None = None,
+        model_call_query: Any | None = None,
+        identification_query: Any | None = None,
+        db_session: Any | None = None,
     ):
         self.config = config
         self.logger = logger or logging.getLogger("global_logger")
@@ -76,7 +74,7 @@ class AdClassifier:
         self.db_session = db_session or db.session
 
         # Initialize rate limiter for the configured model
-        self.rate_limiter: Optional[TokenRateLimiter]
+        self.rate_limiter: TokenRateLimiter | None
         if self.config.llm_enable_token_rate_limiting:
             tokens_per_minute = self.config.llm_max_input_tokens_per_minute
             if tokens_per_minute is None:
@@ -97,7 +95,7 @@ class AdClassifier:
             self.logger.info("Token rate limiting disabled")
 
         # Initialize concurrency limiter for LLM API calls
-        self.concurrency_limiter: Optional[LLMConcurrencyLimiter]
+        self.concurrency_limiter: LLMConcurrencyLimiter | None
         max_concurrent = getattr(self.config, "llm_max_concurrent_calls", 3)
         if max_concurrent > 0:
             self.concurrency_limiter = get_concurrency_limiter(max_concurrent)
@@ -112,7 +110,7 @@ class AdClassifier:
         self.cue_detector = CueDetector()
 
         # Initialize boundary refiner (conditionally based on config)
-        self.boundary_refiner: Optional[BoundaryRefiner] = None
+        self.boundary_refiner: BoundaryRefiner | None = None
         if config.enable_boundary_refinement:
             if getattr(config, "enable_word_level_boundary_refinder", False):
                 self.boundary_refiner = WordBoundaryRefiner(config, self.logger)  # type: ignore[assignment]
@@ -126,7 +124,7 @@ class AdClassifier:
     def classify(
         self,
         *,
-        transcript_segments: List[TranscriptSegment],
+        transcript_segments: list[TranscriptSegment],
         system_prompt: str,
         user_prompt_template: Template,
         post: Post,
@@ -162,7 +160,7 @@ class AdClassifier:
 
         try:
             current_index = 0
-            next_overlap_segments: List[TranscriptSegment] = []
+            next_overlap_segments: list[TranscriptSegment] = []
             max_iterations = (
                 total_segments + 10
             )  # Safety limit to prevent infinite loops
@@ -223,10 +221,10 @@ class AdClassifier:
     def _step(
         self,
         classify_params: ClassifyParams,
-        prev_overlap_segments: List[TranscriptSegment],
+        prev_overlap_segments: list[TranscriptSegment],
         current_index: int,
-        transcript_segments: List[TranscriptSegment],
-    ) -> Tuple[int, List[TranscriptSegment]]:
+        transcript_segments: list[TranscriptSegment],
+    ) -> tuple[int, list[TranscriptSegment]]:
         overlap_segments = self._apply_overlap_cap(prev_overlap_segments)
         remaining_segments = transcript_segments[current_index:]
 
@@ -291,11 +289,11 @@ class AdClassifier:
     def _process_chunk(
         self,
         *,
-        chunk_segments: List[TranscriptSegment],
+        chunk_segments: list[TranscriptSegment],
         system_prompt: str,
         post: Post,
         user_prompt_str: str,
-    ) -> List[TranscriptSegment]:
+    ) -> list[TranscriptSegment]:
         """Process a chunk of transcript segments for classification."""
         if not chunk_segments:
             return []
@@ -338,14 +336,14 @@ class AdClassifier:
     def _build_chunk_payload(
         self,
         *,
-        overlap_segments: List[TranscriptSegment],
-        remaining_segments: List[TranscriptSegment],
-        total_segments: List[TranscriptSegment],
+        overlap_segments: list[TranscriptSegment],
+        remaining_segments: list[TranscriptSegment],
+        total_segments: list[TranscriptSegment],
         post: Post,
         system_prompt: str,
         user_prompt_template: Template,
         max_new_segments: int,
-    ) -> Tuple[List[TranscriptSegment], str, int, bool]:
+    ) -> tuple[list[TranscriptSegment], str, int, bool]:
         """Construct chunk data while enforcing overlap and token constraints."""
         if not remaining_segments:
             return ([], "", 0, False)
@@ -411,12 +409,12 @@ class AdClassifier:
     def _combine_overlap_segments(
         self,
         *,
-        overlap_segments: List[TranscriptSegment],
-        base_segments: List[TranscriptSegment],
-    ) -> List[TranscriptSegment]:
+        overlap_segments: list[TranscriptSegment],
+        base_segments: list[TranscriptSegment],
+    ) -> list[TranscriptSegment]:
         """Combine overlap and new segments while preserving order and removing duplicates."""
-        combined: List[TranscriptSegment] = []
-        seen_ids: Set[int] = set()
+        combined: list[TranscriptSegment] = []
+        seen_ids: set[int] = set()
 
         for segment in overlap_segments:
             if segment.id not in seen_ids:
@@ -443,10 +441,10 @@ class AdClassifier:
     def _compute_next_overlap_segments(
         self,
         *,
-        chunk_segments: List[TranscriptSegment],
-        identified_segments: List[TranscriptSegment],
+        chunk_segments: list[TranscriptSegment],
+        identified_segments: list[TranscriptSegment],
         max_overlap_segments: int,
-    ) -> List[TranscriptSegment]:
+    ) -> list[TranscriptSegment]:
         """Determine which segments should be carried forward to the next chunk."""
         if max_overlap_segments <= 0 or not chunk_segments:
             return []
@@ -493,9 +491,9 @@ class AdClassifier:
 
     def _apply_overlap_cap(
         self,
-        overlap_segments: List[TranscriptSegment],
-        max_override: Optional[int] = None,
-    ) -> List[TranscriptSegment]:
+        overlap_segments: list[TranscriptSegment],
+        max_override: int | None = None,
+    ) -> list[TranscriptSegment]:
         """Ensure stored overlap obeys configured limits."""
         max_overlap = (
             self.config.processing.max_overlap_segments
@@ -531,8 +529,8 @@ class AdClassifier:
         return trimmed
 
     def _segments_covering_tail(
-        self, *, chunk_segments: List[TranscriptSegment], seconds: float
-    ) -> List[TranscriptSegment]:
+        self, *, chunk_segments: list[TranscriptSegment], seconds: float
+    ) -> list[TranscriptSegment]:
         """Return the minimal set of segments covering the last `seconds` of audio."""
         if not chunk_segments:
             return []
@@ -544,7 +542,7 @@ class AdClassifier:
         )
         cutoff = last_end_time - seconds
 
-        tail_segments: List[TranscriptSegment] = []
+        tail_segments: list[TranscriptSegment] = []
         for seg in reversed(chunk_segments):
             tail_segments.append(seg)
             if seg.start_time <= cutoff:
@@ -588,7 +586,7 @@ class AdClassifier:
 
     def _prepare_api_call(
         self, model_call_obj: ModelCall, system_prompt: str
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Prepare API call arguments and validate token limits."""
         # Prepare messages for the API call
         messages = [
@@ -663,7 +661,7 @@ class AdClassifier:
     def _generate_user_prompt(
         self,
         *,
-        current_chunk_db_segments: List[TranscriptSegment],
+        current_chunk_db_segments: list[TranscriptSegment],
         post: Post,
         user_prompt_template: Template,
         includes_start: bool,
@@ -692,7 +690,7 @@ class AdClassifier:
         first_seq_num: int,
         last_seq_num: int,
         user_prompt_str: str,
-    ) -> Optional[ModelCall]:
+    ) -> ModelCall | None:
         """Get an existing ModelCall or create a new one via writer."""
         model = self.config.llm_model
         result = writer_client.action(
@@ -732,7 +730,7 @@ class AdClassifier:
                 self._handle_test_mode_call(model_call)
             else:
                 self._call_model(model_call_obj=model_call, system_prompt=system_prompt)
-        except Exception as e:  # pylint: disable=broad-exception-caught
+        except Exception as e:
             self.logger.error(
                 f"LLM interaction via _call_model for ModelCall {model_call.id} resulted in an exception: {e}",
                 exc_info=True,
@@ -764,8 +762,8 @@ class AdClassifier:
         self,
         *,
         model_call: ModelCall,
-        current_chunk_db_segments: List[TranscriptSegment],
-    ) -> List[TranscriptSegment]:
+        current_chunk_db_segments: list[TranscriptSegment],
+    ) -> list[TranscriptSegment]:
         """Process a successful LLM response and create Identification records."""
         self.logger.info(
             f"LLM call for ModelCall {model_call.id} was successful. Parsing response."
@@ -796,13 +794,13 @@ class AdClassifier:
         self,
         *,
         prediction_list: AdSegmentPredictionList,
-        current_chunk_db_segments: List[TranscriptSegment],
+        current_chunk_db_segments: list[TranscriptSegment],
         model_call: ModelCall,
-    ) -> Tuple[int, List[TranscriptSegment]]:
+    ) -> tuple[int, list[TranscriptSegment]]:
         """Create Identification records from the prediction list."""
-        to_insert: List[Dict[str, Any]] = []
-        matched_segments: List[TranscriptSegment] = []
-        processed_segment_ids: Set[int] = set()
+        to_insert: list[dict[str, Any]] = []
+        matched_segments: list[TranscriptSegment] = []
+        processed_segment_ids: set[int] = set()
         content_type = prediction_list.content_type
 
         for pred in prediction_list.ad_segments:
@@ -878,7 +876,7 @@ class AdClassifier:
         return inserted, matched_segments
 
     def _adjust_confidence(
-        self, *, base_confidence: float, content_type: Optional[str]
+        self, *, base_confidence: float, content_type: str | None
     ) -> float:
         """Demote confidence for self-promo/educational contexts."""
         if not content_type:
@@ -894,12 +892,12 @@ class AdClassifier:
         self,
         *,
         matched_segment: TranscriptSegment,
-        current_chunk_db_segments: List[TranscriptSegment],
+        current_chunk_db_segments: list[TranscriptSegment],
         model_call: ModelCall,
-        processed_segment_ids: Set[int],
-        matched_segments: List[TranscriptSegment],
+        processed_segment_ids: set[int],
+        matched_segments: list[TranscriptSegment],
         base_confidence: float,
-        to_insert: List[Dict[str, Any]],
+        to_insert: list[dict[str, Any]],
     ) -> int:
         """If an ad is detected within the first 45s, include up to 3 preceding intro segments."""
         if matched_segment.start_time > 45.0:
@@ -941,8 +939,8 @@ class AdClassifier:
         self,
         *,
         segment_offset: float,
-        current_chunk_db_segments: List[TranscriptSegment],
-    ) -> Optional[TranscriptSegment]:
+        current_chunk_db_segments: list[TranscriptSegment],
+    ) -> TranscriptSegment | None:
         """Find the TranscriptSegment that matches the given segment offset."""
         min_diff = float("inf")
         matched_segment = None
@@ -988,8 +986,8 @@ class AdClassifier:
         self,
         model_call_obj: ModelCall,
         system_prompt: str,
-        max_retries: Optional[int] = None,
-    ) -> Optional[str]:
+        max_retries: int | None = None,
+    ) -> str | None:
         """Call the LLM model with retry logic."""
         # Use configured retry count if not specified
         retry_count = (
@@ -998,7 +996,7 @@ class AdClassifier:
             else getattr(self.config, "llm_max_retry_attempts", 3)
         )
 
-        last_error: Optional[Exception] = None
+        last_error: Exception | None = None
         raw_response_content = None
         original_retry_attempts = (
             0
@@ -1113,7 +1111,7 @@ class AdClassifier:
         self,
         *,
         model_call_obj: ModelCall,
-        error: Union[InternalServerError, Exception],
+        error: InternalServerError | Exception,
         attempt: int,
         current_attempt_num: int,
     ) -> None:
@@ -1156,7 +1154,7 @@ class AdClassifier:
         self,
         model_call_obj: ModelCall,
         max_retries: int,
-        last_error: Optional[Exception],
+        last_error: Exception | None,
     ) -> None:
         """Handle the case when all retries are exhausted."""
         self.logger.error(
@@ -1180,8 +1178,8 @@ class AdClassifier:
         model_call_obj.error_message = error_message
 
     def _get_segments_bulk(
-        self, post_id: int, sequence_numbers: List[int]
-    ) -> Dict[int, TranscriptSegment]:
+        self, post_id: int, sequence_numbers: list[int]
+    ) -> dict[int, TranscriptSegment]:
         """Fetch multiple segments in one query.
 
         NOTE: Must use self.db_session.query() instead of TranscriptSegment.query
@@ -1203,7 +1201,7 @@ class AdClassifier:
 
     def _get_existing_ids_bulk(
         self, post_id: int, model_call_id: int
-    ) -> Set[Tuple[int, int, str]]:
+    ) -> set[tuple[int, int, str]]:
         """Fetch all existing identifications as a set for O(1) lookup.
 
         NOTE: Uses self.db_session.query() for session consistency.
@@ -1222,7 +1220,7 @@ class AdClassifier:
         return {(i.transcript_segment_id, i.model_call_id, i.label) for i in ids}
 
     def _create_identifications_bulk(
-        self, identifications: List[Dict[str, Any]]
+        self, identifications: list[dict[str, Any]]
     ) -> int:
         """Bulk insert identifications"""
         if not identifications:
@@ -1240,7 +1238,7 @@ class AdClassifier:
 
     def expand_neighbors_bulk(
         self,
-        ad_identifications: List[Identification],
+        ad_identifications: list[Identification],
         model_call: ModelCall,
         post_id: int,
         window: int = 5,
@@ -1359,7 +1357,7 @@ class AdClassifier:
         return confidence
 
     def _refine_boundaries(
-        self, transcript_segments: List[TranscriptSegment], post: Post
+        self, transcript_segments: list[TranscriptSegment], post: Post
     ) -> None:
         """Apply boundary refinement to detected ads.
 
@@ -1370,7 +1368,7 @@ class AdClassifier:
 
         # Latest refined boundaries for downstream audio cuts. Overwrites prior
         # values for the post ("latest successful" semantics).
-        refined_boundaries: List[Dict[str, Any]] = []
+        refined_boundaries: list[dict[str, Any]] = []
 
         # Get ad identifications
         identifications = (
@@ -1453,7 +1451,7 @@ class AdClassifier:
                 raise RuntimeError(
                     getattr(res, "error", "Failed to update refined ad boundaries")
                 )
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # noqa: BLE001
             # Best-effort: cutting can fall back to segment-derived windows.
             self.logger.warning(
                 "Failed to persist refined ad boundaries for post %s: %s",
@@ -1462,8 +1460,8 @@ class AdClassifier:
             )
 
     def _group_into_blocks(
-        self, identifications: List[Identification]
-    ) -> List[Dict[str, Any]]:
+        self, identifications: list[Identification]
+    ) -> list[dict[str, Any]]:
         """Group adjacent identifications into ad blocks"""
         if not identifications:
             return []
@@ -1471,8 +1469,8 @@ class AdClassifier:
         identifications = sorted(
             identifications, key=lambda i: i.transcript_segment.start_time
         )
-        blocks: List[Dict[str, Any]] = []
-        current: List[Identification] = []
+        blocks: list[dict[str, Any]] = []
+        current: list[Identification] = []
 
         for ident in identifications:
             if (
@@ -1491,7 +1489,7 @@ class AdClassifier:
 
         return blocks
 
-    def _create_block(self, identifications: List[Identification]) -> Dict[str, Any]:
+    def _create_block(self, identifications: list[Identification]) -> dict[str, Any]:
         return {
             "start": min(i.transcript_segment.start_time for i in identifications),
             "end": max(i.transcript_segment.end_time for i in identifications),
@@ -1502,9 +1500,9 @@ class AdClassifier:
 
     def _apply_refinement(
         self,
-        block: Dict[str, Any],
+        block: dict[str, Any],
         refinement: Any,
-        transcript_segments: List[TranscriptSegment],
+        transcript_segments: list[TranscriptSegment],
         post: Post,
         model_call: ModelCall,
     ) -> None:
@@ -1515,7 +1513,7 @@ class AdClassifier:
             if getattr(i, "id", None) is not None
         ]
 
-        new_identifications: List[Dict[str, Any]] = []
+        new_identifications: list[dict[str, Any]] = []
         for seg in transcript_segments:
             seg_start = float(seg.start_time or 0.0)
             seg_end = float(seg.end_time or seg_start)

@@ -1,9 +1,6 @@
-import importlib
-import json
 import logging
 import os
 import secrets
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -13,7 +10,7 @@ from flask_migrate import upgrade
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
 
-from app import models
+from app import models as models
 from app.auth import AuthSettings, load_auth_settings
 from app.auth.bootstrap import bootstrap_admin_user
 from app.auth.discord_settings import load_discord_settings
@@ -33,7 +30,7 @@ from app.processor import (
 )
 from app.routes import register_routes
 from app.runtime_config import config, is_test
-from app.writer.client import writer_client
+from app.writer.client import writer_client as writer_client
 from shared import defaults as DEFAULTS
 from shared.processing_paths import get_in_root, get_srv_root
 
@@ -286,7 +283,7 @@ def _configure_session(app: Flask, auth_settings: AuthSettings) -> None:
     if not secret_key:
         try:
             secret_key = secrets.token_urlsafe(64)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:
             raise RuntimeError("Failed to generate session secret key.") from exc
         if auth_settings.require_auth:
             logger.warning(
@@ -378,7 +375,7 @@ def _configure_readonly_sessions(app: Flask) -> None:
                 return
             if current_app.config.get("PODLY_APP_ROLE") != "web":
                 return
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # noqa: BLE001
             return
 
         # Set isolation level to prevent write locks
@@ -401,7 +398,7 @@ def _configure_readonly_sessions(app: Flask) -> None:
                 return
             if current_app.config.get("PODLY_APP_ROLE") != "web":
                 return
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # noqa: BLE001
             return
 
         if session.info.get("readonly"):
@@ -433,7 +430,7 @@ def _register_api_logging(app: Flask) -> None:
     def _log_api_request(response: Any) -> Any:
         try:
             path = request.path
-        except Exception:  # pragma: no cover  # pylint: disable=broad-except
+        except Exception:  # pragma: no cover  # noqa: BLE001
             return response
 
         if not path.startswith("/api/"):
@@ -464,7 +461,7 @@ def _run_app_startup(auth_settings: AuthSettings) -> None:
         ensure_defaults_and_hydrate()
 
         ProcessorSingleton.reset_instance()
-    except Exception as exc:  # pylint: disable=broad-except
+    except Exception as exc:  # noqa: BLE001
         logger.error(f"Failed to initialize settings: {exc}")
 
 

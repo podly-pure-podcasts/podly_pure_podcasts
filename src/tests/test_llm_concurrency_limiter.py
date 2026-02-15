@@ -100,11 +100,11 @@ class TestLLMConcurrencyLimiter:
         limiter.acquire()
 
         # Try to use context manager with timeout
-        with pytest.raises(
-            RuntimeError, match="Could not acquire LLM concurrency slot"
+        with (
+            pytest.raises(RuntimeError, match="Could not acquire LLM concurrency slot"),
+            ConcurrencyContext(limiter, timeout=0.1),
         ):
-            with ConcurrencyContext(limiter, timeout=0.1):
-                pass
+            pass
 
     def test_thread_safety(self):
         """Test that the limiter works correctly with multiple threads."""
@@ -119,7 +119,7 @@ class TestLLMConcurrencyLimiter:
                     # Simulate some work
                     time.sleep(0.1)
                     results.append(f"worker_{worker_id}_end")
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 errors.append(f"worker_{worker_id}_error: {e}")
 
         # Start 4 threads, but only 2 should run concurrently

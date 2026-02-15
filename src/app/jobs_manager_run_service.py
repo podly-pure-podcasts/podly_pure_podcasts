@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, Optional, cast
+from typing import Any, cast
 
 from sqlalchemy import func
 
@@ -15,7 +15,7 @@ logger = logging.getLogger("writer")
 SINGLETON_RUN_ID = "jobs-manager-singleton"
 
 
-def _session_get(session: Any, ident: str) -> Optional[JobsManagerRun]:
+def _session_get(session: Any, ident: str) -> JobsManagerRun | None:
     """Get a JobsManagerRun by id from a session-like object.
 
     Accepts both modern Session objects that implement .get(model, id)
@@ -24,15 +24,15 @@ def _session_get(session: Any, ident: str) -> Optional[JobsManagerRun]:
     """
     getter = getattr(session, "get", None)
     if callable(getter):
-        return cast(Optional[JobsManagerRun], getter(JobsManagerRun, ident))
+        return cast(JobsManagerRun | None, getter(JobsManagerRun, ident))
     # Fallback for older SQLAlchemy versions
-    return cast(Optional[JobsManagerRun], session.query(JobsManagerRun).get(ident))
+    return cast(JobsManagerRun | None, session.query(JobsManagerRun).get(ident))
 
 
 def _build_context_payload(
-    trigger: str, context: Optional[Dict[str, object]], updated_at: datetime
-) -> Dict[str, object]:
-    payload: Dict[str, object] = {}
+    trigger: str, context: dict[str, object] | None, updated_at: datetime
+) -> dict[str, object]:
+    payload: dict[str, object] = {}
     if context:
         payload.update(context)
     payload["last_trigger"] = trigger
@@ -41,7 +41,7 @@ def _build_context_payload(
 
 
 def get_or_create_singleton_run(
-    session: Any, trigger: str, context: Optional[Dict[str, object]] = None
+    session: Any, trigger: str, context: dict[str, object] | None = None
 ) -> JobsManagerRun:
     """Return the singleton run, creating it if necessary."""
     now = datetime.utcnow()
@@ -73,18 +73,18 @@ def get_or_create_singleton_run(
 
 
 def ensure_active_run(
-    session: Any, trigger: str, context: Optional[Dict[str, object]] = None
+    session: Any, trigger: str, context: dict[str, object] | None = None
 ) -> JobsManagerRun:
     """Return the singleton run, ensuring it exists and is up to date."""
     return get_or_create_singleton_run(session, trigger, context)
 
 
-def get_active_run(session: Any) -> Optional[JobsManagerRun]:
+def get_active_run(session: Any) -> JobsManagerRun | None:
     """Return the singleton run if it exists."""
     return _session_get(session, SINGLETON_RUN_ID)
 
 
-def recalculate_run_counts(session: Any) -> Optional[JobsManagerRun]:
+def recalculate_run_counts(session: Any) -> JobsManagerRun | None:
     """
     Recompute aggregate counters for the singleton run.
 
@@ -99,7 +99,7 @@ def recalculate_run_counts(session: Any) -> Optional[JobsManagerRun]:
     # The linter incorrectly flags func.count as not callable.
     query = session.query(
         ProcessingJob.status,
-        func.count(ProcessingJob.id),  # pylint: disable=not-callable
+        func.count(ProcessingJob.id),
     ).filter(ProcessingJob.jobs_manager_run_id == run.id)
     if cutoff:
         query = query.filter(ProcessingJob.created_at >= cutoff)
@@ -157,7 +157,7 @@ def recalculate_run_counts(session: Any) -> Optional[JobsManagerRun]:
     return run
 
 
-def serialize_run(run: JobsManagerRun) -> Dict[str, object]:
+def serialize_run(run: JobsManagerRun) -> dict[str, object]:
     """Return a JSON-serialisable representation of a run."""
     progress_denom = max(run.total_jobs or 0, 1)
     progress_percentage = (
@@ -188,7 +188,7 @@ def serialize_run(run: JobsManagerRun) -> Dict[str, object]:
     }
 
 
-def build_run_status_snapshot(session: Any) -> Optional[Dict[str, object]]:
+def build_run_status_snapshot(session: Any) -> dict[str, object] | None:
     """
     Return a fresh, non-persisted snapshot of the current run counters.
 
@@ -203,7 +203,7 @@ def build_run_status_snapshot(session: Any) -> Optional[Dict[str, object]]:
     cutoff = run.counters_reset_at
     query = session.query(
         ProcessingJob.status,
-        func.count(ProcessingJob.id),  # pylint: disable=not-callable
+        func.count(ProcessingJob.id),
     ).filter(ProcessingJob.jobs_manager_run_id == run.id)
     if cutoff:
         query = query.filter(ProcessingJob.created_at >= cutoff)

@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, Optional, Sequence, Tuple
 
 from flask import current_app
 from sqlalchemy import func
@@ -39,7 +39,7 @@ def _get_most_recent_posts_per_feed(post_guids: Sequence[str]) -> set[str]:
     latest_completed = _load_latest_completed_map(post_guids)
 
     # Group by feed and find most recent per feed
-    feed_posts: Dict[int, tuple[str, Optional[datetime]]] = {}
+    feed_posts: dict[int, tuple[str, datetime | None]] = {}
 
     for post in posts:
         timestamp = _get_post_timestamp(post, latest_completed)
@@ -60,8 +60,8 @@ def _get_most_recent_posts_per_feed(post_guids: Sequence[str]) -> set[str]:
 
 
 def _get_post_timestamp(
-    post: Post, latest_completed: Dict[str, Optional[datetime]]
-) -> Optional[datetime]:
+    post: Post, latest_completed: dict[str, datetime | None]
+) -> datetime | None:
     """Get the most recent timestamp for a post (file or job completion)."""
     file_timestamp = _get_processed_file_timestamp(post)
     job_timestamp = latest_completed.get(post.guid)
@@ -72,8 +72,8 @@ def _get_post_timestamp(
 
 
 def _build_cleanup_query(
-    retention_days: Optional[int],
-) -> Tuple[Optional[Query["Post"]], Optional[datetime]]:
+    retention_days: int | None,
+) -> tuple[Query[Post] | None, datetime | None]:
     """Construct the base query for posts eligible for cleanup."""
     if retention_days is None:
         return None, None
@@ -101,8 +101,8 @@ def _build_cleanup_query(
 
 
 def count_cleanup_candidates(
-    retention_days: Optional[int],
-) -> Tuple[int, Optional[datetime]]:
+    retention_days: int | None,
+) -> tuple[int, datetime | None]:
     """Return how many posts would currently be removed along with the cutoff."""
     posts_query, cutoff = _build_cleanup_query(retention_days)
     if posts_query is None or cutoff is None:
@@ -122,7 +122,7 @@ def count_cleanup_candidates(
     return count, cutoff
 
 
-def cleanup_processed_posts(retention_days: Optional[int]) -> int:
+def cleanup_processed_posts(retention_days: int | None) -> int:
     """Prune processed posts older than the retention window.
 
     Posts qualify when their processed audio artifact (or, if missing, the
@@ -169,7 +169,7 @@ def cleanup_processed_posts(retention_days: Optional[int]) -> int:
                 writer_client.action(
                     "cleanup_processed_post_files_only", {"post_id": post.id}, wait=True
                 )
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:
                 logger.error(
                     "Cleanup failed for post %s (guid=%s): %s",
                     post.id,
@@ -199,7 +199,7 @@ def scheduled_cleanup_processed_posts() -> None:
     try:
         with scheduler.app.app_context():
             cleanup_processed_posts(retention)
-    except Exception as exc:  # pylint: disable=broad-except
+    except Exception as exc:
         logger.error("Scheduled cleanup failed: %s", exc, exc_info=True)
         reset_session(db.session, logger, "scheduled_cleanup_processed_posts", exc)
 
@@ -211,7 +211,7 @@ def _remove_associated_files(post: Post) -> None:
             continue
         try:
             file_path = Path(path_str)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # noqa: BLE001
             logger.warning("Cleanup: invalid path for post %s: %s", post.guid, path_str)
             continue
         if not file_path.exists():
@@ -225,7 +225,7 @@ def _remove_associated_files(post: Post) -> None:
 
 def _load_latest_completed_map(
     post_guids: Sequence[str],
-) -> Dict[str, Optional[datetime]]:
+) -> dict[str, datetime | None]:
     if not post_guids:
         return {}
 
@@ -242,12 +242,12 @@ def _load_latest_completed_map(
 
 
 def _processed_timestamp_before_cutoff(
-    post: Post, cutoff: datetime, latest_completed: Dict[str, Optional[datetime]]
+    post: Post, cutoff: datetime, latest_completed: dict[str, datetime | None]
 ) -> bool:
     file_timestamp = _get_processed_file_timestamp(post)
     job_timestamp = latest_completed.get(post.guid)
 
-    candidate: Optional[datetime]
+    candidate: datetime | None
     if file_timestamp and job_timestamp:
         candidate = min(file_timestamp, job_timestamp)
     else:
@@ -256,13 +256,13 @@ def _processed_timestamp_before_cutoff(
     return bool(candidate and candidate < cutoff)
 
 
-def _get_processed_file_timestamp(post: Post) -> Optional[datetime]:
+def _get_processed_file_timestamp(post: Post) -> datetime | None:
     if not post.processed_audio_path:
         return None
 
     try:
         file_path = Path(post.processed_audio_path)
-    except Exception:  # pylint: disable=broad-except
+    except Exception:  # noqa: BLE001
         logger.warning(
             "Cleanup: invalid processed path for post %s: %s",
             post.guid,

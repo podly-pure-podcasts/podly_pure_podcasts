@@ -18,11 +18,11 @@ def safe_commit(
     log = logger_obj or logging.getLogger("global_logger")
     try:
         session.commit()
-    except Exception as exc:  # pylint: disable=broad-except
+    except Exception as exc:
         log.error("Commit failed in %s, rolling back: %s", context, exc, exc_info=True)
         try:
             session.rollback()
-        except Exception as rb_exc:  # pylint: disable=broad-except
+        except Exception as rb_exc:
             log.error("Rollback also failed in %s: %s", context, rb_exc, exc_info=True)
         if must_succeed:
             raise

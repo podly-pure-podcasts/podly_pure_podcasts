@@ -1,6 +1,5 @@
 import logging
 from pathlib import Path
-from typing import List, Optional
 
 from app.models import Post
 from app.writer.client import writer_client
@@ -9,14 +8,14 @@ from podcast_processor.podcast_downloader import get_and_make_download_path
 logger = logging.getLogger("global_logger")
 
 
-def _collect_processed_paths(post: Post) -> List[Path]:
+def _collect_processed_paths(post: Post) -> list[Path]:
     """Collect all possible processed audio paths to check for a post."""
     import re
 
     from podcast_processor.podcast_downloader import sanitize_title
     from shared.processing_paths import get_srv_root, paths_from_unprocessed_path
 
-    processed_paths_to_check: List[Path] = []
+    processed_paths_to_check: list[Path] = []
 
     # 1. Check database path first (most reliable if set)
     if post.processed_audio_path:
@@ -49,17 +48,17 @@ def _collect_processed_paths(post: Post) -> List[Path]:
     return processed_paths_to_check
 
 
-def _dedupe_and_find_existing(paths: List[Path]) -> tuple[List[Path], Optional[Path]]:
+def _dedupe_and_find_existing(paths: list[Path]) -> tuple[list[Path], Path | None]:
     """Deduplicate paths and find the first existing one."""
     seen: set[Path] = set()
-    unique_paths: List[Path] = []
+    unique_paths: list[Path] = []
     for p in paths:
         resolved = p.resolve()
         if resolved not in seen:
             seen.add(resolved)
             unique_paths.append(resolved)
 
-    existing_path: Optional[Path] = None
+    existing_path: Path | None = None
     for p in unique_paths:
         if p.exists():
             existing_path = p
@@ -68,7 +67,7 @@ def _dedupe_and_find_existing(paths: List[Path]) -> tuple[List[Path], Optional[P
     return unique_paths, existing_path
 
 
-def _remove_file_if_exists(path: Optional[Path], file_type: str, post_id: int) -> None:
+def _remove_file_if_exists(path: Path | None, file_type: str, post_id: int) -> None:
     """Remove a file if it exists and log the result."""
     if not path:
         logger.debug(f"{file_type} path is None for post {post_id}.")
@@ -100,7 +99,7 @@ def remove_associated_files(post: Post) -> None:
         unique_paths, processed_abs_path = _dedupe_and_find_existing(processed_paths)
 
         # Compute expected unprocessed audio path
-        unprocessed_abs_path: Optional[Path] = None
+        unprocessed_abs_path: Path | None = None
         if post.title:
             unprocessed_path = get_and_make_download_path(post.title)
             if unprocessed_path:
@@ -125,7 +124,7 @@ def remove_associated_files(post: Post) -> None:
                 f"Could not determine processed audio path for post {post.id}."
             )
 
-    except Exception as e:  # pylint: disable=broad-except
+    except Exception as e:
         logger.error(
             f"Unexpected error in remove_associated_files for post {post.id}: {e}",
             exc_info=True,
@@ -160,7 +159,7 @@ def clear_post_processing_data(post: Post) -> None:
             f"Error clearing processing data for post {post.id}: {e}",
             exc_info=True,
         )
-        raise PostException(f"Failed to clear processing data: {str(e)}") from e
+        raise PostException(f"Failed to clear processing data: {e!s}") from e
 
 
 class PostException(Exception):

@@ -50,7 +50,7 @@ def upgrade():
             dt = row.release_date
         else:
             dt = datetime.datetime.combine(row.release_date, datetime.time())
-        dt = dt.replace(tzinfo=datetime.timezone.utc)
+        dt = dt.replace(tzinfo=datetime.UTC)
         bind.execute(
             post.update().where(post.c.id == row.id).values(release_date_tmp=dt)
         )
@@ -100,7 +100,7 @@ def downgrade():
             dt = row.release_date
         else:
             dt = datetime.datetime.combine(row.release_date, datetime.time())
-        date_only = dt.astimezone(datetime.timezone.utc).date()
+        date_only = dt.astimezone(datetime.UTC).date()
         bind.execute(
             post.update().where(post.c.id == row.id).values(release_date_date=date_only)
         )

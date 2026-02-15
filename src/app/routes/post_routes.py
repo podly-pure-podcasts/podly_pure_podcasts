@@ -3,7 +3,7 @@ import logging
 import math
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 import flask
 from flask import Blueprint, g, jsonify, request, send_file
@@ -270,7 +270,7 @@ def post_debug(p_guid: str) -> flask.Response:
     )
 
 
-def _get_chapter_stats(post: Post, feed: Feed) -> Dict[str, Any]:
+def _get_chapter_stats(post: Post, feed: Feed) -> dict[str, Any]:
     """Get chapter statistics for chapter-based processing."""
 
     # Try to read stored chapter data first (set during processing)
@@ -349,8 +349,8 @@ def api_post_stats(p_guid: str) -> flask.Response:
         .all()
     )
 
-    model_call_statuses: Dict[str, int] = {}
-    model_types: Dict[str, int] = {}
+    model_call_statuses: dict[str, int] = {}
+    model_types: dict[str, int] = {}
 
     for call in model_calls:
         if call.status not in model_call_statuses:
@@ -392,8 +392,8 @@ def api_post_stats(p_guid: str) -> flask.Response:
         )
 
     transcript_segments_data = []
-    segment_mixed_by_id: Dict[int, bool] = {}
-    ad_windows_from_segments: List[Tuple[float, float]] = []
+    segment_mixed_by_id: dict[int, bool] = {}
+    ad_windows_from_segments: list[tuple[float, float]] = []
     for segment in transcript_segments:
         segment_identifications = identifications_by_segment.get(segment.id, [])
 
@@ -549,7 +549,7 @@ def api_toggle_whitelist(p_guid: str) -> ResponseReturnValue:
         )
         # Refresh post object
         db.session.expire(post)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.error(f"Failed to toggle whitelist: {e}")
         return (
             flask.jsonify(
@@ -560,7 +560,7 @@ def api_toggle_whitelist(p_guid: str) -> ResponseReturnValue:
             500,
         )
 
-    response_body: Dict[str, Any] = {
+    response_body: dict[str, Any] = {
         "guid": post.guid,
         "whitelisted": post.whitelisted,
         "message": "Whitelist status updated successfully",
@@ -613,7 +613,7 @@ def api_toggle_whitelist_all(feed_id: int) -> ResponseReturnValue:
         if not result or not result.success:
             raise RuntimeError(getattr(result, "error", "Unknown writer error"))
         updated = int((result.data or {}).get("updated_count") or 0)
-    except Exception:  # pylint: disable=broad-except
+    except Exception:  # noqa: BLE001
         return (
             flask.jsonify(
                 {
@@ -706,14 +706,14 @@ def api_process_post(p_guid: str) -> ResponseReturnValue:
         )
         status_code = 200 if result.get("status") in ("started", "completed") else 400
         return flask.jsonify(result), status_code
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.error(f"Failed to start processing job for {p_guid}: {e}")
         return (
             flask.jsonify(
                 {
                     "status": "error",
                     "error_code": "JOB_START_FAILED",
-                    "message": f"Failed to start processing job: {str(e)}",
+                    "message": f"Failed to start processing job: {e!s}",
                 }
             ),
             500,
@@ -837,7 +837,7 @@ def api_reprocess_post(p_guid: str) -> ResponseReturnValue:
                 {
                     "status": "error",
                     "error_code": "REPROCESS_FAILED",
-                    "message": f"Failed to reprocess post: {str(e)}",
+                    "message": f"Failed to reprocess post: {e!s}",
                 }
             ),
             500,
@@ -896,7 +896,7 @@ def api_get_post_audio(p_guid: str) -> ResponseReturnValue:
         )
         response.headers["Accept-Ranges"] = "bytes"
         return response
-    except Exception as e:  # pylint: disable=broad-except
+    except Exception as e:  # noqa: BLE001
         logger.error(f"Error serving audio file for {p_guid}: {e}")
         return flask.make_response(
             jsonify(
@@ -933,7 +933,7 @@ def api_download_post(p_guid: str) -> flask.Response:
             as_attachment=True,
             download_name=f"{post.title}.mp3",
         )
-    except Exception as e:  # pylint: disable=broad-except
+    except Exception as e:  # noqa: BLE001
         logger.error(f"Error serving file for {p_guid}: {e}")
         return flask.make_response(("Error serving file", 500))
 
@@ -968,7 +968,7 @@ def api_download_original_post(p_guid: str) -> flask.Response:
             as_attachment=True,
             download_name=f"{post.title}_original.mp3",
         )
-    except Exception as e:  # pylint: disable=broad-except
+    except Exception as e:  # noqa: BLE001
         logger.error(f"Error serving original file for {p_guid}: {e}")
         return flask.make_response(("Error serving file", 500))
 

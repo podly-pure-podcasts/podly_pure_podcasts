@@ -1,5 +1,6 @@
 import logging
-from typing import Any, Callable, Dict
+from collections.abc import Callable
+from typing import Any
 
 from flask import Flask
 
@@ -16,7 +17,7 @@ class CommandExecutor:
     def __init__(self, app: Flask):
         self.app = app
         self.models = self._discover_models()
-        self.actions: Dict[str, Any] = {}  # Registry for custom actions
+        self.actions: dict[str, Any] = {}  # Registry for custom actions
         self._register_default_actions()
 
     def _register_default_actions(self) -> None:
@@ -142,7 +143,7 @@ class CommandExecutor:
             "update_user_last_active", writer_actions.update_user_last_active_action
         )
 
-    def _discover_models(self) -> Dict[str, Any]:
+    def _discover_models(self) -> dict[str, Any]:
         """Discover all SQLAlchemy models in app.models"""
         model_map = {}
         for name, obj in vars(models).items():
@@ -150,7 +151,7 @@ class CommandExecutor:
                 model_map[name] = obj
         return model_map
 
-    def register_action(self, name: str, func: Callable[[Dict[str, Any]], Any]) -> None:
+    def register_action(self, name: str, func: Callable[[dict[str, Any]], Any]) -> None:
         self.actions[name] = func
 
     def process_command(self, cmd: WriteCommand) -> WriteResult:
@@ -266,7 +267,7 @@ class CommandExecutor:
                 },
             )
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             # Let process_command handle rollback
             return WriteResult(cmd.id, False, error=str(e))
 

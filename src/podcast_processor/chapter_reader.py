@@ -2,7 +2,6 @@
 
 import logging
 from dataclasses import dataclass
-from typing import List
 
 from mutagen.id3 import CHAP, ID3  # type: ignore[attr-defined]
 from mutagen.mp3 import MP3
@@ -20,7 +19,7 @@ class Chapter:
     end_time_ms: int
 
 
-def read_chapters(audio_path: str) -> List[Chapter]:
+def read_chapters(audio_path: str) -> list[Chapter]:
     """
     Read ID3 CHAP frames from an MP3 file.
 
@@ -31,7 +30,7 @@ def read_chapters(audio_path: str) -> List[Chapter]:
         List of Chapter objects, sorted by start time.
         Returns empty list if no chapters found or file has no ID3 tags.
     """
-    chapters: List[Chapter] = []
+    chapters: list[Chapter] = []
 
     try:
         audio = MP3(audio_path, ID3=ID3)
@@ -79,7 +78,7 @@ def read_chapters(audio_path: str) -> List[Chapter]:
                 chapter.end_time_ms,
             )
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.warning("Failed to read chapters from %s: %s", audio_path, e)
         return []
 

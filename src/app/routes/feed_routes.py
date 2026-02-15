@@ -2,9 +2,7 @@ import logging
 import secrets
 from pathlib import Path
 from threading import Thread
-from typing import Any, Optional, cast
-
-# pylint: disable=chained-comparison
+from typing import Any, cast
 from urllib.parse import urlencode, urlparse, urlunparse
 
 import requests
@@ -104,7 +102,7 @@ def add_feed() -> ResponseReturnValue:
             name="enqueue-jobs-after-add",
         ).start()
         return redirect(url_for("main.index"))
-    except Exception as e:  # pylint: disable=broad-except
+    except Exception as e:  # noqa: BLE001
         logger.error(f"Error adding feed: {e}")
         return make_response((f"Error adding feed: {e}", 500))
 
@@ -256,7 +254,7 @@ def get_feed(f_id: int) -> Response:
 
 
 @feed_bp.route("/feed/<int:f_id>", methods=["DELETE"])
-def delete_feed(f_id: int) -> ResponseReturnValue:  # pylint: disable=too-many-branches
+def delete_feed(f_id: int) -> ResponseReturnValue:
     user, error = _require_user_or_error(allow_missing_auth=True)
     if error:
         return error
@@ -277,7 +275,7 @@ def delete_feed(f_id: int) -> ResponseReturnValue:  # pylint: disable=too-many-b
             try:
                 Path(post.unprocessed_audio_path).unlink()
                 logger.info(f"Deleted unprocessed audio: {post.unprocessed_audio_path}")
-            except Exception as e:  # pylint: disable=broad-except
+            except Exception as e:  # noqa: BLE001
                 logger.error(
                     f"Error deleting unprocessed audio {post.unprocessed_audio_path}: {e}"
                 )
@@ -286,7 +284,7 @@ def delete_feed(f_id: int) -> ResponseReturnValue:  # pylint: disable=too-many-b
             try:
                 Path(post.processed_audio_path).unlink()
                 logger.info(f"Deleted processed audio: {post.processed_audio_path}")
-            except Exception as e:  # pylint: disable=broad-except
+            except Exception as e:  # noqa: BLE001
                 logger.error(
                     f"Error deleting processed audio {post.processed_audio_path}: {e}"
                 )
@@ -300,7 +298,7 @@ def delete_feed(f_id: int) -> ResponseReturnValue:  # pylint: disable=too-many-b
         )
         if not result or not result.success:
             raise RuntimeError(getattr(result, "error", "Failed to delete feed"))
-    except Exception as e:  # pylint: disable=broad-except
+    except Exception as e:  # noqa: BLE001
         logger.error("Failed to delete feed %s: %s", feed.id, e)
         return make_response(("Failed to delete feed", 500))
 
@@ -391,7 +389,7 @@ def _refresh_feed_background(app: Flask, feed_id: int) -> None:
             get_jobs_manager().enqueue_pending_jobs(
                 trigger="feed_refresh", context={"feed_id": feed_id}
             )
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # noqa: BLE001
             logger.error("Failed to refresh feed %s asynchronously: %s", feed_id, exc)
 
 
@@ -399,7 +397,7 @@ def _enqueue_pending_jobs_async(app: Flask) -> None:
     with app.app_context():
         try:
             get_jobs_manager().enqueue_pending_jobs(trigger="feed_refresh")
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # noqa: BLE001
             logger.error("Failed to enqueue pending jobs asynchronously: %s", exc)
 
 
@@ -427,7 +425,7 @@ def get_feed_by_alt_or_url(something_or_rss: str) -> Response:
         # Use Flask's safe helper to prevent directory traversal outside static_folder
         try:
             return send_from_directory(current_app.static_folder, something_or_rss)
-        except Exception:
+        except Exception:  # noqa: BLE001
             # Not a valid static file; fall through to RSS/DB lookup
             pass
     feed = Feed.query.filter_by(rss_url=something_or_rss).first()
@@ -784,7 +782,7 @@ def update_feed_settings(feed_id: int) -> ResponseReturnValue:
 def _serialize_feed(
     feed: Feed,
     *,
-    current_user: Optional[User] = None,
+    current_user: User | None = None,
 ) -> dict[str, Any]:
     auth_enabled = is_auth_enabled()
     member_ids = [membership.user_id for membership in getattr(feed, "user_feeds", [])]

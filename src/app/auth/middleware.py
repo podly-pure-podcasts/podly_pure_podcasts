@@ -66,7 +66,6 @@ def init_auth_middleware(app: Any) -> None:
 
     @app.before_request  # type: ignore[untyped-decorator]
     def enforce_authentication() -> Response | None:
-        # pylint: disable=too-many-return-statements
         if request.method == "OPTIONS":
             return None
 

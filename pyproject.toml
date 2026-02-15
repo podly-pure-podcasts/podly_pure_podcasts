@@ -34,10 +34,8 @@ dependencies = [
     "ffmpeg-python",
     "litellm",
     "bleach",
-    "types-bleach",
     "groq",
     "async_timeout",
-    "pytest-cov",
     "flask-cors",
     "bcrypt",
     "httpx-aiohttp",
@@ -48,12 +46,13 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "ruff",
-    "mypy",
+    "ty",
+    "types-bleach",
     "types-pyyaml",
     "types-requests",
     "types-waitress",
-    "pylint",
     "pytest",
+    "pytest-cov",
     "dill",
     "types-flask-migrate",
     "pytest-mock",
@@ -61,27 +60,6 @@ dev = [
     "requests",
     "types-flask-cors",
 ]
-
-[tool.pylint]
-init-hook = 'import sys; sys.path.append("./src")'
-
-disable = [
-    "logging-fstring-interpolation",
-    "missing-class-docstring",
-    "missing-function-docstring",
-    "missing-module-docstring",
-    "too-few-public-methods",
-    "too-many-arguments",
-    "too-many-locals",
-    "unspecified-encoding",
-    "line-too-long",
-    "too-many-return-statements"
-]
-
-[tool.mypy]
-warn_unused_ignores = true
-strict = true
-mypy_path = "src"
 
 [tool.pytest.ini_options]
 pythonpath = ["src", "."]
@@ -91,6 +69,61 @@ testpaths = []  # No test paths - tests converted to standalone scripts
 [tool.ruff]
 line-length = 88
 target-version = "py311"
+src = ["src"]
 
 [tool.ruff.lint]
-extend-select = ["I"]
+select = ["E", "F", "W", "I", "UP", "B", "BLE", "SIM", "RUF", "PLC", "PLE", "PLR", "PLW", "ANN"]
+ignore = [
+    "E501",    # line-too-long (formatter handles it)
+    # ANN — relaxed for gradual adoption
+    "ANN001",  # missing-type-function-argument
+    "ANN002",  # missing-type-args
+    "ANN003",  # missing-type-kwargs
+    "ANN201",  # missing-return-type-public-function
+    "ANN202",  # missing-return-type-private-function
+    "ANN204",  # missing-return-type-special-method
+    "ANN206",  # missing-return-type-class-method
+    "ANN401",  # dynamically-typed-expressions (Any)
+    # PLC
+    "PLC0415", # import-outside-toplevel (intentional lazy imports)
+    # PLR — rules that were globally disabled in the old pylint config
+    "PLR0911", # too-many-return-statements
+    "PLR0913", # too-many-arguments
+    "PLR0914", # too-many-locals
+    "PLR0915", # too-many-statements
+    "PLR0917", # too-many-positional-arguments
+    "PLR2004", # magic-value-comparison
+    # PLW
+    "PLW0603", # global-statement (intentional module-level singletons)
+    "PLW1508", # invalid-envvar-default (false positive on os.environ.get)
+    # RUF
+    "RUF001",  # ambiguous-unicode-character-string (false positives on en-dash)
+    "RUF012",  # mutable-class-variable (config classes)
+    # SIM — style preferences
+    "SIM102",  # collapsible-if
+    "SIM103",  # needless-bool
+    "SIM105",  # use-contextlib-suppress
+    "SIM108",  # if-else-block-instead-of-if-exp
+    "SIM117",  # multiple-with-statements
+    "SIM118",  # in-dict-keys
+    "SIM201",  # negate-equal-op
+]
+
+[tool.ruff.lint.per-file-ignores]
+"src/tests/**/*.py" = ["ANN"]
+"scripts/**/*.py" = ["ANN"]
+
+[tool.ty.environment]
+python-version = "3.11"
+
+[tool.ty.src]
+include = ["src"]
+
+[tool.ty.rules]
+unresolved-attribute = "warn"
+invalid-argument-type = "warn"
+invalid-return-type = "warn"
+invalid-method-override = "warn"
+invalid-assignment = "warn"
+no-matching-overload = "warn"
+not-subscriptable = "warn"

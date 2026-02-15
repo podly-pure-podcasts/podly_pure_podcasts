@@ -1,7 +1,6 @@
 """Write chapter metadata to processed MP3 files with adjusted timestamps."""
 
 import logging
-from typing import List, Tuple
 
 from mutagen.id3 import CHAP, CTOC, TIT2  # type: ignore[attr-defined]
 from mutagen.mp3 import MP3
@@ -12,9 +11,9 @@ logger = logging.getLogger("global_logger")
 
 
 def recalculate_chapter_times(
-    chapters: List[Chapter],
-    removed_segments: List[Tuple[float, float]],
-) -> List[Chapter]:
+    chapters: list[Chapter],
+    removed_segments: list[tuple[float, float]],
+) -> list[Chapter]:
     """
     Adjust chapter timestamps after ad segment removal.
 
@@ -37,7 +36,7 @@ def recalculate_chapter_times(
     # Sort removed segments by start time
     sorted_segments = sorted(removed_segments, key=lambda x: x[0])
 
-    adjusted_chapters: List[Chapter] = []
+    adjusted_chapters: list[Chapter] = []
 
     for chapter in chapters:
         chapter_start_ms = chapter.start_time_ms
@@ -88,7 +87,7 @@ def recalculate_chapter_times(
 
 def write_chapters(
     audio_path: str,
-    chapters: List[Chapter],
+    chapters: list[Chapter],
 ) -> None:
     """
     Write chapter metadata to an MP3 file.
@@ -161,8 +160,8 @@ def write_chapters(
 
 def write_adjusted_chapters(
     audio_path: str,
-    chapters_to_keep: List[Chapter],
-    removed_segments: List[Tuple[float, float]],
+    chapters_to_keep: list[Chapter],
+    removed_segments: list[tuple[float, float]],
 ) -> None:
     """
     Write chapters to an MP3 file with timestamps adjusted for removed segments.

@@ -11,7 +11,7 @@ from openai.types.audio.transcription_segment import TranscriptionSegment
 @pytest.mark.skip
 def test_remote_transcribe() -> None:
     # import here instead of the toplevel because torch is not installed properly in CI.
-    from podcast_processor.transcribe import (  # pylint: disable=import-outside-toplevel
+    from podcast_processor.transcribe import (
         OpenAIWhisperTranscriber,
     )
 
@@ -29,7 +29,7 @@ def test_remote_transcribe() -> None:
 @pytest.mark.skip
 def test_local_transcribe() -> None:
     # import here instead of the toplevel because torch is not installed properly in CI.
-    from podcast_processor.transcribe import (  # pylint: disable=import-outside-toplevel
+    from podcast_processor.transcribe import (
         LocalWhisperTranscriber,
     )
 
@@ -42,10 +42,10 @@ def test_local_transcribe() -> None:
 @pytest.mark.skip
 def test_groq_transcribe(mocker: Any) -> None:
     # import here instead of the toplevel because dependencies aren't installed properly in CI.
-    from podcast_processor.transcribe import (  # pylint: disable=import-outside-toplevel
+    from podcast_processor.transcribe import (
         GroqWhisperTranscriber,
     )
-    from shared.config import (  # pylint: disable=import-outside-toplevel
+    from shared.config import (
         GroqWhisperConfig,
     )
 
@@ -81,7 +81,7 @@ def test_groq_transcribe(mocker: Any) -> None:
 
 def test_offset() -> None:
     # import here instead of the toplevel because torch is not installed properly in CI.
-    from podcast_processor.transcribe import (  # pylint: disable=import-outside-toplevel
+    from podcast_processor.transcribe import (
         OpenAIWhisperTranscriber,
     )
 

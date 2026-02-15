@@ -1,7 +1,8 @@
 import os
 import uuid
+from collections.abc import Callable
 from queue import Empty
-from typing import Any, Callable, Dict, Optional, cast
+from typing import Any, cast
 
 from flask import current_app
 
@@ -18,7 +19,7 @@ class WriterClient:
     def connect(self) -> None:
         if not self.manager:
             self.manager = make_client_manager()
-            self.queue = self.manager.get_command_queue()  # pylint: disable=no-member
+            self.queue = self.manager.get_command_queue()
 
     def _should_use_local_fallback(self) -> bool:
         if os.environ.get("PYTEST_CURRENT_TEST"):
@@ -27,15 +28,15 @@ class WriterClient:
             return True
         try:
             return bool(getattr(current_app, "testing", False))
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # noqa: BLE001
             return False
 
     def _local_execute(self, cmd: WriteCommand) -> WriteResult:
         # Import locally to avoid cyclic dependencies
-        from app import models  # pylint: disable=import-outside-toplevel
-        from app.extensions import db  # pylint: disable=import-outside-toplevel
+        from app import models
+        from app.extensions import db
 
-        model_map: Dict[str, Any] = {}
+        model_map: dict[str, Any] = {}
         for name, obj in vars(models).items():
             if isinstance(obj, type) and issubclass(obj, db.Model) and obj != db.Model:
                 model_map[name] = obj
@@ -50,22 +51,22 @@ class WriterClient:
             else:
                 db.session.rollback()
             return result
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # noqa: BLE001
             db.session.rollback()
             return WriteResult(cmd.id, False, error=str(exc))
 
     def _local_execute_single(
-        self, cmd: WriteCommand, model_map: Dict[str, Any]
+        self, cmd: WriteCommand, model_map: dict[str, Any]
     ) -> WriteResult:
         if cmd.type == WriteCommandType.ACTION:
             return self._local_execute_action(cmd)
         return self._local_execute_model(cmd, model_map)
 
     def _local_execute_transaction(
-        self, cmd: WriteCommand, model_map: Dict[str, Any]
+        self, cmd: WriteCommand, model_map: dict[str, Any]
     ) -> WriteResult:
         # Import locally to avoid cyclic dependencies
-        from app.extensions import db  # pylint: disable=import-outside-toplevel
+        from app.extensions import db
 
         results = []
         for sub_cmd_data in cmd.data.get("commands", []):
@@ -94,7 +95,6 @@ class WriterClient:
 
     def _local_execute_action(self, cmd: WriteCommand) -> WriteResult:
         # Import locally to avoid cyclic dependencies
-        # pylint: disable=import-outside-toplevel
         from app.writer import actions as writer_actions
 
         action_name = cmd.data.get("action")
@@ -103,8 +103,8 @@ class WriterClient:
         if func_obj is None or not callable(func_obj):
             return WriteResult(cmd.id, False, error=f"Unknown action: {action_name}")
 
-        func = cast(Callable[[Dict[str, Any]], Any], func_obj)
-        result = func(cmd.data.get("params", {}))  # pylint: disable=not-callable
+        func = cast(Callable[[dict[str, Any]], Any], func_obj)
+        result = func(cmd.data.get("params", {}))
         return WriteResult(
             cmd.id,
             True,
@@ -112,10 +112,10 @@ class WriterClient:
         )
 
     def _local_execute_model(
-        self, cmd: WriteCommand, model_map: Dict[str, Any]
+        self, cmd: WriteCommand, model_map: dict[str, Any]
     ) -> WriteResult:
         # Import locally to avoid cyclic dependencies
-        from app.extensions import db  # pylint: disable=import-outside-toplevel
+        from app.extensions import db
 
         if not cmd.model or cmd.model not in model_map:
             return WriteResult(cmd.id, False, error=f"Unknown model: {cmd.model}")
@@ -127,11 +127,11 @@ class WriterClient:
 
     def submit(
         self, cmd: WriteCommand, wait: bool = False, timeout: int = 10
-    ) -> Optional[WriteResult]:
+    ) -> WriteResult | None:
         if not self.queue:
             try:
                 self.connect()
-            except Exception:  # pylint: disable=broad-except
+            except Exception:
                 if self._should_use_local_fallback():
                     result = self._local_execute(cmd)
                     return result if wait else None
@@ -141,7 +141,7 @@ class WriterClient:
             if not self.manager:
                 raise RuntimeError("Manager not connected")
             # Create a temporary queue for the reply
-            reply_q = self.manager.Queue()  # pylint: disable=no-member
+            reply_q = self.manager.Queue()
             cmd.reply_queue = reply_q
 
         if self.queue:
@@ -155,23 +155,23 @@ class WriterClient:
         return None
 
     def create(
-        self, model: str, data: Dict[str, Any], wait: bool = True
-    ) -> Optional[WriteResult]:
+        self, model: str, data: dict[str, Any], wait: bool = True
+    ) -> WriteResult | None:
         cmd = WriteCommand(
             id=str(uuid.uuid4()), type=WriteCommandType.CREATE, model=model, data=data
         )
         return self.submit(cmd, wait=wait)
 
     def update(
-        self, model: str, pk: Any, data: Dict[str, Any], wait: bool = True
-    ) -> Optional[WriteResult]:
+        self, model: str, pk: Any, data: dict[str, Any], wait: bool = True
+    ) -> WriteResult | None:
         data["id"] = pk
         cmd = WriteCommand(
             id=str(uuid.uuid4()), type=WriteCommandType.UPDATE, model=model, data=data
         )
         return self.submit(cmd, wait=wait)
 
-    def delete(self, model: str, pk: Any, wait: bool = True) -> Optional[WriteResult]:
+    def delete(self, model: str, pk: Any, wait: bool = True) -> WriteResult | None:
         cmd = WriteCommand(
             id=str(uuid.uuid4()),
             type=WriteCommandType.DELETE,
@@ -181,8 +181,8 @@ class WriterClient:
         return self.submit(cmd, wait=wait)
 
     def action(
-        self, action_name: str, params: Dict[str, Any], wait: bool = True
-    ) -> Optional[WriteResult]:
+        self, action_name: str, params: dict[str, Any], wait: bool = True
+    ) -> WriteResult | None:
         cmd = WriteCommand(
             id=str(uuid.uuid4()),
             type=WriteCommandType.ACTION,

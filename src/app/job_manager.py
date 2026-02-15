@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 from app.extensions import db as _db
 from app.models import Post, ProcessingJob
@@ -17,10 +17,10 @@ class JobManager:
         post_guid: str,
         status_manager: ProcessingStatusManager,
         logger_obj: logging.Logger,
-        run_id: Optional[str],
+        run_id: str | None,
         *,
-        requested_by_user_id: Optional[int] = None,
-        billing_user_id: Optional[int] = None,
+        requested_by_user_id: int | None = None,
+        billing_user_id: int | None = None,
     ) -> None:
         self.post_guid = post_guid
         self._status_manager = status_manager
@@ -28,13 +28,13 @@ class JobManager:
         self._run_id = run_id
         self._requested_by_user_id = requested_by_user_id
         self._billing_user_id = billing_user_id
-        self.job: Optional[ProcessingJob] = None
+        self.job: ProcessingJob | None = None
 
     @property
-    def job_id(self) -> Optional[str]:
+    def job_id(self) -> str | None:
         return getattr(self.job, "id", None) if self.job else None
 
-    def _reload_job(self) -> Optional[ProcessingJob]:
+    def _reload_job(self) -> ProcessingJob | None:
         self.job = (
             ProcessingJob.query.filter_by(post_guid=self.post_guid)
             .order_by(ProcessingJob.created_at.desc())
@@ -42,7 +42,7 @@ class JobManager:
         )
         return self.job
 
-    def get_active_job(self) -> Optional[ProcessingJob]:
+    def get_active_job(self) -> ProcessingJob | None:
         job = self.job or self._reload_job()
         if job and job.status in self.ACTIVE_STATUSES:
             return job
@@ -95,8 +95,8 @@ class JobManager:
     def skip(
         self,
         message: str = "Processing skipped",
-        step: Optional[int] = None,
-        progress: Optional[float] = None,
+        step: int | None = None,
+        progress: float | None = None,
     ) -> ProcessingJob:
         job = self.ensure_job()
         total_steps = job.total_steps or 4
@@ -110,7 +110,7 @@ class JobManager:
 
     def _load_and_validate_post(
         self,
-    ) -> Tuple[Optional[Post], Optional[Dict[str, Any]]]:
+    ) -> tuple[Post | None, dict[str, Any] | None]:
         """Load the post and perform lifecycle validations."""
         post = Post.query.filter_by(guid=self.post_guid).first()
         if not post:
@@ -157,7 +157,7 @@ class JobManager:
         if post.processed_audio_path and os.path.exists(post.processed_audio_path):
             try:
                 job = self.skip("Post already processed")
-            except Exception as err:  # pylint: disable=broad-exception-caught
+            except Exception as err:  # noqa: BLE001
                 self._logger.error(
                     "Failed to mark job as completed during short-circuit for %s: %s",
                     self.post_guid,
@@ -176,7 +176,7 @@ class JobManager:
 
         return post, None
 
-    def _mark_job_skipped(self, reason: str) -> Optional[ProcessingJob]:
+    def _mark_job_skipped(self, reason: str) -> ProcessingJob | None:
         job = self.get_active_job()
         if job and job.status in {"pending", "running"}:
             job.error_message = None
@@ -192,13 +192,13 @@ class JobManager:
 
         try:
             return self.skip(reason)
-        except Exception as err:  # pylint: disable=broad-exception-caught
+        except Exception as err:  # noqa: BLE001
             self._logger.error(
                 "Failed to mark job as skipped for %s: %s", self.post_guid, err
             )
         return job
 
-    def start_processing(self, priority: str) -> Dict[str, Any]:
+    def start_processing(self, priority: str) -> dict[str, Any]:
         """
         Handle the end-to-end lifecycle for a single post processing request.
         Ensures a job exists and is marked ready for the worker thread.

@@ -8,7 +8,7 @@ improve system stability.
 
 import logging
 import threading
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ class LLMConcurrencyLimiter:
             f"LLM concurrency limiter initialized with {max_concurrent_calls} max concurrent calls"
         )
 
-    def acquire(self, timeout: Optional[float] = None) -> bool:
+    def acquire(self, timeout: float | None = None) -> bool:
         """
         Acquire a slot for making an LLM API call.
 
@@ -46,9 +46,7 @@ class LLMConcurrencyLimiter:
             True if a slot was acquired, False if timeout occurred
         """
         # Disable specific pylint warning for this line as manual semaphore control is needed
-        acquired = self._semaphore.acquire(  # pylint: disable=consider-using-with
-            timeout=timeout
-        )
+        acquired = self._semaphore.acquire(timeout=timeout)
         if acquired:
             logger.debug("Acquired LLM concurrency slot")
         else:
@@ -76,12 +74,12 @@ class LLMConcurrencyLimiter:
 
 
 # Global concurrency limiter instance
-_CONCURRENCY_LIMITER: Optional[LLMConcurrencyLimiter] = None
+_CONCURRENCY_LIMITER: LLMConcurrencyLimiter | None = None
 
 
 def get_concurrency_limiter(max_concurrent_calls: int = 3) -> LLMConcurrencyLimiter:
     """Get or create the global concurrency limiter instance."""
-    global _CONCURRENCY_LIMITER  # pylint: disable=global-statement
+    global _CONCURRENCY_LIMITER
     if (
         _CONCURRENCY_LIMITER is None
         or _CONCURRENCY_LIMITER.max_concurrent_calls != max_concurrent_calls
@@ -93,7 +91,7 @@ def get_concurrency_limiter(max_concurrent_calls: int = 3) -> LLMConcurrencyLimi
 class ConcurrencyContext:
     """Context manager for controlling LLM API call concurrency."""
 
-    def __init__(self, limiter: LLMConcurrencyLimiter, timeout: Optional[float] = None):
+    def __init__(self, limiter: LLMConcurrencyLimiter, timeout: float | None = None):
         """
         Initialize the context manager.
 
@@ -116,9 +114,9 @@ class ConcurrencyContext:
 
     def __exit__(
         self,
-        exc_type: Optional[type],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[Any],
+        exc_type: type | None,
+        exc_val: BaseException | None,
+        exc_tb: Any | None,
     ) -> None:
         """Release the concurrency slot."""
         if self.acquired:

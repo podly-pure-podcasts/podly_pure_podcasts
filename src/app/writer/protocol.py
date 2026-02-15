@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 class WriteCommandType(Enum):
@@ -17,8 +17,8 @@ class WriteCommandType(Enum):
 class WriteCommand:
     id: str
     type: WriteCommandType
-    model: Optional[str]
-    data: Dict[str, Any]
+    model: str | None
+    data: dict[str, Any]
     # The queue to send the result back to (managed by the client)
     reply_queue: Any = None
 
@@ -27,5 +27,5 @@ class WriteCommand:
 class WriteResult:
     command_id: str
     success: bool
-    data: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
+    data: dict[str, Any] | None = None
+    error: str | None = None

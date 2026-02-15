@@ -3,14 +3,14 @@ import math
 import os
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import ffmpeg  # type: ignore[import-untyped]
 
 logger = logging.getLogger("global_logger")
 
 
-def get_audio_duration_ms(file_path: str) -> Optional[int]:
+def get_audio_duration_ms(file_path: str) -> int | None:
     try:
         logger.debug("[FFMPEG_PROBE] Probing audio file: %s", file_path)
         probe = ffmpeg.probe(file_path)
@@ -30,7 +30,7 @@ def get_audio_duration_ms(file_path: str) -> Optional[int]:
 
 def _get_encoding_args(
     use_vbr: bool = False, vbr_quality: int = 2, cbr_bitrate: str = "192k"
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Return ffmpeg encoding arguments for VBR or CBR."""
     if use_vbr:
         return {"q:a": vbr_quality}
@@ -38,7 +38,7 @@ def _get_encoding_args(
 
 
 def clip_segments_with_fade(
-    ad_segments_ms: List[Tuple[int, int]],
+    ad_segments_ms: list[tuple[int, int]],
     fade_ms: int,
     in_path: str,
     out_path: str,
@@ -66,7 +66,7 @@ def clip_segments_with_fade(
         _clip_segments_simple(
             ad_segments_ms, in_path, out_path, audio_duration_ms, encoding_args
         )
-    except Exception as e:  # pylint: disable=broad-except
+    except Exception as e:  # noqa: BLE001
         # Catches filter graph construction errors like "multiple outgoing edges"
         logger.warning(
             "Complex filter failed (graph error), trying simple approach: %s", e
@@ -77,12 +77,12 @@ def clip_segments_with_fade(
 
 
 def _clip_segments_complex(
-    ad_segments_ms: List[Tuple[int, int]],
+    ad_segments_ms: list[tuple[int, int]],
     fade_ms: int,
     in_path: str,
     out_path: str,
     audio_duration_ms: int,
-    encoding_args: Dict[str, Any],
+    encoding_args: dict[str, Any],
 ) -> None:
     """Original complex approach with fades."""
 
@@ -131,7 +131,7 @@ def _clip_segments_complex(
 
 
 def clip_segments_exact(
-    ad_segments_ms: List[Tuple[int, int]],
+    ad_segments_ms: list[tuple[int, int]],
     in_path: str,
     out_path: str,
     cbr_bitrate: str = "192k",
@@ -151,16 +151,16 @@ def clip_segments_exact(
 
 
 def _clip_segments_simple(
-    ad_segments_ms: List[Tuple[int, int]],
+    ad_segments_ms: list[tuple[int, int]],
     in_path: str,
     out_path: str,
     audio_duration_ms: int,
-    encoding_args: Dict[str, Any],
+    encoding_args: dict[str, Any],
 ) -> None:
     """Simpler approach without fades - more reliable for many segments."""
 
     # Build list of segments to keep (inverse of ad segments)
-    keep_segments: List[Tuple[int, int]] = []
+    keep_segments: list[tuple[int, int]] = []
     last_end = 0
 
     for start_ms, end_ms in ad_segments_ms:
@@ -254,7 +254,7 @@ def split_audio(
     audio_file_path: Path,
     audio_chunk_path: Path,
     chunk_size_bytes: int,
-) -> List[Tuple[Path, int]]:
+) -> list[tuple[Path, int]]:
 
     audio_chunk_path.mkdir(parents=True, exist_ok=True)
 
@@ -282,7 +282,7 @@ def split_audio(
         chunk_duration_ms,
     )
 
-    chunks: List[Tuple[Path, int]] = []
+    chunks: list[tuple[Path, int]] = []
 
     for i in range(num_chunks):
         start_offset_ms = i * chunk_duration_ms

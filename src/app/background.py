@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta
-from typing import Optional
 
 from app.extensions import scheduler
 from app.jobs_manager import (
@@ -23,13 +22,13 @@ def add_background_job(minutes: int) -> None:
     )
 
 
-def schedule_cleanup_job(retention_days: Optional[int]) -> None:
+def schedule_cleanup_job(retention_days: int | None) -> None:
     """Ensure the periodic cleanup job is scheduled or disabled as needed."""
     job_id = "cleanup_processed_posts"
     if retention_days is None or retention_days <= 0:
         try:
             scheduler.remove_job(job_id)
-        except Exception:
+        except Exception:  # noqa: BLE001
             # Job may not be scheduled; ignore.
             pass
         return

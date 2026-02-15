@@ -46,7 +46,7 @@ def cleanup_processed_post_files_only_action(params: Dict[str, Any]) -> Dict[str
             continue
         try:
             file_path = Path(path_str)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:
             logger.warning(
                 "[WRITER] Invalid path for post %s: %s", post.guid, path_str
             )

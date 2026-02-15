@@ -23,7 +23,7 @@ class AuthSettings:
     def admin_password_required(self) -> bool:
         return self.require_auth
 
-    def without_password(self) -> "AuthSettings":
+    def without_password(self) -> AuthSettings:
         """Return a copy with the password removed to avoid retaining plaintext."""
         return replace(self, admin_password=None)
 

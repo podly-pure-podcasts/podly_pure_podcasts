@@ -3,8 +3,9 @@ from __future__ import annotations
 import logging
 import os
 import re
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Iterator, Optional, Set
+from typing import Any
 
 import requests
 import validators
@@ -24,12 +25,12 @@ class PodcastDownloader:
     """
 
     def __init__(
-        self, download_dir: str = DOWNLOAD_DIR, logger: Optional[logging.Logger] = None
+        self, download_dir: str = DOWNLOAD_DIR, logger: logging.Logger | None = None
     ):
         self.download_dir = download_dir
         self.logger = logger or logging.getLogger(__name__)
 
-    def download_episode(self, post: Post, dest_path: str) -> Optional[str]:
+    def download_episode(self, post: Post, dest_path: str) -> str | None:
         """
         Download a podcast episode if it doesn't already exist.
 
@@ -114,7 +115,7 @@ def sanitize_title(title: str) -> str:
 
 def find_audio_link(entry: Any) -> str:
     """Find the audio link in a feed entry."""
-    audio_mime_types: Set[str] = {
+    audio_mime_types: set[str] = {
         "audio/mpeg",
         "audio/mp3",
         "audio/x-mp3",
@@ -140,7 +141,7 @@ def find_audio_link(entry: Any) -> str:
     return str(getattr(entry, "id", ""))
 
 
-def _iter_enclosure_audio_urls(entry: Any, audio_mime_types: Set[str]) -> Iterator[str]:
+def _iter_enclosure_audio_urls(entry: Any, audio_mime_types: set[str]) -> Iterator[str]:
     enclosures = getattr(entry, "enclosures", None) or []
     for enclosure in enclosures:
         enc_type = (getattr(enclosure, "type", "") or "").lower()
@@ -156,7 +157,7 @@ def _iter_enclosure_audio_urls(entry: Any, audio_mime_types: Set[str]) -> Iterat
 
 def _iter_link_audio_urls(
     entry: Any,
-    audio_mime_types: Set[str],
+    audio_mime_types: set[str],
     *,
     match_any_audio: bool,
 ) -> Iterator[str]:
@@ -166,9 +167,8 @@ def _iter_link_audio_urls(
         if match_any_audio:
             if not link_type.startswith("audio/"):
                 continue
-        else:
-            if link_type not in audio_mime_types:
-                continue
+        elif link_type not in audio_mime_types:
+            continue
 
         href = getattr(link, "href", None)
         if href:
@@ -179,7 +179,7 @@ def _iter_link_audio_urls(
 _default_downloader = PodcastDownloader()
 
 
-def download_episode(post: Post, dest_path: str) -> Optional[str]:
+def download_episode(post: Post, dest_path: str) -> str | None:
     return _default_downloader.download_episode(post, dest_path)
 
 

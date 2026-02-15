@@ -1,7 +1,7 @@
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from app.extensions import db
 from app.jobs_manager_run_service import recalculate_run_counts
@@ -16,7 +16,7 @@ from app.models import (
 logger = logging.getLogger("writer")
 
 
-def cleanup_missing_audio_paths_action(params: Dict[str, Any]) -> int:
+def cleanup_missing_audio_paths_action(params: dict[str, Any]) -> int:
     inconsistent_posts = Post.query.filter(
         Post.whitelisted,
         (
@@ -57,7 +57,7 @@ def cleanup_missing_audio_paths_action(params: Dict[str, Any]) -> int:
     return count
 
 
-def clear_post_processing_data_action(params: Dict[str, Any]) -> Dict[str, Any]:
+def clear_post_processing_data_action(params: dict[str, Any]) -> dict[str, Any]:
     post_id = params.get("post_id")
     post = db.session.get(Post, post_id)
     if not post:
@@ -107,7 +107,7 @@ def clear_post_processing_data_action(params: Dict[str, Any]) -> Dict[str, Any]:
     return {"post_id": post.id}
 
 
-def cleanup_processed_post_action(params: Dict[str, Any]) -> Dict[str, Any]:
+def cleanup_processed_post_action(params: dict[str, Any]) -> dict[str, Any]:
     post_id = params.get("post_id")
     if not post_id:
         raise ValueError("post_id is required")
@@ -129,7 +129,7 @@ def cleanup_processed_post_action(params: Dict[str, Any]) -> Dict[str, Any]:
     return {"post_id": post.id}
 
 
-def cleanup_processed_post_files_only_action(params: Dict[str, Any]) -> Dict[str, Any]:
+def cleanup_processed_post_files_only_action(params: dict[str, Any]) -> dict[str, Any]:
     """Remove audio files but preserve processing metadata."""
     post_id = params.get("post_id")
     if not post_id:
@@ -148,7 +148,7 @@ def cleanup_processed_post_files_only_action(params: Dict[str, Any]) -> Dict[str
             continue
         try:
             file_path = Path(path_str)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # noqa: BLE001
             logger.warning("[WRITER] Invalid path for post %s: %s", post.guid, path_str)
             continue
         if not file_path.exists():

@@ -14,7 +14,7 @@ Set SKIP_INTEGRATION=1 to skip these checks without error.
 
 import os
 import sys
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from integration_check.client import (
     FeedInfo,
@@ -126,7 +126,7 @@ def test_whitelist_and_process_post():
         assert posts, "Need at least one post to test"
 
         # Find a non-whitelisted post or use the first one
-        target_post: Dict[str, Any] = posts[0]
+        target_post: dict[str, Any] = posts[0]
         for post in posts:
             if not post.get("whitelisted"):
                 target_post = post
@@ -136,9 +136,9 @@ def test_whitelist_and_process_post():
 
         # Whitelist and trigger processing
         result = client.whitelist_post(guid, whitelisted=True, trigger_processing=True)
-        assert (
-            result.get("whitelisted") is True
-        ), f"Post should be whitelisted: {result}"
+        assert result.get("whitelisted") is True, (
+            f"Post should be whitelisted: {result}"
+        )
         assert "processing_job" in result, f"Should trigger processing job: {result}"
         assert result["processing_job"].get("status") in (
             "started",
@@ -232,9 +232,9 @@ def test_reprocess_clears_and_reprocesses():
         # Verify audio is still accessible after reprocessing
         post_info = client.get_post_info(guid)
         assert post_info is not None
-        assert (
-            post_info.has_processed_audio
-        ), "Should have processed audio after reprocess"
+        assert post_info.has_processed_audio, (
+            "Should have processed audio after reprocess"
+        )
 
         # Verify audio endpoint works
         audio_resp = client.get_audio(guid)
@@ -299,9 +299,9 @@ def test_cleanup_removes_only_audio_files():
         # Capture initial state of a post
         initial_info = client.get_post_info(old_guid)
         assert initial_info is not None
-        assert (
-            initial_info.has_processed_audio
-        ), "Should have processed audio before cleanup"
+        assert initial_info.has_processed_audio, (
+            "Should have processed audio before cleanup"
+        )
 
         # Store duration for later comparison (should be preserved)
         initial_duration = initial_info.duration
@@ -332,22 +332,22 @@ def test_cleanup_removes_only_audio_files():
         assert post_after is not None, "Post should still exist after cleanup"
 
         # Audio files should be removed from the old post
-        assert (
-            not post_after.has_processed_audio
-        ), "Processed audio path should be cleared after cleanup"
-        assert (
-            not post_after.has_unprocessed_audio
-        ), "Unprocessed audio path should be cleared after cleanup"
+        assert not post_after.has_processed_audio, (
+            "Processed audio path should be cleared after cleanup"
+        )
+        assert not post_after.has_unprocessed_audio, (
+            "Unprocessed audio path should be cleared after cleanup"
+        )
 
         # Whitelisted should be set to False
-        assert (
-            not post_after.whitelisted
-        ), "Post should not be whitelisted after cleanup"
+        assert not post_after.whitelisted, (
+            "Post should not be whitelisted after cleanup"
+        )
 
         # Duration should be preserved (metadata)
-        assert (
-            post_after.duration == initial_duration
-        ), f"Duration should be preserved. Expected {initial_duration}, got {post_after.duration}"
+        assert post_after.duration == initial_duration, (
+            f"Duration should be preserved. Expected {initial_duration}, got {post_after.duration}"
+        )
 
         print("    ✓ passed")
     finally:
@@ -367,9 +367,9 @@ def test_cleanup_disabled_when_no_retention():
         raise SkipTest("Cleanup is enabled with retention_days > 0")
 
     result = client.run_cleanup()
-    assert (
-        result.get("status") == "disabled"
-    ), f"Expected disabled status when retention <= 0, got: {result}"
+    assert result.get("status") == "disabled", (
+        f"Expected disabled status when retention <= 0, got: {result}"
+    )
 
     print("    ✓ passed")
 
@@ -469,7 +469,7 @@ def main():
             except SkipTest as e:
                 print(f"    ⊘ skipped: {e}")
                 total_skipped += 1
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 print(f"    ✗ FAILED: {e}")
                 total_failed += 1
                 import traceback

@@ -5,7 +5,6 @@ Provides more robust and extensible error handling beyond simple string matching
 """
 
 import re
-from typing import Union
 
 from litellm.exceptions import InternalServerError
 
@@ -49,7 +48,7 @@ class LLMErrorClassifier:
     ]
 
     @classmethod
-    def is_retryable_error(cls, error: Union[Exception, str]) -> bool:
+    def is_retryable_error(cls, error: Exception | str) -> bool:
         """
         Determine if an error should be retried.
 
@@ -78,7 +77,7 @@ class LLMErrorClassifier:
         return cls._matches_patterns(error_str, retryable_patterns)
 
     @classmethod
-    def get_error_category(cls, error: Union[Exception, str]) -> str:
+    def get_error_category(cls, error: Exception | str) -> str:
         """
         Categorize the error type for better handling.
 
@@ -108,7 +107,7 @@ class LLMErrorClassifier:
         return "unknown"
 
     @classmethod
-    def get_suggested_backoff(cls, error: Union[Exception, str], attempt: int) -> float:
+    def get_suggested_backoff(cls, error: Exception | str, attempt: int) -> float:
         """
         Get suggested backoff time based on error type and attempt number.
 

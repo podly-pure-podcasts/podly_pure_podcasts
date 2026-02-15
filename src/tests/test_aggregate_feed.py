@@ -1,5 +1,3 @@
-import pytest
-
 from app.extensions import db
 from app.feeds import get_user_aggregate_posts
 from app.models import Feed, Post, UserFeed

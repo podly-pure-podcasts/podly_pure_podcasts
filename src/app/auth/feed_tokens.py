@@ -4,7 +4,6 @@ import hashlib
 import logging
 import secrets
 from dataclasses import dataclass
-from typing import Optional
 
 from app.auth.service import AuthenticatedUser
 from app.extensions import db
@@ -67,7 +66,7 @@ def create_feed_access_token(user: User, feed: Feed | None) -> tuple[str, str]:
 
 def authenticate_feed_token(
     token_id: str, secret: str, path: str
-) -> Optional[FeedTokenAuthResult]:
+) -> FeedTokenAuthResult | None:
     if not token_id:
         return None
 
@@ -117,7 +116,7 @@ def _verify_subscription(user: User, feed_id: int) -> bool:
     return True
 
 
-def _resolve_user_id_from_feed_path(path: str) -> Optional[int]:
+def _resolve_user_id_from_feed_path(path: str) -> int | None:
     if path.startswith("/feed/user/"):
         remainder = path[len("/feed/user/") :]
         try:
@@ -127,7 +126,7 @@ def _resolve_user_id_from_feed_path(path: str) -> Optional[int]:
     return None
 
 
-def _resolve_feed_id(path: str) -> Optional[int]:
+def _resolve_feed_id(path: str) -> int | None:
     if path.startswith("/feed/"):
         remainder = path[len("/feed/") :]
         try:

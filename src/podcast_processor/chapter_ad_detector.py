@@ -1,7 +1,6 @@
 """Detect ad segments using chapter metadata filtering."""
 
 import logging
-from typing import List, Optional, Tuple
 
 from podcast_processor.chapter_filter import (
     filter_chapters_by_strings,
@@ -19,8 +18,8 @@ class ChapterAdDetector:
 
     def __init__(
         self,
-        filter_strings: List[str],
-        logger: Optional[logging.Logger] = None,
+        filter_strings: list[str],
+        logger: logging.Logger | None = None,
     ):
         """
         Initialize the chapter-based ad detector.
@@ -36,7 +35,7 @@ class ChapterAdDetector:
     def from_csv(
         cls,
         filter_strings_csv: str,
-        logger: Optional[logging.Logger] = None,
+        logger: logging.Logger | None = None,
     ) -> "ChapterAdDetector":
         """
         Create detector from comma-separated filter strings.
@@ -54,7 +53,7 @@ class ChapterAdDetector:
     def detect(
         self,
         audio_path: str,
-    ) -> Tuple[List[Tuple[float, float]], List[Chapter], List[Chapter]]:
+    ) -> tuple[list[tuple[float, float]], list[Chapter], list[Chapter]]:
         """
         Detect ad segments in an audio file using chapter metadata.
 
@@ -83,7 +82,7 @@ class ChapterAdDetector:
         )
 
         # Convert removed chapters to time segments (in seconds)
-        ad_segments: List[Tuple[float, float]] = []
+        ad_segments: list[tuple[float, float]] = []
         for chapter in chapters_to_remove:
             start_sec = chapter.start_time_ms / 1000.0
             end_sec = chapter.end_time_ms / 1000.0
@@ -97,7 +96,7 @@ class ChapterAdDetector:
 
         return ad_segments, chapters_to_keep, chapters_to_remove
 
-    def detect_ad_segments(self, audio_path: str) -> List[Tuple[float, float]]:
+    def detect_ad_segments(self, audio_path: str) -> list[tuple[float, float]]:
         """
         Detect ad segments and return only the time tuples.
 

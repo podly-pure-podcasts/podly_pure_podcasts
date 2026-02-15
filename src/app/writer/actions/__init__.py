@@ -3,8 +3,6 @@
 Mypy runs with `--no-implicit-reexport`, so imports use explicit aliasing.
 """
 
-# pylint: disable=useless-import-alias
-
 from .cleanup import (
     cleanup_missing_audio_paths_action as cleanup_missing_audio_paths_action,
 )

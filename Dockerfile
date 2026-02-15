@@ -24,6 +24,8 @@ COPY --from=ghcr.io/astral-sh/uv:0.10.2 /uv /uvx /bin/
 # Environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV UV_COMPILE_BYTECODE=1
+ENV UV_LINK_MODE=copy
 ARG CUDA_VERSION=12.4.1
 ARG ROCM_VERSION=6.4
 ARG USE_GPU=false
@@ -89,7 +91,8 @@ RUN if [ -f /etc/debian_version ]; then \
     fi
 
 # Install dependencies conditionally based on LITE_BUILD
-RUN set -e && \
+RUN --mount=type=cache,target=/root/.cache/uv \
+    set -e && \
     if [ "${LITE_BUILD}" = "true" ]; then \
     echo "Installing lite dependencies (without Whisper)"; \
     echo "Using lite pyproject:" && \
@@ -103,32 +106,15 @@ RUN set -e && \
     fi
 
 # Install PyTorch with CUDA support if using NVIDIA image (skip if LITE_BUILD)
-RUN if [ "${LITE_BUILD}" = "true" ]; then \
+RUN --mount=type=cache,target=/root/.cache/uv \
+    if [ "${LITE_BUILD}" = "true" ]; then \
     echo "Skipping PyTorch installation in lite mode"; \
     elif [ "${USE_GPU}" = "true" ] || [ "${USE_GPU_NVIDIA}" = "true" ]; then \
-    if command -v pip >/dev/null 2>&1; then \
-    pip install --no-cache-dir nvidia-cudnn-cu12 torch; \
-    elif command -v pip3 >/dev/null 2>&1; then \
-    pip3 install --no-cache-dir nvidia-cudnn-cu12 torch; \
-    else \
-    python3 -m pip install --no-cache-dir nvidia-cudnn-cu12 torch; \
-    fi; \
+    uv pip install nvidia-cudnn-cu12 torch; \
     elif [ "${USE_GPU_AMD}" = "true" ]; then \
-    if command -v pip >/dev/null 2>&1; then \
-    pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/rocm${ROCM_VERSION}; \
-    elif command -v pip3 >/dev/null 2>&1; then \
-    pip3 install --no-cache-dir torch --index-url https://download.pytorch.org/whl/rocm${ROCM_VERSION}; \
+    uv pip install torch --index-url https://download.pytorch.org/whl/rocm${ROCM_VERSION}; \
     else \
-    python3 -m pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/rocm${ROCM_VERSION}; \
-    fi; \
-    else \
-    if command -v pip >/dev/null 2>&1; then \
-    pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu; \
-    elif command -v pip3 >/dev/null 2>&1; then \
-    pip3 install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu; \
-    else \
-    python3 -m pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu; \
-    fi; \
+    uv pip install torch --index-url https://download.pytorch.org/whl/cpu; \
     fi
 
 # Copy application code
@@ -146,16 +132,19 @@ RUN groupadd -r appuser && \
     mkdir -p /home/appuser && \
     chown -R appuser:appuser /home/appuser
 
-# Create necessary directories and set permissions
+# Create necessary directories and set permissions (only dirs needing runtime writes)
 RUN mkdir -p /app/processing /app/src/instance /app/src/instance/data /app/src/instance/data/in /app/src/instance/data/srv /app/src/instance/config /app/src/instance/db && \
-    chown -R appuser:appuser /app
+    chown -R appuser:appuser /app/processing /app/src/instance
 
 # Copy entrypoint script
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod 755 /docker-entrypoint.sh
 
+# Add venv to PATH so we don't need uv run at runtime
+ENV PATH="/app/.venv/bin:$PATH"
+
 EXPOSE 5001
 
 # Run the application through the entrypoint script
 ENTRYPOINT ["/docker-entrypoint.sh"]
-CMD ["uv", "run", "--no-sync", "./scripts/start_services.sh"]
+CMD ["./scripts/start_services.sh"]

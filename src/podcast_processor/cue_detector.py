@@ -1,5 +1,5 @@
 import re
-from typing import Dict, List, Pattern, Tuple
+from re import Pattern
 
 
 class CueDetector:
@@ -34,7 +34,7 @@ class CueDetector:
             or self.cta_pattern.search(text)
         )
 
-    def analyze(self, text: str) -> Dict[str, bool]:
+    def analyze(self, text: str) -> dict[str, bool]:
         return {
             "url": bool(self.url_pattern.search(text)),
             "promo": bool(self.promo_pattern.search(text)),
@@ -49,7 +49,7 @@ class CueDetector:
         Highlights detected cues in the text by wrapping them in *** ***.
         Useful for drawing attention to cues in LLM prompts.
         """
-        matches: List[Tuple[int, int]] = []
+        matches: list[tuple[int, int]] = []
         patterns = [
             self.url_pattern,
             self.promo_pattern,
@@ -70,7 +70,7 @@ class CueDetector:
         matches.sort(key=lambda x: (x[0], -x[1]))
 
         # Merge overlapping intervals
-        merged: List[Tuple[int, int]] = []
+        merged: list[tuple[int, int]] = []
         if matches:
             curr_start, curr_end = matches[0]
             for next_start, next_end in matches[1:]:

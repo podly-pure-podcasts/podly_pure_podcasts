@@ -128,4 +128,4 @@ def test_split_audio() -> None:
             )
             assert abs(filesize - split.stat().st_size) <= 500, (
                 f"filesize <> 500 bytes for {split}. found {split.stat().st_size}, expected {filesize}"
-            )  # pylint: disable=line-too-long
+            )

@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 from flask import current_app
 
@@ -26,9 +26,6 @@ from shared.config import (
     TestWhisperConfig,
 )
 
-# pylint: disable=too-many-lines
-
-
 logger = logging.getLogger("global_logger")
 
 
@@ -36,14 +33,14 @@ def _is_empty(value: Any) -> bool:
     return value is None or value == ""
 
 
-def _parse_int(val: Any) -> Optional[int]:
+def _parse_int(val: Any) -> int | None:
     try:
         return int(val) if val is not None else None
-    except Exception:
+    except Exception:  # noqa: BLE001
         return None
 
 
-def _parse_bool(val: Any) -> Optional[bool]:
+def _parse_bool(val: Any) -> bool | None:
     if val is None:
         return None
     s = str(val).strip().lower()
@@ -72,13 +69,13 @@ def _set_if_default(obj: Any, attr: str, new_val: Any, default_val: Any) -> bool
     return False
 
 
-def _ensure_row(model: type, defaults: Dict[str, Any]) -> Any:
+def _ensure_row(model: type, defaults: dict[str, Any]) -> Any:
     row = db.session.get(model, 1)
     if row is None:
         role = None
         try:
             role = current_app.config.get("PODLY_APP_ROLE")
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # noqa: BLE001
             role = None
 
         # Web app should be read-only; only the writer process is allowed to create
@@ -402,7 +399,7 @@ def _apply_env_overrides_to_db_first_boot() -> None:
         )
 
 
-def read_combined() -> Dict[str, Any]:
+def read_combined() -> dict[str, Any]:
     ensure_defaults()
 
     llm = LLMSettings.query.get(1)
@@ -413,7 +410,7 @@ def read_combined() -> Dict[str, Any]:
 
     assert llm and whisper and processing and output and app_s
 
-    whisper_payload: Dict[str, Any] = {"whisper_type": whisper.whisper_type}
+    whisper_payload: dict[str, Any] = {"whisper_type": whisper.whisper_type}
     if whisper.whisper_type == "local":
         whisper_payload.update({"model": whisper.local_model})
     elif whisper.whisper_type == "remote":
@@ -476,7 +473,7 @@ def read_combined() -> Dict[str, Any]:
     }
 
 
-def _update_section_llm(data: Dict[str, Any]) -> None:
+def _update_section_llm(data: dict[str, Any]) -> None:
     row = LLMSettings.query.get(1)
     assert row is not None
     for key in [
@@ -506,7 +503,7 @@ def _update_section_llm(data: Dict[str, Any]) -> None:
     )
 
 
-def _update_section_whisper(data: Dict[str, Any]) -> None:
+def _update_section_whisper(data: dict[str, Any]) -> None:
     row = WhisperSettings.query.get(1)
     assert row is not None
     if "whisper_type" in data and data["whisper_type"] in {
@@ -558,7 +555,7 @@ def _update_section_whisper(data: Dict[str, Any]) -> None:
     )
 
 
-def _update_section_processing(data: Dict[str, Any]) -> None:
+def _update_section_processing(data: dict[str, Any]) -> None:
     row = ProcessingSettings.query.get(1)
     assert row is not None
     for key in [
@@ -574,7 +571,7 @@ def _update_section_processing(data: Dict[str, Any]) -> None:
     )
 
 
-def _update_section_output(data: Dict[str, Any]) -> None:
+def _update_section_output(data: dict[str, Any]) -> None:
     row = OutputSettings.query.get(1)
     assert row is not None
     for key in [
@@ -593,11 +590,11 @@ def _update_section_output(data: Dict[str, Any]) -> None:
     )
 
 
-def _update_section_app(data: Dict[str, Any]) -> Tuple[Optional[int], Optional[int]]:
+def _update_section_app(data: dict[str, Any]) -> tuple[int | None, int | None]:
     row = AppSettings.query.get(1)
     assert row is not None
-    old_interval: Optional[int] = row.background_update_interval_minute
-    old_retention: Optional[int] = row.post_cleanup_retention_days
+    old_interval: int | None = row.background_update_interval_minute
+    old_retention: int | None = row.post_cleanup_retention_days
     for key in [
         "background_update_interval_minute",
         "automatically_whitelist_new_episodes",
@@ -619,7 +616,7 @@ def _update_section_app(data: Dict[str, Any]) -> Tuple[Optional[int], Optional[i
 
 
 def _maybe_reschedule_refresh_job(
-    old_interval: Optional[int], new_interval: Optional[int]
+    old_interval: int | None, new_interval: int | None
 ) -> None:
     if old_interval == new_interval:
         return
@@ -631,7 +628,7 @@ def _maybe_reschedule_refresh_job(
         if job:
             try:
                 scheduler.remove_job(job_id)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 pass
         return
 
@@ -647,7 +644,7 @@ def _maybe_reschedule_refresh_job(
 
 
 def _maybe_disable_cleanup_job(
-    old_retention: Optional[int], new_retention: Optional[int]
+    old_retention: int | None, new_retention: int | None
 ) -> None:
     if old_retention == new_retention:
         return
@@ -659,11 +656,11 @@ def _maybe_disable_cleanup_job(
         if job:
             try:
                 scheduler.remove_job(job_id)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 pass
 
 
-def update_combined(payload: Dict[str, Any]) -> Dict[str, Any]:
+def update_combined(payload: dict[str, Any]) -> dict[str, Any]:
     if "llm" in payload:
         _update_section_llm(payload["llm"] or {})
     if "whisper" in payload:
@@ -688,9 +685,13 @@ def update_combined(payload: Dict[str, Any]) -> Dict[str, Any]:
 def to_pydantic_config() -> PydanticConfig:
     data = read_combined()
     # Map whisper section to discriminated union config
-    whisper_obj: Optional[
-        LocalWhisperConfig | RemoteWhisperConfig | TestWhisperConfig | GroqWhisperConfig
-    ] = None
+    whisper_obj: (
+        LocalWhisperConfig
+        | RemoteWhisperConfig
+        | TestWhisperConfig
+        | GroqWhisperConfig
+        | None
+    ) = None
     w = data["whisper"]
     wtype = w.get("whisper_type")
     if wtype == "local":
@@ -800,7 +801,7 @@ def to_pydantic_config() -> PydanticConfig:
     )
 
 
-def hydrate_runtime_config_inplace(db_config: Optional[PydanticConfig] = None) -> None:
+def hydrate_runtime_config_inplace(db_config: PydanticConfig | None = None) -> None:
     """Hydrate the in-process runtime config from DB-backed settings in-place.
 
     Preserves the identity of the `app.config` Pydantic instance so any modules
@@ -1123,7 +1124,7 @@ def _calculate_env_hash() -> str:
     hasher = hashlib.sha256()
     for key in keys:
         val = os.environ.get(key, "")
-        hasher.update(f"{key}={val}".encode("utf-8"))
+        hasher.update(f"{key}={val}".encode())
 
     return hasher.hexdigest()
 
@@ -1157,7 +1158,7 @@ def _check_and_apply_env_changes() -> None:
                 logger_obj=logger,
             )
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.warning(f"Failed to check/update environment hash: {e}")
 
 

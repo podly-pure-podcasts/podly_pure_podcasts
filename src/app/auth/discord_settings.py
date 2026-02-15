@@ -69,19 +69,19 @@ def load_discord_settings() -> DiscordSettings:
     )
 
 
-def _load_from_database() -> "DiscordSettingsModel | None":
+def _load_from_database() -> DiscordSettingsModel | None:
     """Load Discord settings from database, returns None if not available."""
     try:
         from app.extensions import db
         from app.models import DiscordSettings as DiscordSettingsModel
 
         return db.session.get(DiscordSettingsModel, 1)
-    except Exception:
+    except Exception:  # noqa: BLE001
         # Database not initialized or table doesn't exist yet
         return None
 
 
-def reload_discord_settings(app: "Flask") -> DiscordSettings:
+def reload_discord_settings(app: Flask) -> DiscordSettings:
     """Reload Discord settings and update app config."""
     settings = load_discord_settings()
     app.config["DISCORD_SETTINGS"] = settings

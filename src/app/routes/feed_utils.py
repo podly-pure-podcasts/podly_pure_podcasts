@@ -2,7 +2,6 @@
 
 import logging
 import re
-from typing import Optional
 
 from flask import jsonify, make_response, redirect, url_for
 from flask.typing import ResponseReturnValue
@@ -62,7 +61,7 @@ def whitelist_latest_for_first_member(
         updated = bool(result.data.get("updated"))
         if not updated or not post_guid:
             return
-    except Exception:  # pylint: disable=broad-except
+    except Exception:  # noqa: BLE001
         return
     try:
         get_jobs_manager().start_post_processing(
@@ -71,16 +70,16 @@ def whitelist_latest_for_first_member(
             requested_by_user_id=requested_by_user_id,
             billing_user_id=requested_by_user_id,
         )
-    except Exception as exc:  # pylint: disable=broad-except
+    except Exception as exc:  # noqa: BLE001
         logger.error(
             "Failed to enqueue processing for latest post %s: %s", post_guid, exc
         )
 
 
-def handle_developer_mode_feed(url: str, user: Optional[User]) -> ResponseReturnValue:
+def handle_developer_mode_feed(url: str, user: User | None) -> ResponseReturnValue:
     """Handle special developer mode feed creation."""
     try:
-        feed_id_str = url.split("/")[-1]
+        feed_id_str = url.rsplit("/", maxsplit=1)[-1]
         # Use the feed_id_str directly as an identifier (could be hex string or int)
 
         result = writer_client.action(
@@ -111,12 +110,12 @@ def handle_developer_mode_feed(url: str, user: Optional[User]) -> ResponseReturn
 
         return redirect(url_for("main.index"))
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.error(f"Error adding test feed: {e}")
         return make_response((f"Error adding test feed: {e}", 500))
 
 
-def check_feed_allowance(user: User, url: str) -> Optional[ResponseReturnValue]:
+def check_feed_allowance(user: User, url: str) -> ResponseReturnValue | None:
     """Check if user is within their feed allowance limit."""
     if user.role == "admin":
         return None
@@ -181,7 +180,7 @@ def cleanup_feed_directories(feed: Feed) -> None:
             # Remove the directory itself
             srv_feed_dir.rmdir()
             logger.info(f"Deleted processed audio directory: {srv_feed_dir}")
-        except Exception as e:  # pylint: disable=broad-except
+        except Exception as e:  # noqa: BLE001
             logger.error(
                 f"Error deleting processed audio directory {srv_feed_dir}: {e}"
             )
@@ -201,7 +200,7 @@ def cleanup_feed_directories(feed: Feed) -> None:
                 # Remove the directory itself
                 in_post_dir.rmdir()
                 logger.info(f"Deleted unprocessed audio directory: {in_post_dir}")
-            except Exception as e:  # pylint: disable=broad-except
+            except Exception as e:  # noqa: BLE001
                 logger.error(
                     f"Error deleting unprocessed audio directory {in_post_dir}: {e}"
                 )

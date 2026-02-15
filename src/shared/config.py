@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -16,7 +16,7 @@ class ProcessingConfig(BaseModel):
     )
 
     @model_validator(mode="after")
-    def validate_overlap_limits(self) -> "ProcessingConfig":
+    def validate_overlap_limits(self) -> ProcessingConfig:
         assert self.max_overlap_segments <= self.num_segments_to_input_to_prompt, (
             "max_overlap_segments must be <= num_segments_to_input_to_prompt"
         )
@@ -70,9 +70,9 @@ class LocalWhisperConfig(BaseModel):
 
 
 class Config(BaseModel):
-    llm_api_key: Optional[str] = Field(default=None)
+    llm_api_key: str | None = Field(default=None)
     llm_model: str = Field(default=DEFAULTS.LLM_DEFAULT_MODEL)
-    openai_base_url: Optional[str] = None
+    openai_base_url: str | None = None
     openai_max_tokens: int = DEFAULTS.OPENAI_DEFAULT_MAX_TOKENS
     openai_timeout: int = DEFAULTS.OPENAI_DEFAULT_TIMEOUT_SEC
     # Optional: Rate limiting controls
@@ -84,7 +84,7 @@ class Config(BaseModel):
         default=DEFAULTS.LLM_DEFAULT_MAX_RETRY_ATTEMPTS,
         description="Maximum retry attempts for failed LLM calls",
     )
-    llm_max_input_tokens_per_call: Optional[int] = Field(
+    llm_max_input_tokens_per_call: int | None = Field(
         default=DEFAULTS.LLM_MAX_INPUT_TOKENS_PER_CALL,
         description="Maximum input tokens per LLM call to stay under API limits",
     )
@@ -93,7 +93,7 @@ class Config(BaseModel):
         default=DEFAULTS.LLM_ENABLE_TOKEN_RATE_LIMITING,
         description="Enable client-side token-based rate limiting",
     )
-    llm_max_input_tokens_per_minute: Optional[int] = Field(
+    llm_max_input_tokens_per_minute: int | None = Field(
         default=DEFAULTS.LLM_MAX_INPUT_TOKENS_PER_MINUTE,
         description="Override default tokens per minute limit for the model",
     )
@@ -111,31 +111,35 @@ class Config(BaseModel):
     )
     output: OutputConfig
     processing: ProcessingConfig
-    server: Optional[str] = Field(
+    server: str | None = Field(
         default=None,
         deprecated=True,
         description="deprecated in favor of request-aware URL generation",
     )
-    background_update_interval_minute: Optional[int] = (
+    background_update_interval_minute: int | None = (
         DEFAULTS.APP_BACKGROUND_UPDATE_INTERVAL_MINUTE
     )
-    post_cleanup_retention_days: Optional[int] = Field(
+    post_cleanup_retention_days: int | None = Field(
         default=DEFAULTS.APP_POST_CLEANUP_RETENTION_DAYS,
         description="Number of days to retain processed post data before cleanup. None disables cleanup.",
     )
     # removed job_timeout
-    whisper: Optional[
-        LocalWhisperConfig | RemoteWhisperConfig | TestWhisperConfig | GroqWhisperConfig
-    ] = Field(
+    whisper: (
+        LocalWhisperConfig
+        | RemoteWhisperConfig
+        | TestWhisperConfig
+        | GroqWhisperConfig
+        | None
+    ) = Field(
         default=None,
         discriminator="whisper_type",
     )
-    remote_whisper: Optional[bool] = Field(
+    remote_whisper: bool | None = Field(
         default=False,
         deprecated=True,
         description="deprecated in favor of [Remote|Local]WhisperConfig",
     )
-    whisper_model: Optional[str] = Field(
+    whisper_model: str | None = Field(
         default=DEFAULTS.WHISPER_LOCAL_MODEL,
         deprecated=True,
         description="deprecated in favor of [Remote|Local]WhisperConfig",
@@ -159,7 +163,7 @@ class Config(BaseModel):
         )
 
     @model_validator(mode="after")
-    def validate_whisper_config(self) -> "Config":
+    def validate_whisper_config(self) -> Config:
         new_style = self.whisper is not None
 
         if new_style:

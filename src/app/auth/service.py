@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence, cast
+from typing import cast
 
 from app.extensions import db
 from app.models import User
@@ -169,7 +170,7 @@ def _enforce_user_limit() -> None:
 
     try:
         limit = getattr(runtime_config, "user_limit_total", None)
-    except Exception:  # pragma: no cover - defensive
+    except Exception:  # pragma: no cover - defensive  # noqa: BLE001
         limit = None
 
     if limit is None:
@@ -177,7 +178,7 @@ def _enforce_user_limit() -> None:
 
     try:
         limit_int = int(limit)
-    except Exception:
+    except Exception:  # noqa: BLE001
         return
 
     if limit_int < 0:

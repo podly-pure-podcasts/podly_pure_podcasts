@@ -85,12 +85,12 @@ def test_integration_prompt():
     # "Go to" is CTA, "mywebsite.com" is URL
     expected_line2 = "[15.0] *** Go to *** *** mywebsite.com *** today."
 
-    assert (
-        expected_line1 in result
-    ), f"Expected to find {expected_line1!r} in {result!r}"
-    assert (
-        expected_line2 in result
-    ), f"Expected to find {expected_line2!r} in {result!r}"
+    assert expected_line1 in result, (
+        f"Expected to find {expected_line1!r} in {result!r}"
+    )
+    assert expected_line2 in result, (
+        f"Expected to find {expected_line2!r} in {result!r}"
+    )
     print("✓ test_integration_prompt passed")
 
 

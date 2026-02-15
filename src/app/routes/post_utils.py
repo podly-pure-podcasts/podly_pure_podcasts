@@ -1,7 +1,7 @@
 """Utility functions for post route handlers."""
 
 import logging
-from typing import Optional, cast
+from typing import cast
 
 import flask
 
@@ -29,13 +29,11 @@ def increment_download_count(post: Post) -> None:
         writer_client.action(
             "increment_download_count", {"post_id": post.id}, wait=False
         )
-    except Exception as e:  # pylint: disable=broad-except
+    except Exception as e:  # noqa: BLE001
         logger.error(f"Failed to increment download count for post {post.guid}: {e}")
 
 
-def ensure_whitelisted_for_download(
-    post: Post, p_guid: str
-) -> Optional[flask.Response]:
+def ensure_whitelisted_for_download(post: Post, p_guid: str) -> flask.Response | None:
     """Make sure a post is whitelisted before serving or queuing processing."""
     if post.whitelisted:
         return None
@@ -55,7 +53,7 @@ def ensure_whitelisted_for_download(
         post.whitelisted = True
         logger.info("Auto-whitelisted post %s on download request", p_guid)
         return None
-    except Exception as exc:  # pylint: disable=broad-except
+    except Exception as exc:  # noqa: BLE001
         logger.warning(
             "Failed to auto-whitelist post %s on download: %s", post.guid, exc
         )
@@ -79,7 +77,7 @@ def missing_processed_audio_response(post: Post, p_guid: str) -> flask.Response:
         requested_by_user_id=requester,
         billing_user_id=requester,
     )
-    status = cast(Optional[str], job_response.get("status"))
+    status = cast(str | None, job_response.get("status"))
     status_code = {
         "completed": 200,
         "skipped": 200,
