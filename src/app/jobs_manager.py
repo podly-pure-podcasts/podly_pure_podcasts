@@ -156,20 +156,24 @@ class JobsManager:
         """Ensure every post has an associated ProcessingJob record."""
         posts_without_jobs = (
             Post.query.outerjoin(ProcessingJob, ProcessingJob.post_guid == Post.guid)
-            .filter(ProcessingJob.id.is_(None))
+            .filter(ProcessingJob.id.is_(None), Post.whitelisted.is_(True))
             .all()
         )
 
         created = 0
         for post in posts_without_jobs:
-            if post.whitelisted:
-                SingleJobManager(
-                    post.guid,
-                    self._status_manager,
-                    logger,
-                    run_id,
-                ).ensure_job()
-                created += 1
+            # Avoid recreating jobs for posts that already have processed audio.
+            # Startup clears ProcessingJob rows, so we must key off post/file state too.
+            if post.processed_audio_path and os.path.exists(post.processed_audio_path):
+                continue
+
+            SingleJobManager(
+                post.guid,
+                self._status_manager,
+                logger,
+                run_id,
+            ).ensure_job()
+            created += 1
         return created
 
     def get_post_status(self, post_guid: str) -> dict[str, Any]:
