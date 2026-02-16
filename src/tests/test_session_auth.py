@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Generator
 from urllib.parse import parse_qs, urlparse
 
 import pytest
 from flask import Flask, Response, g, jsonify
+from flask.typing import ResponseReturnValue
 
 from app.auth import AuthSettings
 from app.auth.middleware import init_auth_middleware
@@ -15,7 +17,7 @@ from app.routes.feed_routes import feed_bp
 
 
 @pytest.fixture
-def auth_app() -> Flask:
+def auth_app() -> Generator[Flask, None, None]:
     app = Flask(__name__)
     app.config.update(
         SECRET_KEY="test-secret",
@@ -47,7 +49,7 @@ def auth_app() -> Flask:
     app.register_blueprint(feed_bp)
 
     @app.route("/api/protected", methods=["GET"])
-    def protected() -> Response:
+    def protected() -> ResponseReturnValue:
         current = getattr(g, "current_user", None)
         if current is None:
             return jsonify({"error": "missing user"}), 500

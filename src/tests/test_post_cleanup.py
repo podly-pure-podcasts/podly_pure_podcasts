@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from app.extensions import db
@@ -13,6 +13,10 @@ from app.models import (
     TranscriptSegment,
 )
 from app.post_cleanup import cleanup_processed_posts, count_cleanup_candidates
+
+
+def _utc_now() -> datetime:
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def _create_feed() -> Feed:
@@ -65,7 +69,7 @@ def test_cleanup_removes_expired_posts(app, tmp_path) -> None:
 
         db.session.commit()
 
-        completed_at = datetime.utcnow() - timedelta(days=10)
+        completed_at = _utc_now() - timedelta(days=10)
         db.session.add(
             ProcessingJob(
                 id="job-old",
@@ -80,7 +84,7 @@ def test_cleanup_removes_expired_posts(app, tmp_path) -> None:
             )
         )
 
-        recent_completed = datetime.utcnow() - timedelta(days=2)
+        recent_completed = _utc_now() - timedelta(days=2)
         db.session.add(
             ProcessingJob(
                 id="job-recent",
@@ -150,7 +154,7 @@ def test_cleanup_skips_when_retention_disabled(app) -> None:
     with app.app_context():
         feed = _create_feed()
         post = _create_post(feed, "guid", "https://example.com/audio.mp3")
-        completed_at = datetime.utcnow() - timedelta(days=10)
+        completed_at = _utc_now() - timedelta(days=10)
         db.session.add(
             ProcessingJob(
                 id="job-disable",
@@ -181,7 +185,7 @@ def test_cleanup_includes_non_whitelisted_processed_posts(app, tmp_path) -> None
             feed, "non-white-old", "https://example.com/nonwhite-old.mp3"
         )
         old_post.whitelisted = False
-        old_post.release_date = datetime.utcnow() - timedelta(days=15)
+        old_post.release_date = _utc_now() - timedelta(days=15)
         old_processed = tmp_path / "old_processed.mp3"
         old_processed.write_text("audio")
         old_post.processed_audio_path = str(old_processed)
@@ -190,13 +194,13 @@ def test_cleanup_includes_non_whitelisted_processed_posts(app, tmp_path) -> None
             feed, "non-white-recent", "https://example.com/nonwhite-recent.mp3"
         )
         recent_post.whitelisted = False
-        recent_post.release_date = datetime.utcnow() - timedelta(days=10)
+        recent_post.release_date = _utc_now() - timedelta(days=10)
         recent_processed = tmp_path / "recent_processed.mp3"
         recent_processed.write_text("audio")
         recent_post.processed_audio_path = str(recent_processed)
 
         # Add old completed jobs so both posts qualify for cleanup by age
-        old_completed = datetime.utcnow() - timedelta(days=15)
+        old_completed = _utc_now() - timedelta(days=15)
         db.session.add(
             ProcessingJob(
                 id="job-non-white-old",
@@ -211,7 +215,7 @@ def test_cleanup_includes_non_whitelisted_processed_posts(app, tmp_path) -> None
             )
         )
 
-        recent_completed = datetime.utcnow() - timedelta(days=10)
+        recent_completed = _utc_now() - timedelta(days=10)
         db.session.add(
             ProcessingJob(
                 id="job-non-white-recent",
@@ -253,7 +257,7 @@ def test_cleanup_skips_unprocessed_unwhitelisted_posts(app) -> None:
         feed = _create_feed()
         post = _create_post(feed, "non-white-2", "https://example.com/nonwhite2.mp3")
         post.whitelisted = False
-        post.release_date = datetime.utcnow() - timedelta(days=10)
+        post.release_date = _utc_now() - timedelta(days=10)
         db.session.commit()
 
         count, _ = count_cleanup_candidates(retention_days=5)
@@ -283,9 +287,9 @@ def test_cleanup_preserves_most_recent_post_per_feed(app, tmp_path) -> None:
             post.processed_audio_path = str(processed)
 
         # All posts completed before retention window (10 days ago)
-        oldest_completed = datetime.utcnow() - timedelta(days=20)
-        old_completed = datetime.utcnow() - timedelta(days=15)
-        recent_completed = datetime.utcnow() - timedelta(days=10)
+        oldest_completed = _utc_now() - timedelta(days=20)
+        old_completed = _utc_now() - timedelta(days=15)
+        recent_completed = _utc_now() - timedelta(days=10)
 
         for post, completed_at in [
             (oldest_post, oldest_completed),
@@ -364,7 +368,7 @@ def test_cleanup_preserves_most_recent_across_multiple_feeds(app, tmp_path) -> N
 
         # All completed 10+ days ago (before retention window)
         for post in [feed1_old, feed1_recent, feed2_old, feed2_recent]:
-            completed_at = datetime.utcnow() - timedelta(days=10)
+            completed_at = _utc_now() - timedelta(days=10)
             db.session.add(
                 ProcessingJob(
                     id=f"job-{post.guid}",
@@ -380,12 +384,16 @@ def test_cleanup_preserves_most_recent_across_multiple_feeds(app, tmp_path) -> N
             )
 
         # Make feed1_recent and feed2_recent actually more recent
-        db.session.query(ProcessingJob).filter_by(
-            post_guid="feed1-recent"
-        ).first().completed_at = datetime.utcnow() - timedelta(days=8)
-        db.session.query(ProcessingJob).filter_by(
-            post_guid="feed2-recent"
-        ).first().completed_at = datetime.utcnow() - timedelta(days=8)
+        feed1_recent_job = (
+            db.session.query(ProcessingJob).filter_by(post_guid="feed1-recent").first()
+        )
+        assert feed1_recent_job is not None
+        feed1_recent_job.completed_at = _utc_now() - timedelta(days=8)
+        feed2_recent_job = (
+            db.session.query(ProcessingJob).filter_by(post_guid="feed2-recent").first()
+        )
+        assert feed2_recent_job is not None
+        feed2_recent_job.completed_at = _utc_now() - timedelta(days=8)
 
         db.session.commit()
 
@@ -425,7 +433,7 @@ def test_cleanup_with_single_old_post_per_feed(app, tmp_path) -> None:
         processed.write_text("audio")
         only_post.processed_audio_path = str(processed)
 
-        completed_at = datetime.utcnow() - timedelta(days=30)
+        completed_at = _utc_now() - timedelta(days=30)
         db.session.add(
             ProcessingJob(
                 id="job-only",

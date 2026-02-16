@@ -1,6 +1,6 @@
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from threading import Event, Lock, Thread
 from typing import Any, cast
 
@@ -18,6 +18,13 @@ from podcast_processor.podcast_processor import ProcessorException
 from podcast_processor.processing_status_manager import ProcessingStatusManager
 
 logger = logging.getLogger("global_logger")
+
+
+def _scheduler_app_context() -> Any:
+    scheduler_app = scheduler.app
+    if scheduler_app is None:
+        raise RuntimeError("Scheduler app is not initialized")
+    return scheduler_app.app_context()
 
 
 class JobsManager:
@@ -50,7 +57,7 @@ class JobsManager:
         self._worker_thread.start()
 
         # Initialize run via writer
-        with scheduler.app.app_context():
+        with _scheduler_app_context():
             try:
                 result = writer_client.action(
                     "ensure_active_run",
@@ -90,7 +97,7 @@ class JobsManager:
         """
         Idempotently start processing for a post. If an active job exists, return it.
         """
-        with scheduler.app.app_context():
+        with _scheduler_app_context():
             ensure_result = writer_client.action(
                 "ensure_active_run",
                 {
@@ -125,7 +132,7 @@ class JobsManager:
 
         Returns basic stats for logging/monitoring.
         """
-        with scheduler.app.app_context():
+        with _scheduler_app_context():
             result = writer_client.action(
                 "ensure_active_run", {"trigger": trigger, "context": context}, wait=True
             )
@@ -177,7 +184,7 @@ class JobsManager:
         return created
 
     def get_post_status(self, post_guid: str) -> dict[str, Any]:
-        with scheduler.app.app_context():
+        with _scheduler_app_context():
             post = Post.query.filter_by(guid=post_guid).first()
             if not post:
                 return {
@@ -238,7 +245,7 @@ class JobsManager:
             return response
 
     def get_job_status(self, job_id: str) -> dict[str, Any]:
-        with scheduler.app.app_context():
+        with _scheduler_app_context():
             job = _db.session.get(ProcessingJob, job_id)
             if not job:
                 return {
@@ -262,7 +269,7 @@ class JobsManager:
             }
 
     def list_active_jobs(self, limit: int = 100) -> list[dict[str, Any]]:
-        with scheduler.app.app_context():
+        with _scheduler_app_context():
             # Derive a simple priority from status: running > pending
             priority_order = case(
                 (ProcessingJob.status == "running", 2),
@@ -309,7 +316,7 @@ class JobsManager:
             return results
 
     def list_all_jobs_detailed(self, limit: int = 200) -> list[dict[str, Any]]:
-        with scheduler.app.app_context():
+        with _scheduler_app_context():
             # Priority by status, others ranked lowest
             priority_order = case(
                 (ProcessingJob.status == "running", 2),
@@ -355,7 +362,7 @@ class JobsManager:
             return results
 
     def cancel_job(self, job_id: str) -> dict[str, Any]:
-        with scheduler.app.app_context():
+        with _scheduler_app_context():
             job = _db.session.get(ProcessingJob, job_id)
             if not job:
                 return {
@@ -381,7 +388,7 @@ class JobsManager:
             }
 
     def cancel_post_jobs(self, post_guid: str) -> dict[str, Any]:
-        with scheduler.app.app_context():
+        with _scheduler_app_context():
             # Find active jobs for this post in database
             active_jobs = (
                 ProcessingJob.query.filter_by(post_guid=post_guid)
@@ -419,8 +426,10 @@ class JobsManager:
         Clean up jobs that have been stuck in 'pending' status for too long.
         This indicates they were never picked up by the thread pool.
         """
-        cutoff = datetime.utcnow() - timedelta(minutes=stuck_threshold_minutes)
-        with scheduler.app.app_context():
+        cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(
+            minutes=stuck_threshold_minutes
+        )
+        with _scheduler_app_context():
             stuck_jobs = ProcessingJob.query.filter(
                 ProcessingJob.status == "pending", ProcessingJob.created_at < cutoff
             ).all()
@@ -468,7 +477,7 @@ class JobsManager:
         """
         Refresh feeds and enqueue per-post processing into internal worker pool.
         """
-        with scheduler.app.app_context():
+        with _scheduler_app_context():
             feeds = Feed.query.all()
             for feed in feeds:
                 refresh_feed(feed)
@@ -596,7 +605,7 @@ class JobsManager:
                 job_id,
                 post_guid,
             )
-            with scheduler.app.app_context():
+            with _scheduler_app_context():
                 with db_guard("process_job", _db.session, logger):
                     try:
                         # Clear any failed transaction state from prior work on this session.

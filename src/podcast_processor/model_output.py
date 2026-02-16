@@ -116,14 +116,14 @@ def clean_and_parse_model_output(model_output: str) -> AdSegmentPredictionList:
 
     # First attempt: try to parse as-is
     try:
-        return AdSegmentPredictionList.parse_raw(model_output)
+        return AdSegmentPredictionList.model_validate_json(model_output)
     except Exception as first_error:  # noqa: BLE001
         logger.debug(f"Initial parse failed: {first_error}")
 
         # Second attempt: try to repair truncated JSON
         try:
             repaired_output = _attempt_json_repair(model_output)
-            result = AdSegmentPredictionList.parse_raw(repaired_output)
+            result = AdSegmentPredictionList.model_validate_json(repaired_output)
             logger.info("Successfully parsed model output after JSON repair")
             return result
         except Exception as repair_error:

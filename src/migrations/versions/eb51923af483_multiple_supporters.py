@@ -6,7 +6,7 @@ Create Date: 2025-12-01 22:25:13.104687
 
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 import sqlalchemy as sa
 from alembic import op
@@ -116,7 +116,7 @@ def upgrade():
             {
                 "feed_id": feed_id,
                 "user_id": user_id,
-                "created_at": datetime.utcnow(),
+                "created_at": datetime.now(UTC).replace(tzinfo=None),
             }
         )
     if inserts:

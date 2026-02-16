@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -47,7 +47,7 @@ def upsert_model_call_action(params: dict[str, Any]) -> dict[str, Any]:
             model_name=str(model_name),
             prompt=str(prompt),
             status="pending",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC).replace(tzinfo=None),
             retry_attempts=0,
             error_message=None,
             response=None,
@@ -116,7 +116,7 @@ def upsert_whisper_model_call_action(params: dict[str, Any]) -> dict[str, Any]:
             retry_attempts=int(reset_fields.get("retry_attempts") or 0),
             error_message=reset_fields.get("error_message"),
             response=reset_fields.get("response"),
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC).replace(tzinfo=None),
         )
         db.session.add(model_call)
         try:

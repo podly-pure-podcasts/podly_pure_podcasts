@@ -1,6 +1,6 @@
 import logging
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, cast
 
 from sqlalchemy.orm import object_session
@@ -41,7 +41,7 @@ class ProcessingStatusManager:
             "current_step": 0,
             "total_steps": 4,
             "progress_percentage": 0.0,
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(UTC).replace(tzinfo=None).isoformat(),
             "requested_by_user_id": requested_by_user_id,
             "billing_user_id": billing_user_id,
         }

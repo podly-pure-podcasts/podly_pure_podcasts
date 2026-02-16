@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, cast
 
 from sqlalchemy import func
@@ -44,7 +44,7 @@ def get_or_create_singleton_run(
     session: Any, trigger: str, context: dict[str, object] | None = None
 ) -> JobsManagerRun:
     """Return the singleton run, creating it if necessary."""
-    now = datetime.utcnow()
+    now = datetime.now(UTC).replace(tzinfo=None)
     run = _session_get(session, SINGLETON_RUN_ID)
     if run:
         run.trigger = trigger
@@ -111,7 +111,7 @@ def recalculate_run_counts(session: Any) -> JobsManagerRun | None:
         counts,
     )
 
-    now = datetime.utcnow()
+    now = datetime.now(UTC).replace(tzinfo=None)
     queued = counts.get("pending", 0) + counts.get("queued", 0)
     running = counts.get("running", 0)
     completed = counts.get("completed", 0)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import MutableMapping
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 
 @dataclass
@@ -27,7 +27,7 @@ class FailureRateLimiter:
         self._warm_up_attempts = warm_up_attempts
 
     def register_failure(self, key: str) -> int:
-        now = datetime.utcnow()
+        now = datetime.now(UTC).replace(tzinfo=None)
         state = self._storage.get(key)
 
         if state is None:
@@ -57,7 +57,7 @@ class FailureRateLimiter:
         if state is None or state.blocked_until is None:
             return None
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC).replace(tzinfo=None)
         if state.blocked_until <= now:
             del self._storage[key]
             return None
