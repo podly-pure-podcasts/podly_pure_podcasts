@@ -174,8 +174,11 @@ export const feedsApi = {
     return response.data;
   },
 
-  reprocessPost: async (guid: string): Promise<{ status: string; job_id?: string; message: string; download_url?: string }> => {
-    const response = await api.post(`/api/posts/${guid}/reprocess`);
+  reprocessPost: async (
+    guid: string,
+    payload?: { force_retranscribe?: boolean }
+  ): Promise<{ status: string; job_id?: string; message: string; download_url?: string }> => {
+    const response = await api.post(`/api/posts/${guid}/reprocess`, payload ?? {});
     return response.data;
   },
 

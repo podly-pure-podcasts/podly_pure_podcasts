@@ -22,6 +22,7 @@ export default function ReprocessButton({
   const [isReprocessing, setIsReprocessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [regenerateTranscript, setRegenerateTranscript] = useState(false);
   const queryClient = useQueryClient();
 
   const handleReprocessClick = async () => {
@@ -30,6 +31,7 @@ export default function ReprocessButton({
       return;
     }
 
+    setRegenerateTranscript(false);
     setShowModal(true);
   };
 
@@ -39,7 +41,9 @@ export default function ReprocessButton({
     setError(null);
 
     try {
-      const response = await feedsApi.reprocessPost(episodeGuid);
+      const response = await feedsApi.reprocessPost(episodeGuid, {
+        force_retranscribe: regenerateTranscript,
+      });
 
       if (response.status === 'started') {
         // Notify parent component that reprocessing started
@@ -119,6 +123,19 @@ export default function ReprocessButton({
               <p className="text-gray-700 mb-6">
                 Are you sure you want to reprocess this episode? This will delete the existing processed data and start fresh processing.
               </p>
+              <label className="flex items-start gap-2 mb-6 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={regenerateTranscript}
+                  onChange={(event) => setRegenerateTranscript(event.target.checked)}
+                />
+                <span>
+                  Also regenerate transcript
+                  <span className="block text-xs text-gray-500">
+                    Disabled by default. Enable this to force a full re-transcription.
+                  </span>
+                </span>
+              </label>
 
               {/* Action Buttons */}
               <div className="flex gap-3 justify-end">
