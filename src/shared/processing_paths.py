@@ -9,23 +9,106 @@ class ProcessingPaths:
     post_processed_audio_path: Path
 
 
+def _sanitize_post_title_for_filename(post_title: str) -> str:
+    """Match legacy filename sanitization used by downloader/output code."""
+    return re.sub(r"[^a-zA-Z0-9\s]", "", post_title)
+
+
+def _sanitize_feed_title_legacy(feed_title: str) -> str:
+    """Legacy feed-directory sanitization (spaces preserved)."""
+    return re.sub(r"[^a-zA-Z0-9\s]", "", feed_title)
+
+
+def _sanitize_feed_title_modern(feed_title: str) -> str:
+    """Modern feed-directory sanitization (underscore-separated)."""
+    sanitized_feed_title = re.sub(r"[^a-zA-Z0-9\s_.-]", "", feed_title).strip()
+    sanitized_feed_title = sanitized_feed_title.rstrip(".")
+    return re.sub(r"\s+", "_", sanitized_feed_title)
+
+
 def paths_from_unprocessed_path(
     unprocessed_path: str, feed_title: str
 ) -> ProcessingPaths:
     unprocessed_filename = Path(unprocessed_path).name
-    # Sanitize feed_title to prevent illegal characters in paths
-    # Keep spaces, alphanumeric. Remove others.
-    sanitized_feed_title = re.sub(r"[^a-zA-Z0-9\s_.-]", "", feed_title).strip()
-    # Remove any trailing dots that might result from sanitization
-    sanitized_feed_title = sanitized_feed_title.rstrip(".")
-    # Replace spaces with underscores for friendlier directory names
-    sanitized_feed_title = re.sub(r"\s+", "_", sanitized_feed_title)
+    sanitized_feed_title = _sanitize_feed_title_modern(feed_title)
 
     return ProcessingPaths(
         post_processed_audio_path=get_srv_root()
         / sanitized_feed_title
         / unprocessed_filename,
     )
+
+
+def get_processed_audio_path_candidates(
+    *,
+    processed_audio_path: str | None,
+    unprocessed_audio_path: str | None,
+    feed_title: str | None,
+    post_title: str | None,
+) -> list[Path]:
+    """Return candidate processed-audio paths from legacy and modern conventions."""
+    candidates: list[Path] = []
+
+    if processed_audio_path:
+        candidates.append(Path(processed_audio_path))
+
+    if unprocessed_audio_path and feed_title:
+        derived = paths_from_unprocessed_path(unprocessed_audio_path, feed_title)
+        candidates.append(derived.post_processed_audio_path)
+
+    if feed_title and post_title:
+        sanitized_post_title = _sanitize_post_title_for_filename(post_title)
+        if sanitized_post_title:
+            candidates.append(
+                get_srv_root()
+                / _sanitize_feed_title_legacy(feed_title)
+                / f"{sanitized_post_title}.mp3"
+            )
+            candidates.append(
+                get_srv_root()
+                / _sanitize_feed_title_modern(feed_title)
+                / f"{sanitized_post_title}.mp3"
+            )
+
+    deduped: list[Path] = []
+    seen: set[Path] = set()
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve()
+        except OSError:
+            resolved = candidate
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        deduped.append(resolved)
+    return deduped
+
+
+def find_existing_processed_audio_path(
+    *,
+    processed_audio_path: str | None,
+    unprocessed_audio_path: str | None,
+    feed_title: str | None,
+    post_title: str | None,
+) -> Path | None:
+    """Return the first non-empty processed-audio file found across path variants."""
+    candidates = get_processed_audio_path_candidates(
+        processed_audio_path=processed_audio_path,
+        unprocessed_audio_path=unprocessed_audio_path,
+        feed_title=feed_title,
+        post_title=post_title,
+    )
+    for candidate in candidates:
+        try:
+            if (
+                candidate.exists()
+                and candidate.is_file()
+                and candidate.stat().st_size > 0
+            ):
+                return candidate
+        except OSError:
+            continue
+    return None
 
 
 def get_job_unprocessed_path(post_guid: str, job_id: str, post_title: str) -> Path:

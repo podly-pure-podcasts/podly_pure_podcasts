@@ -1,5 +1,4 @@
 import logging
-import os
 from datetime import UTC, datetime, timedelta
 from threading import Event, Lock, Thread
 from typing import Any, cast
@@ -16,6 +15,7 @@ from app.processor import get_processor
 from app.writer.client import writer_client
 from podcast_processor.podcast_processor import ProcessorException
 from podcast_processor.processing_status_manager import ProcessingStatusManager
+from shared.processing_paths import find_existing_processed_audio_path
 
 logger = logging.getLogger("global_logger")
 
@@ -170,8 +170,26 @@ class JobsManager:
         created = 0
         for post in posts_without_jobs:
             # Avoid recreating jobs for posts that already have processed audio.
-            # Startup clears ProcessingJob rows, so we must key off post/file state too.
-            if post.processed_audio_path and os.path.exists(post.processed_audio_path):
+            existing_processed_path = find_existing_processed_audio_path(
+                processed_audio_path=post.processed_audio_path,
+                unprocessed_audio_path=post.unprocessed_audio_path,
+                feed_title=getattr(post.feed, "title", None),
+                post_title=post.title,
+            )
+            if existing_processed_path:
+                processed_path_str = str(existing_processed_path)
+                if post.processed_audio_path != processed_path_str:
+                    result = writer_client.update(
+                        "Post",
+                        post.id,
+                        {"processed_audio_path": processed_path_str},
+                        wait=True,
+                    )
+                    if not result or not result.success:
+                        logger.warning(
+                            "Failed to update recovered processed path for post %s",
+                            post.guid,
+                        )
                 continue
 
             SingleJobManager(
@@ -200,9 +218,13 @@ class JobsManager:
             )
 
             if not job:
-                if post.processed_audio_path and os.path.exists(
-                    post.processed_audio_path
-                ):
+                existing_processed_path = find_existing_processed_audio_path(
+                    processed_audio_path=post.processed_audio_path,
+                    unprocessed_audio_path=post.unprocessed_audio_path,
+                    feed_title=getattr(post.feed, "title", None),
+                    post_title=post.title,
+                )
+                if existing_processed_path:
                     return {
                         "status": "skipped",
                         "step": 4,
@@ -232,10 +254,14 @@ class JobsManager:
             }
             if job.started_at:
                 response["started_at"] = job.started_at.isoformat()
-            if (
-                job.status in {"completed", "skipped"}
-                and post.processed_audio_path
-                and os.path.exists(post.processed_audio_path)
+            if job.status in {
+                "completed",
+                "skipped",
+            } and find_existing_processed_audio_path(
+                processed_audio_path=post.processed_audio_path,
+                unprocessed_audio_path=post.unprocessed_audio_path,
+                feed_title=getattr(post.feed, "title", None),
+                post_title=post.title,
             ):
                 response["download_url"] = f"/api/posts/{post_guid}/download"
             if job.status == "failed" and job.error_message:
