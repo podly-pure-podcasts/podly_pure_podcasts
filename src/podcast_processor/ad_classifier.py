@@ -1,7 +1,7 @@
 import logging
 import math
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import litellm
@@ -1443,7 +1443,9 @@ class AdClassifier:
                 post.id,
                 {
                     "refined_ad_boundaries": refined_boundaries or None,
-                    "refined_ad_boundaries_updated_at": datetime.utcnow(),
+                    "refined_ad_boundaries_updated_at": datetime.now(UTC).replace(
+                        tzinfo=None
+                    ),
                 },
                 wait=True,
             )

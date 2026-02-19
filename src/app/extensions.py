@@ -1,6 +1,6 @@
 import os
 
-from flask_apscheduler import APScheduler  # type: ignore
+from flask_apscheduler import APScheduler
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 

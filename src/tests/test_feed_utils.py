@@ -1,6 +1,8 @@
 from types import SimpleNamespace
+from typing import cast
 from unittest import mock
 
+from app.models import Feed
 from app.routes.feed_utils import whitelist_latest_for_first_member
 
 
@@ -13,7 +15,7 @@ def test_whitelist_latest_for_first_member_skips_when_auto_whitelist_disabled(
     mock_writer = mock.MagicMock()
     monkeypatch.setattr("app.routes.feed_utils.writer_client", mock_writer)
 
-    whitelist_latest_for_first_member(SimpleNamespace(id=1), 7)
+    whitelist_latest_for_first_member(cast(Feed, SimpleNamespace(id=1)), 7)
 
     mock_writer.action.assert_not_called()
 
@@ -28,7 +30,7 @@ def test_whitelist_latest_for_first_member_enqueues_when_enabled(monkeypatch):
     mock_jobs = mock.MagicMock()
     monkeypatch.setattr("app.routes.feed_utils.get_jobs_manager", lambda: mock_jobs)
 
-    whitelist_latest_for_first_member(SimpleNamespace(id=5), 11)
+    whitelist_latest_for_first_member(cast(Feed, SimpleNamespace(id=5)), 11)
 
     mock_writer.action.assert_called_once_with(
         "whitelist_latest_post_for_feed", {"feed_id": 5}, wait=True

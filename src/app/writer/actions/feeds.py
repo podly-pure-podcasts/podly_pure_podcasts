@@ -1,7 +1,7 @@
 import hashlib
 import secrets
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import func
@@ -55,7 +55,7 @@ def refresh_feed_action(params: dict[str, Any]) -> dict[str, Any]:
                 current_step=0,
                 total_steps=4,
                 progress_percentage=0.0,
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(UTC).replace(tzinfo=None),
             )
             db.session.add(job)
 
@@ -97,7 +97,7 @@ def add_feed_action(params: dict[str, Any]) -> dict[str, Any]:
                 current_step=0,
                 total_steps=4,
                 progress_percentage=0.0,
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(UTC).replace(tzinfo=None),
             )
             db.session.add(job)
 
@@ -232,7 +232,7 @@ def create_dev_test_feed_action(params: dict[str, Any]) -> dict[str, Any]:
     db.session.add(feed)
     db.session.flush()
 
-    now = datetime.utcnow()
+    now = datetime.now(UTC).replace(tzinfo=None)
     # Use a larger default so dev/test feeds exercise paging in the UI
     post_count = int(params.get("post_count") or 30)
     for i in range(1, post_count + 1):
@@ -396,7 +396,7 @@ def touch_feed_access_token_action(params: dict[str, Any]) -> dict[str, Any]:
     if token is None:
         return {"updated": False}
 
-    token.last_used_at = datetime.utcnow()
+    token.last_used_at = datetime.now(UTC).replace(tzinfo=None)
     if token.token_secret is None and secret_value:
         token.token_secret = str(secret_value)
     db.session.flush()

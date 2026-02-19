@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from flask import current_app
@@ -84,7 +84,7 @@ def _build_cleanup_query(
     if retention_days <= 0 and not developer_mode:
         return None, None
 
-    cutoff = datetime.utcnow() - timedelta(days=retention_days)
+    cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=retention_days)
 
     active_jobs_exists = (
         db.session.query(ProcessingJob.id)
@@ -279,4 +279,4 @@ def _get_processed_file_timestamp(post: Post) -> datetime | None:
         logger.warning("Cleanup: unable to stat processed file %s: %s", file_path, exc)
         return None
 
-    return datetime.utcfromtimestamp(mtime)
+    return datetime.fromtimestamp(mtime, tz=UTC).replace(tzinfo=None)

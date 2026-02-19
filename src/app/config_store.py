@@ -893,7 +893,7 @@ def _configure_local_whisper(cfg: PydanticConfig) -> None:
     """Configure local whisper type."""
     # Validate that local whisper is available
     try:
-        import whisper as _  # type: ignore[import-untyped]  # noqa: F401
+        import whisper as _  # noqa: F401
     except ImportError as e:
         error_msg = (
             f"WHISPER_TYPE is set to 'local' but whisper library is not available. "

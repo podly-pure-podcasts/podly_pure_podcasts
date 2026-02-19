@@ -6,8 +6,8 @@ from email.utils import format_datetime, parsedate_to_datetime
 from typing import Any, cast
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
-import feedparser  # type: ignore[import-untyped]
-import PyRSS2Gen  # type: ignore[import-untyped]
+import feedparser
+import PyRSS2Gen
 from flask import current_app, g, request
 
 from app.extensions import db
@@ -36,7 +36,10 @@ def is_feed_active_for_user(feed_id: int, user: User) -> bool:
         allowance = int(getattr(user, "feed_allowance", 0))
 
     # Sort user's feeds by creation date to determine priority
-    user_feeds = sorted(user.user_feeds, key=lambda uf: uf.created_at)
+    user_feeds = sorted(
+        cast(Iterable[UserFeed], user.user_feeds),
+        key=lambda uf: uf.created_at or datetime.datetime(1970, 1, 1),
+    )
 
     for i, uf in enumerate(user_feeds):
         if uf.feed_id == feed_id:
@@ -199,7 +202,7 @@ def add_or_refresh_feed(url: str) -> Feed:
         refresh_feed(feed)
     else:
         feed = add_feed(feed_data)
-    return feed  # type: ignore[no-any-return]
+    return feed
 
 
 def add_feed(feed_data: feedparser.FeedParserDict) -> Feed:
@@ -265,7 +268,7 @@ def add_feed(feed_data: feedparser.FeedParserDict) -> Feed:
         raise e
 
 
-class ItunesRSSItem(PyRSS2Gen.RSSItem):  # type: ignore[misc]
+class ItunesRSSItem(PyRSS2Gen.RSSItem):
     def __init__(
         self,
         *,
@@ -594,7 +597,7 @@ def get_guid(entry: feedparser.FeedParserDict) -> str:
         return str(uuid.uuid5(uuid.NAMESPACE_URL, dlurl))
 
 
-def get_duration(entry: feedparser.FeedParserDict) -> int | None:
+def get_duration(entry: feedparser.FeedParserDict | dict[str, Any]) -> int | None:
     try:
         return int(entry["itunes_duration"])
     except Exception:  # noqa: BLE001

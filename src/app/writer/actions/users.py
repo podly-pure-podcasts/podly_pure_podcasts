@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from app.extensions import db
@@ -193,6 +193,6 @@ def update_user_last_active_action(params: dict[str, Any]) -> dict[str, Any]:
     if not user:
         raise ValueError(f"User {user_id} not found")
 
-    user.last_active = datetime.utcnow()
+    user.last_active = datetime.now(UTC).replace(tzinfo=None)
     db.session.flush()
     return {"user_id": user.id, "last_active": user.last_active.isoformat()}

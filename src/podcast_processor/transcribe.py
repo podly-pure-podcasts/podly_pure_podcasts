@@ -55,7 +55,8 @@ class TestWhisperTranscriber(Transcriber):
     def model_name(self) -> str:
         return "test_whisper"
 
-    def transcribe(self, _: str) -> list[Segment]:
+    def transcribe(self, audio_file_path: str) -> list[Segment]:
+        del audio_file_path
         self.logger.info("Using test whisper")
         return [
             Segment(start=0, end=1, text="This is a test"),
@@ -85,7 +86,7 @@ class LocalWhisperTranscriber(Transcriber):
     def transcribe(self, audio_file_path: str) -> list[Segment]:
         # Import whisper only when needed to avoid CUDA dependencies during module import
         try:
-            import whisper  # type: ignore[import-untyped]
+            import whisper
         except ImportError as e:
             self.logger.error(f"Failed to import whisper: {e}")
             raise ImportError(

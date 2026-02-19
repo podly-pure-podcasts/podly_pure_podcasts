@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from app.extensions import db
@@ -27,7 +27,7 @@ def dequeue_job_action(params: dict[str, Any]) -> dict[str, Any] | None:
         return None
 
     job.status = "running"
-    job.started_at = datetime.utcnow()
+    job.started_at = datetime.now(UTC).replace(tzinfo=None)
 
     if run_id and job.jobs_manager_run_id != run_id:
         job.jobs_manager_run_id = run_id
@@ -37,7 +37,9 @@ def dequeue_job_action(params: dict[str, Any]) -> dict[str, Any] | None:
 
 def cleanup_stale_jobs_action(params: dict[str, Any]) -> dict[str, Any]:
     older_than_seconds = params.get("older_than_seconds", 3600)
-    cutoff = datetime.utcnow() - timedelta(seconds=older_than_seconds)
+    cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(
+        seconds=older_than_seconds
+    )
 
     old_jobs = ProcessingJob.query.filter(ProcessingJob.created_at < cutoff).all()
 
@@ -120,12 +122,12 @@ def update_job_status_action(params: dict[str, Any]) -> dict[str, Any]:
         job.error_message = error_message
 
     if status == "running" and not job.started_at:
-        job.started_at = datetime.utcnow()
+        job.started_at = datetime.now(UTC).replace(tzinfo=None)
     elif (
         status in ["completed", "failed", "cancelled", "skipped"]
         and not job.completed_at
     ):
-        job.completed_at = datetime.utcnow()
+        job.completed_at = datetime.now(UTC).replace(tzinfo=None)
 
     if job.jobs_manager_run_id:
         recalculate_run_counts(db.session)
@@ -143,7 +145,7 @@ def mark_cancelled_action(params: dict[str, Any]) -> dict[str, Any]:
 
     job.status = "cancelled"
     job.error_message = reason
-    job.completed_at = datetime.utcnow()
+    job.completed_at = datetime.now(UTC).replace(tzinfo=None)
 
     if job.jobs_manager_run_id:
         recalculate_run_counts(db.session)

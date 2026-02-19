@@ -12,6 +12,7 @@ from app.models import (
     ProcessingJob,
     TranscriptSegment,
 )
+from shared.processing_paths import find_existing_processed_audio_path
 
 logger = logging.getLogger("writer")
 
@@ -28,7 +29,18 @@ def cleanup_missing_audio_paths_action(params: dict[str, Any]) -> int:
     count = 0
     for post in inconsistent_posts:
         changed = False
-        if post.processed_audio_path and not os.path.exists(post.processed_audio_path):
+        existing_processed_path = find_existing_processed_audio_path(
+            processed_audio_path=post.processed_audio_path,
+            unprocessed_audio_path=post.unprocessed_audio_path,
+            feed_title=getattr(post.feed, "title", None),
+            post_title=post.title,
+        )
+        if existing_processed_path:
+            resolved_processed_path = str(existing_processed_path)
+            if post.processed_audio_path != resolved_processed_path:
+                post.processed_audio_path = resolved_processed_path
+                changed = True
+        elif post.processed_audio_path:
             post.processed_audio_path = None
             changed = True
         if post.unprocessed_audio_path and not os.path.exists(

@@ -335,3 +335,96 @@ def test_feed_posts_pagination_and_filtering(app):
         assert filtered["total"] == 15
         assert filtered["whitelisted_total"] == 15
         assert all(item["whitelisted"] for item in filtered["items"])
+
+
+def test_post_stats_omits_debug_info_when_disabled(app):
+    app.testing = True
+    app.register_blueprint(post_bp)
+
+    with app.app_context():
+        feed = Feed(title="Stats Feed", rss_url="https://example.com/feed.xml")
+        db.session.add(feed)
+        db.session.commit()
+
+        post = Post(
+            feed_id=feed.id,
+            guid="stats-no-debug-guid",
+            download_url="https://example.com/audio.mp3",
+            title="Stats Episode",
+            whitelisted=True,
+        )
+        db.session.add(post)
+        db.session.commit()
+        guid = post.guid
+
+    client = app.test_client()
+
+    with mock.patch.dict("os.environ", {"PODLY_STATS_DEBUG": "false"}, clear=False):
+        response = client.get(f"/api/posts/{guid}/stats")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload is not None
+    assert "debug_info" not in payload
+
+
+def test_post_stats_includes_debug_info_when_enabled(app, tmp_path):
+    app.testing = True
+    app.register_blueprint(post_bp)
+
+    processed_audio = tmp_path / "processed.mp3"
+    processed_audio_bytes = b"processed-audio-bytes"
+    processed_audio.write_bytes(processed_audio_bytes)
+
+    unprocessed_audio = tmp_path / "unprocessed.mp3"
+    unprocessed_audio_bytes = b"unprocessed-audio-bytes"
+    unprocessed_audio.write_bytes(unprocessed_audio_bytes)
+
+    with app.app_context():
+        feed = Feed(title="Stats Feed", rss_url="https://example.com/feed.xml")
+        db.session.add(feed)
+        db.session.commit()
+
+        post = Post(
+            feed_id=feed.id,
+            guid="stats-debug-guid",
+            download_url="https://example.com/audio.mp3",
+            title="Stats Episode",
+            processed_audio_path=str(processed_audio),
+            unprocessed_audio_path=str(unprocessed_audio),
+            whitelisted=True,
+        )
+        db.session.add(post)
+        db.session.commit()
+        guid = post.guid
+
+    client = app.test_client()
+
+    with mock.patch.dict("os.environ", {"PODLY_STATS_DEBUG": "true"}, clear=False):
+        response = client.get(f"/api/posts/{guid}/stats")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload is not None
+
+    debug_info = payload["debug_info"]
+    assert debug_info["guid"] == "stats-debug-guid"
+    assert debug_info["download_url"] == "https://example.com/audio.mp3"
+
+    processed_info = debug_info["processed_audio"]
+    assert processed_info["path"] == str(processed_audio)
+    assert processed_info["exists"] is True
+    assert processed_info["is_file"] is True
+    assert processed_info["size_bytes"] == len(processed_audio_bytes)
+
+    unprocessed_info = debug_info["unprocessed_audio"]
+    assert unprocessed_info["path"] == str(unprocessed_audio)
+    assert unprocessed_info["exists"] is True
+    assert unprocessed_info["is_file"] is True
+    assert unprocessed_info["size_bytes"] == len(unprocessed_audio_bytes)
+
+    candidates = debug_info["processed_audio_path_candidates"]
+    assert any(
+        c["path"] == str(processed_audio.resolve()) and c["exists"] is True
+        for c in candidates
+    )

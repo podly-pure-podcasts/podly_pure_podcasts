@@ -6,7 +6,11 @@ from typing import Any
 
 
 class QueueManager(BaseManager):
-    pass
+    def get_command_queue(self) -> Queue[Any]:
+        raise NotImplementedError
+
+    def Queue(self) -> Queue[Any]:
+        raise NotImplementedError
 
 
 # Define the queue globally so it can be registered

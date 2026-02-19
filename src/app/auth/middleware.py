@@ -64,7 +64,7 @@ _TOKEN_PROTECTED_PATTERNS: tuple[re.Pattern[str], ...] = (
 def init_auth_middleware(app: Any) -> None:
     """Attach the authentication guard to the Flask app."""
 
-    @app.before_request  # type: ignore[untyped-decorator]
+    @app.before_request
     def enforce_authentication() -> Response | None:
         if request.method == "OPTIONS":
             return None

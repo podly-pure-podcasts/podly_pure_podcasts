@@ -1,4 +1,5 @@
 from collections.abc import Generator
+from typing import cast
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -357,7 +358,7 @@ def test_create_identifications_skips_existing_ad_label(
 
     assert created_count == 0
     assert matched_segments == [segment]
-    classifier.db_session.add.assert_not_called()
+    cast(MagicMock, classifier.db_session.add).assert_not_called()
 
 
 def test_build_chunk_payload_trims_for_token_limit(

@@ -1,6 +1,6 @@
 import os
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy.orm import validates
 
@@ -17,6 +17,10 @@ def generate_uuid() -> str:
 def generate_job_id() -> str:
     """Generate a unique job ID."""
     return generate_uuid()
+
+
+def _utc_now_naive() -> datetime:
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 # https://github.com/python/mypy/issues/17918
@@ -62,7 +66,7 @@ class FeedAccessToken(db.Model):  # type: ignore[name-defined, misc]
     token_secret = db.Column(db.String(128), nullable=True)
     feed_id = db.Column(db.Integer, db.ForeignKey("feed.id"), nullable=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=_utc_now_naive, nullable=False)
     last_used_at = db.Column(db.DateTime, nullable=True)
     revoked = db.Column(db.Boolean, default=False, nullable=False)
 
@@ -158,9 +162,9 @@ class User(db.Model):  # type: ignore[name-defined, misc]
     )
     stripe_customer_id = db.Column(db.String(64), nullable=True)
     stripe_subscription_id = db.Column(db.String(64), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=_utc_now_naive, nullable=False)
     updated_at = db.Column(
-        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+        db.DateTime, default=_utc_now_naive, onupdate=_utc_now_naive, nullable=False
     )
     # Discord SSO fields
     discord_id = db.Column(db.String(32), unique=True, nullable=True, index=True)
@@ -202,7 +206,7 @@ class ModelCall(db.Model):  # type: ignore[name-defined, misc]
     model_name = db.Column(db.String, nullable=False)
     prompt = db.Column(db.Text, nullable=False)
     response = db.Column(db.Text, nullable=True)
-    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    timestamp = db.Column(db.DateTime, nullable=False, default=_utc_now_naive)
     status = db.Column(db.String, nullable=False, default="pending")
     error_message = db.Column(db.Text, nullable=True)
     retry_attempts = db.Column(db.Integer, nullable=False, default=0)
@@ -273,10 +277,8 @@ class JobsManagerRun(db.Model):  # type: ignore[name-defined, misc]
     skipped_jobs = db.Column(db.Integer, nullable=False, default=0)
     context_json = db.Column(db.JSON, nullable=True)
     counters_reset_at = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(
-        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
+    created_at = db.Column(db.DateTime, default=_utc_now_naive)
+    updated_at = db.Column(db.DateTime, default=_utc_now_naive, onupdate=_utc_now_naive)
 
     processing_jobs = db.relationship(
         "ProcessingJob", back_populates="run", lazy="dynamic"
@@ -308,7 +310,7 @@ class ProcessingJob(db.Model):  # type: ignore[name-defined, misc]
     completed_at = db.Column(db.DateTime)
     error_message = db.Column(db.Text)
     scheduler_job_id = db.Column(db.String(255))  # APScheduler job ID
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    created_at = db.Column(db.DateTime, default=_utc_now_naive, index=True)
     requested_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id"))
     billing_user_id = db.Column(db.Integer, db.ForeignKey("users.id"))
 
@@ -341,7 +343,7 @@ class UserFeed(db.Model):  # type: ignore[name-defined, misc]
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     feed_id = db.Column(db.Integer, db.ForeignKey("feed.id"), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=_utc_now_naive, nullable=False)
 
     __table_args__ = (
         db.UniqueConstraint("feed_id", "user_id", name="uq_feed_supporter_feed_user"),
@@ -390,8 +392,8 @@ class LLMSettings(db.Model):  # type: ignore[name-defined, misc]
         default=DEFAULTS.ENABLE_WORD_LEVEL_BOUNDARY_REFINDER,
     )
 
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=_utc_now_naive)
+    updated_at = db.Column(db.DateTime, nullable=False, default=_utc_now_naive)
 
 
 class WhisperSettings(db.Model):  # type: ignore[name-defined, misc]
@@ -435,8 +437,8 @@ class WhisperSettings(db.Model):  # type: ignore[name-defined, misc]
         db.Integer, nullable=False, default=DEFAULTS.WHISPER_GROQ_MAX_RETRIES
     )
 
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=_utc_now_naive)
+    updated_at = db.Column(db.DateTime, nullable=False, default=_utc_now_naive)
 
 
 class ProcessingSettings(db.Model):  # type: ignore[name-defined, misc]
@@ -456,8 +458,8 @@ class ProcessingSettings(db.Model):  # type: ignore[name-defined, misc]
         default=DEFAULTS.PROCESSING_NUM_SEGMENTS_TO_INPUT_TO_PROMPT,
     )
 
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=_utc_now_naive)
+    updated_at = db.Column(db.DateTime, nullable=False, default=_utc_now_naive)
 
 
 class OutputSettings(db.Model):  # type: ignore[name-defined, misc]
@@ -479,8 +481,8 @@ class OutputSettings(db.Model):  # type: ignore[name-defined, misc]
         db.Float, nullable=False, default=DEFAULTS.OUTPUT_MIN_CONFIDENCE
     )
 
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=_utc_now_naive)
+    updated_at = db.Column(db.DateTime, nullable=False, default=_utc_now_naive)
 
 
 class AppSettings(db.Model):  # type: ignore[name-defined, misc]
@@ -521,8 +523,8 @@ class AppSettings(db.Model):  # type: ignore[name-defined, misc]
     # Used to detect changes in environment variables between restarts.
     env_config_hash = db.Column(db.String(64), nullable=True)
 
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=_utc_now_naive)
+    updated_at = db.Column(db.DateTime, nullable=False, default=_utc_now_naive)
 
 
 class DiscordSettings(db.Model):  # type: ignore[name-defined, misc]
@@ -535,8 +537,8 @@ class DiscordSettings(db.Model):  # type: ignore[name-defined, misc]
     guild_ids = db.Column(db.Text, nullable=True)  # Comma-separated list
     allow_registration = db.Column(db.Boolean, nullable=False, default=True)
 
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=_utc_now_naive)
+    updated_at = db.Column(db.DateTime, nullable=False, default=_utc_now_naive)
 
 
 class ChapterFilterSettings(db.Model):  # type: ignore[name-defined, misc]
@@ -547,5 +549,5 @@ class ChapterFilterSettings(db.Model):  # type: ignore[name-defined, misc]
         db.Text, nullable=False, default=DEFAULTS.CHAPTER_FILTER_DEFAULT_STRINGS
     )
 
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=_utc_now_naive)
+    updated_at = db.Column(db.DateTime, nullable=False, default=_utc_now_naive)
