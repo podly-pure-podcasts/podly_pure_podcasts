@@ -26,6 +26,14 @@ on:
         description: Build gpu-amd image (amd64 only)
         type: boolean
         default: true
+      build_amd64:
+        description: Build AMD64 images
+        type: boolean
+        default: true
+      build_arm64:
+        description: Build ARM64 images
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -213,23 +221,27 @@ jobs:
         run: |
           enabled=true
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            case "${{ matrix.variant.name }}" in
-              latest)
-                enabled="${{ github.event.inputs.build_latest }}"
-                ;;
-              lite)
-                enabled="${{ github.event.inputs.build_lite }}"
-                ;;
-              gpu-nvidia)
-                enabled="${{ github.event.inputs.build_gpu_nvidia }}"
-                ;;
-              gpu-amd)
-                enabled="${{ github.event.inputs.build_gpu_amd }}"
-                ;;
-              *)
-                enabled=false
-                ;;
-            esac
+            if [ "${{ github.event.inputs.build_amd64 }}" != "true" ]; then
+              enabled=false
+            else
+              case "${{ matrix.variant.name }}" in
+                latest)
+                  enabled="${{ github.event.inputs.build_latest }}"
+                  ;;
+                lite)
+                  enabled="${{ github.event.inputs.build_lite }}"
+                  ;;
+                gpu-nvidia)
+                  enabled="${{ github.event.inputs.build_gpu_nvidia }}"
+                  ;;
+                gpu-amd)
+                  enabled="${{ github.event.inputs.build_gpu_amd }}"
+                  ;;
+                *)
+                  enabled=false
+                  ;;
+              esac
+            fi
           fi
           echo "enabled=$enabled" >> "$GITHUB_OUTPUT"
         shell: bash
@@ -330,17 +342,21 @@ jobs:
         run: |
           enabled=true
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            case "${{ matrix.variant.name }}" in
-              latest)
-                enabled="${{ github.event.inputs.build_latest }}"
-                ;;
-              lite)
-                enabled="${{ github.event.inputs.build_lite }}"
-                ;;
-              *)
-                enabled=false
-                ;;
-            esac
+            if [ "${{ github.event.inputs.build_arm64 }}" != "true" ]; then
+              enabled=false
+            else
+              case "${{ matrix.variant.name }}" in
+                latest)
+                  enabled="${{ github.event.inputs.build_latest }}"
+                  ;;
+                lite)
+                  enabled="${{ github.event.inputs.build_lite }}"
+                  ;;
+                *)
+                  enabled=false
+                  ;;
+              esac
+            fi
           fi
           echo "enabled=$enabled" >> "$GITHUB_OUTPUT"
         shell: bash
@@ -429,17 +445,21 @@ jobs:
         run: |
           enabled=true
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            case "${{ matrix.variant }}" in
-              latest)
-                enabled="${{ github.event.inputs.build_latest }}"
-                ;;
-              lite)
-                enabled="${{ github.event.inputs.build_lite }}"
-                ;;
-              *)
-                enabled=false
-                ;;
-            esac
+            if [ "${{ github.event.inputs.build_amd64 }}" != "true" ] || [ "${{ github.event.inputs.build_arm64 }}" != "true" ]; then
+              enabled=false
+            else
+              case "${{ matrix.variant }}" in
+                latest)
+                  enabled="${{ github.event.inputs.build_latest }}"
+                  ;;
+                lite)
+                  enabled="${{ github.event.inputs.build_lite }}"
+                  ;;
+                *)
+                  enabled=false
+                  ;;
+              esac
+            fi
           fi
           echo "enabled=$enabled" >> "$GITHUB_OUTPUT"
         shell: bash
