@@ -632,6 +632,10 @@ export const jobsApi = {
     const response = await api.post(`/api/jobs/${jobId}/cancel`);
     return response.data;
   },
+  cancelQueuedJobs: async (): Promise<{ status: string; cancelled_count: number; message: string }> => {
+    const response = await api.post('/api/jobs/cancel-queued');
+    return response.data;
+  },
   getJobManagerStatus: async (): Promise<JobManagerStatus> => {
     const response = await api.get('/api/job-manager/status');
     return response.data;
