@@ -9,6 +9,23 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      build_latest:
+        description: Build latest image
+        type: boolean
+        default: true
+      build_lite:
+        description: Build lite image
+        type: boolean
+        default: true
+      build_gpu_nvidia:
+        description: Build gpu-nvidia image (amd64 only)
+        type: boolean
+        default: true
+      build_gpu_amd:
+        description: Build gpu-amd image (amd64 only)
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -159,7 +176,7 @@ jobs:
 
   build-amd64:
     needs: changes
-    if: ${{ needs.changes.outputs.skip == 'false' && github.event_name != 'pull_request' }}
+    if: ${{ needs.changes.outputs.skip == 'false' && github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || (matrix.variant.name == 'latest' && github.event.inputs.build_latest == 'true') || (matrix.variant.name == 'lite' && github.event.inputs.build_lite == 'true') || (matrix.variant.name == 'gpu-nvidia' && github.event.inputs.build_gpu_nvidia == 'true') || (matrix.variant.name == 'gpu-amd' && github.event.inputs.build_gpu_amd == 'true')) }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -253,7 +270,7 @@ jobs:
 
   build-arm64:
     needs: changes
-    if: ${{ needs.changes.outputs.skip == 'false' && github.event_name != 'pull_request' }}
+    if: ${{ needs.changes.outputs.skip == 'false' && github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || (matrix.variant.name == 'latest' && github.event.inputs.build_latest == 'true') || (matrix.variant.name == 'lite' && github.event.inputs.build_lite == 'true')) }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -342,7 +359,7 @@ jobs:
 
   manifest:
     needs: [changes, build-amd64, build-arm64]
-    if: ${{ needs.changes.outputs.skip == 'false' }}
+    if: ${{ needs.changes.outputs.skip == 'false' && (github.event_name != 'workflow_dispatch' || (matrix.variant == 'latest' && github.event.inputs.build_latest == 'true') || (matrix.variant == 'lite' && github.event.inputs.build_lite == 'true')) }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
