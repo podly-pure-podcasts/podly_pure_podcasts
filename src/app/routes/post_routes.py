@@ -37,11 +37,67 @@ from app.routes.post_utils import (
 from app.writer.client import writer_client
 from podcast_processor.chapter_filter import parse_filter_strings
 from shared import defaults as DEFAULTS
+from shared.processing_paths import (
+    get_in_root,
+    get_processed_audio_path_candidates,
+    get_srv_root,
+)
 
 logger = logging.getLogger("global_logger")
 
 
 post_bp = Blueprint("post", __name__)
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _build_file_debug(path_value: str | None) -> dict[str, Any]:
+    info: dict[str, Any] = {
+        "path": path_value,
+        "absolute_path": None,
+        "exists": False,
+        "is_file": False,
+        "size_bytes": None,
+    }
+    if not path_value:
+        return info
+
+    path_obj = Path(path_value)
+    try:
+        info["absolute_path"] = str(path_obj.resolve())
+        exists = path_obj.exists()
+        is_file = path_obj.is_file()
+        info["exists"] = exists
+        info["is_file"] = is_file
+        if exists and is_file:
+            info["size_bytes"] = path_obj.stat().st_size
+    except OSError as exc:
+        info["error"] = str(exc)
+    return info
+
+
+def _build_candidate_file_debug(candidates: list[Path]) -> list[dict[str, Any]]:
+    candidate_details: list[dict[str, Any]] = []
+    for candidate in candidates:
+        detail = {
+            "path": str(candidate),
+            "exists": False,
+            "size_bytes": None,
+        }
+        try:
+            exists = candidate.exists() and candidate.is_file()
+            detail["exists"] = exists
+            if exists:
+                detail["size_bytes"] = candidate.stat().st_size
+        except OSError as exc:
+            detail["error"] = str(exc)
+        candidate_details.append(detail)
+    return candidate_details
 
 
 @post_bp.route("/api/feeds/<int:feed_id>/posts", methods=["GET"])
@@ -508,6 +564,35 @@ def api_post_stats(p_guid: str) -> flask.Response:
         "identifications": identifications_data,
         "chapters": chapters_data,
     }
+
+    if _env_bool("PODLY_STATS_DEBUG", default=False):
+        candidates = get_processed_audio_path_candidates(
+            processed_audio_path=post.processed_audio_path,
+            unprocessed_audio_path=post.unprocessed_audio_path,
+            feed_title=feed.title if feed else None,
+            post_title=post.title,
+        )
+        stats_data["debug_info"] = {
+            "post_id": post.id,
+            "feed_id": post.feed_id,
+            "guid": post.guid,
+            "download_url": post.download_url,
+            "download_count": post.download_count,
+            "has_processed_audio": post.processed_audio_path is not None,
+            "has_unprocessed_audio": post.unprocessed_audio_path is not None,
+            "processed_audio": _build_file_debug(post.processed_audio_path),
+            "unprocessed_audio": _build_file_debug(post.unprocessed_audio_path),
+            "processed_audio_path_candidates": _build_candidate_file_debug(candidates),
+            "processing_roots": {
+                "in_root": str(get_in_root()),
+                "srv_root": str(get_srv_root()),
+            },
+            "record_counts": {
+                "transcript_segments": len(transcript_segments),
+                "model_calls": len(model_calls),
+                "identifications": len(identifications),
+            },
+        }
 
     return flask.jsonify(stats_data)
 
