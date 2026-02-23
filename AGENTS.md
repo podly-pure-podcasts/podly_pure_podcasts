@@ -3,3 +3,4 @@ Project-specific rules:
 - Only use ./scripts/ci.sh to run tests & lints - do not attempt to run directly
 - use uv (not pipenv)
 - All database writes must go through the `writer` service. Do not use `db.session.commit()` directly in application code. Use `writer_client.action()` instead.
+- If you add any new functionality you must add test coverage for it.
