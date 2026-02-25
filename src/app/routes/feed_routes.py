@@ -813,7 +813,7 @@ def _serialize_feed(
         "auto_whitelist_new_episodes_override": getattr(
             feed, "auto_whitelist_new_episodes_override", None
         ),
-        "posts_count": len(feed.posts),
+        "posts_count": len(cast(list[Any], feed.posts)),
         "member_count": len(member_ids),
         "is_member": is_member,
         "is_active_subscription": is_active_subscription,

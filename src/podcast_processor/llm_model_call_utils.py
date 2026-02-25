@@ -123,3 +123,47 @@ def extract_litellm_content(response: Any) -> str:
     if not content:
         content = getattr(choice, "text", "") or ""
     return str(content)
+
+
+def extract_litellm_finish_reason(response: Any) -> str | None:
+    """Extracts finish_reason from the first response choice, if present."""
+    choices = getattr(response, "choices", None) or []
+    choice = choices[0] if choices else None
+    if not choice:
+        return None
+
+    finish_reason = getattr(choice, "finish_reason", None)
+    if finish_reason is None and isinstance(choice, dict):
+        finish_reason = choice.get("finish_reason")
+    if finish_reason is None:
+        return None
+    return str(finish_reason)
+
+
+def extract_litellm_usage(response: Any) -> dict[str, int | None]:
+    """Extracts token usage fields from a litellm response object."""
+    usage = getattr(response, "usage", None)
+    if usage is None and isinstance(response, dict):
+        usage = response.get("usage")
+
+    def _maybe_int(value: Any) -> int | None:
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except Exception:  # noqa: BLE001
+            return None
+
+    def _usage_field(name: str) -> int | None:
+        if usage is None:
+            return None
+        value = getattr(usage, name, None)
+        if value is None and isinstance(usage, dict):
+            value = usage.get(name)
+        return _maybe_int(value)
+
+    return {
+        "prompt_tokens": _usage_field("prompt_tokens"),
+        "completion_tokens": _usage_field("completion_tokens"),
+        "total_tokens": _usage_field("total_tokens"),
+    }

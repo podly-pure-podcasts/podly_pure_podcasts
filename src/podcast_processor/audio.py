@@ -5,7 +5,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-import ffmpeg  # type: ignore[import-untyped]
+import ffmpeg
 
 logger = logging.getLogger("global_logger")
 

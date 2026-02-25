@@ -71,6 +71,7 @@ export default function JobsPage() {
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<'active' | 'all'>('active');
   const [cancellingJobs, setCancellingJobs] = useState<Set<string>>(new Set());
+  const [cancellingQueued, setCancellingQueued] = useState(false);
   const previousHasActiveWork = useRef<boolean>(false);
   const [cleanupPreview, setCleanupPreview] = useState<CleanupPreview | null>(null);
   const [cleanupLoading, setCleanupLoading] = useState(false);
@@ -160,6 +161,50 @@ export default function JobsPage() {
     [refresh]
   );
 
+  const cancelAllQueuedJobs = useCallback(async () => {
+    const queuedCount =
+      managerStatus?.run?.queued_jobs ??
+      jobs.filter(job => job.status === 'pending').length;
+    if (queuedCount <= 0) {
+      return;
+    }
+
+    const confirmMessage = `Cancel all ${queuedCount} queued job${queuedCount === 1 ? '' : 's'}?`;
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    const queuedVisibleJobIds = jobs
+      .filter(job => job.status === 'pending')
+      .map(job => job.job_id);
+
+    setCancellingQueued(true);
+    setCancellingJobs(prev => {
+      const next = new Set(prev);
+      queuedVisibleJobIds.forEach(id => next.add(id));
+      return next;
+    });
+
+    try {
+      await jobsApi.cancelQueuedJobs();
+      setError(null);
+      await refresh();
+    } catch (e) {
+      setError(
+        `Failed to cancel queued jobs: ${
+          e instanceof Error ? e.message : 'Unknown error'
+        }`
+      );
+    } finally {
+      setCancellingQueued(false);
+      setCancellingJobs(prev => {
+        const next = new Set(prev);
+        queuedVisibleJobIds.forEach(id => next.delete(id));
+        return next;
+      });
+    }
+  }, [jobs, managerStatus?.run?.queued_jobs, refresh]);
+
   const runCleanupNow = useCallback(async () => {
     setCleanupRunning(true);
     setCleanupError(null);
@@ -225,6 +270,8 @@ export default function JobsPage() {
 
   const run: JobManagerRun | null = managerStatus?.run ?? null;
   const hasActiveWork = run ? run.queued_jobs + run.running_jobs > 0 : false;
+  const queuedJobsCount =
+    run?.queued_jobs ?? jobs.filter(job => job.status === 'pending').length;
   const retentionDays = cleanupPreview?.retention_days ?? null;
   const cleanupDisabled = retentionDays === null || retentionDays <= 0;
   const cleanupEligibleCount = cleanupPreview?.count ?? 0;
@@ -353,6 +400,15 @@ export default function JobsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => { void cancelAllQueuedJobs(); }}
+            className="inline-flex items-center rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            disabled={loading || cancellingQueued || queuedJobsCount <= 0}
+          >
+            {cancellingQueued
+              ? 'Cancelling queued…'
+              : `Cancel queued${queuedJobsCount > 0 ? ` (${queuedJobsCount})` : ''}`}
+          </button>
           <button
             onClick={() => { void refresh(); }}
             className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"

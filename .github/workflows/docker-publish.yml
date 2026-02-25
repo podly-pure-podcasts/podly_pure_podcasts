@@ -8,6 +8,32 @@ on:
     branches: [main]
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      build_latest:
+        description: Build latest image
+        type: boolean
+        default: true
+      build_lite:
+        description: Build lite image
+        type: boolean
+        default: true
+      build_gpu_nvidia:
+        description: Build gpu-nvidia image (amd64 only)
+        type: boolean
+        default: true
+      build_gpu_amd:
+        description: Build gpu-amd image (amd64 only)
+        type: boolean
+        default: true
+      build_amd64:
+        description: Build AMD64 images
+        type: boolean
+        default: true
+      build_arm64:
+        description: Build ARM64 images
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -40,6 +66,9 @@ jobs:
             HEAD_SHA=$(git rev-parse "${{ github.sha }}")
             echo "Comparing PR commits: $BASE_SHA...$HEAD_SHA"
             files_changed=$(git diff --name-only "$BASE_SHA"..."$HEAD_SHA")
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Manual workflow dispatch detected; forcing build."
+            files_changed="manual-trigger"
           elif [ "${{ github.event_name }}" = "release" ]; then
             echo "Release event detected; building images for release tag"
             TARGET_REF="${{ github.event.release.target_commitish }}"
@@ -64,8 +93,8 @@ jobs:
           # If no files are documentation, then we should continue
           non_doc_files=$(echo "$files_changed" | grep -v -E '(\.md$|^docs/|LICENCE)')
 
-          if [ "${{ github.event_name }}" = "release" ]; then
-            echo "Release build detected. Skipping documentation-only shortcut."
+          if [ "${{ github.event_name }}" = "release" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Release or manual build detected. Skipping documentation-only shortcut."
             echo "skip=false" >> $GITHUB_OUTPUT
           elif [ -z "$non_doc_files" ]; then
             echo "Only documentation files were changed. Skipping build and publish."
@@ -187,13 +216,44 @@ jobs:
     env:
       ARCH: amd64
     steps:
+      - name: Determine if this variant is selected
+        id: select
+        run: |
+          enabled=true
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ github.event.inputs.build_amd64 }}" != "true" ]; then
+              enabled=false
+            else
+              case "${{ matrix.variant.name }}" in
+                latest)
+                  enabled="${{ github.event.inputs.build_latest }}"
+                  ;;
+                lite)
+                  enabled="${{ github.event.inputs.build_lite }}"
+                  ;;
+                gpu-nvidia)
+                  enabled="${{ github.event.inputs.build_gpu_nvidia }}"
+                  ;;
+                gpu-amd)
+                  enabled="${{ github.event.inputs.build_gpu_amd }}"
+                  ;;
+                *)
+                  enabled=false
+                  ;;
+              esac
+            fi
+          fi
+          echo "enabled=$enabled" >> "$GITHUB_OUTPUT"
+        shell: bash
+
       - name: Checkout repository
+        if: ${{ steps.select.outputs.enabled == 'true' }}
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Free up disk space
-        if: ${{ matrix.variant.gpu == 'true' || matrix.variant.gpu_nvidia == 'true' || matrix.variant.gpu_amd == 'true' }}
+        if: ${{ steps.select.outputs.enabled == 'true' && (matrix.variant.gpu == 'true' || matrix.variant.gpu_nvidia == 'true' || matrix.variant.gpu_amd == 'true') }}
         run: |
           echo "Available disk space before cleanup:"
           df -h
@@ -205,12 +265,14 @@ jobs:
           df -h
 
       - name: Set up Docker Buildx
+        if: ${{ steps.select.outputs.enabled == 'true' }}
         uses: docker/setup-buildx-action@v3
         with:
           driver-opts: |
             image=moby/buildkit:v0.12.0
 
       - name: Log in to Container Registry
+        if: ${{ steps.select.outputs.enabled == 'true' }}
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -218,6 +280,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract metadata
+        if: ${{ steps.select.outputs.enabled == 'true' }}
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -229,6 +292,7 @@ jobs:
             type=raw,value=${{ matrix.variant.name }}-${{ env.ARCH }},enable={{is_default_branch}}
 
       - name: Build and push
+        if: ${{ steps.select.outputs.enabled == 'true' }}
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -273,13 +337,38 @@ jobs:
     env:
       ARCH: arm64
     steps:
+      - name: Determine if this variant is selected
+        id: select
+        run: |
+          enabled=true
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ github.event.inputs.build_arm64 }}" != "true" ]; then
+              enabled=false
+            else
+              case "${{ matrix.variant.name }}" in
+                latest)
+                  enabled="${{ github.event.inputs.build_latest }}"
+                  ;;
+                lite)
+                  enabled="${{ github.event.inputs.build_lite }}"
+                  ;;
+                *)
+                  enabled=false
+                  ;;
+              esac
+            fi
+          fi
+          echo "enabled=$enabled" >> "$GITHUB_OUTPUT"
+        shell: bash
+
       - name: Checkout repository
+        if: ${{ steps.select.outputs.enabled == 'true' }}
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Free up disk space
-        if: ${{ matrix.variant.gpu == 'true' || matrix.variant.gpu_nvidia == 'true' || matrix.variant.gpu_amd == 'true' }}
+        if: ${{ steps.select.outputs.enabled == 'true' && (matrix.variant.gpu == 'true' || matrix.variant.gpu_nvidia == 'true' || matrix.variant.gpu_amd == 'true') }}
         run: |
           echo "Available disk space before cleanup:"
           df -h
@@ -291,15 +380,18 @@ jobs:
           df -h
 
       - name: Set up QEMU
+        if: ${{ steps.select.outputs.enabled == 'true' }}
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
+        if: ${{ steps.select.outputs.enabled == 'true' }}
         uses: docker/setup-buildx-action@v3
         with:
           driver-opts: |
             image=moby/buildkit:v0.12.0
 
       - name: Log in to Container Registry
+        if: ${{ steps.select.outputs.enabled == 'true' }}
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -307,6 +399,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract metadata
+        if: ${{ steps.select.outputs.enabled == 'true' }}
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -318,6 +411,7 @@ jobs:
             type=raw,value=${{ matrix.variant.name }}-${{ env.ARCH }},enable={{is_default_branch}}
 
       - name: Build and push
+        if: ${{ steps.select.outputs.enabled == 'true' }}
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -346,12 +440,38 @@ jobs:
           - "latest"
           - "lite"
     steps:
+      - name: Determine if this manifest variant is selected
+        id: select
+        run: |
+          enabled=true
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ github.event.inputs.build_amd64 }}" != "true" ] || [ "${{ github.event.inputs.build_arm64 }}" != "true" ]; then
+              enabled=false
+            else
+              case "${{ matrix.variant }}" in
+                latest)
+                  enabled="${{ github.event.inputs.build_latest }}"
+                  ;;
+                lite)
+                  enabled="${{ github.event.inputs.build_lite }}"
+                  ;;
+                *)
+                  enabled=false
+                  ;;
+              esac
+            fi
+          fi
+          echo "enabled=$enabled" >> "$GITHUB_OUTPUT"
+        shell: bash
+
       - name: Checkout repository
+        if: ${{ steps.select.outputs.enabled == 'true' }}
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Log in to Container Registry
+        if: ${{ steps.select.outputs.enabled == 'true' }}
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -359,6 +479,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract metadata (manifest)
+        if: ${{ steps.select.outputs.enabled == 'true' }}
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -370,6 +491,7 @@ jobs:
             type=raw,value=${{ matrix.variant }},enable={{is_default_branch}}
 
       - name: Create and push manifest
+        if: ${{ steps.select.outputs.enabled == 'true' }}
         run: |
           set -euo pipefail
           tags="${{ steps.meta.outputs.tags }}"

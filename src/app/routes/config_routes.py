@@ -548,7 +548,7 @@ def _test_local_whisper(whisper_cfg: dict[str, Any]) -> flask.Response:
     """Test local whisper configuration."""
     model_name = _get_whisper_config_value(whisper_cfg, "model", "base.en")
     try:
-        import whisper  # type: ignore[import-untyped]
+        import whisper
     except ImportError as e:
         return _make_error_response(f"whisper not installed: {e}")
 

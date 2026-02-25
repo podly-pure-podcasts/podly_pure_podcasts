@@ -314,6 +314,46 @@ export const feedsApi = {
       segment_text: string;
       mixed: boolean;
     }>;
+    debug_info?: {
+      post_id: number;
+      feed_id: number;
+      guid: string;
+      download_url: string;
+      download_count: number | null;
+      has_processed_audio: boolean;
+      has_unprocessed_audio: boolean;
+      processed_audio: {
+        path: string | null;
+        absolute_path: string | null;
+        exists: boolean;
+        is_file: boolean;
+        size_bytes: number | null;
+        error?: string;
+      };
+      unprocessed_audio: {
+        path: string | null;
+        absolute_path: string | null;
+        exists: boolean;
+        is_file: boolean;
+        size_bytes: number | null;
+        error?: string;
+      };
+      processed_audio_path_candidates: Array<{
+        path: string;
+        exists: boolean;
+        size_bytes: number | null;
+        error?: string;
+      }>;
+      processing_roots: {
+        in_root: string;
+        srv_root: string;
+      };
+      record_counts: {
+        transcript_segments: number;
+        model_calls: number;
+        identifications: number;
+      };
+    };
     chapters: {
       total_chapters: number;
       chapters_kept: number;
@@ -432,6 +472,46 @@ export const feedsApi = {
       segment_text: string;
       mixed: boolean;
     }>;
+    debug_info?: {
+      post_id: number;
+      feed_id: number;
+      guid: string;
+      download_url: string;
+      download_count: number | null;
+      has_processed_audio: boolean;
+      has_unprocessed_audio: boolean;
+      processed_audio: {
+        path: string | null;
+        absolute_path: string | null;
+        exists: boolean;
+        is_file: boolean;
+        size_bytes: number | null;
+        error?: string;
+      };
+      unprocessed_audio: {
+        path: string | null;
+        absolute_path: string | null;
+        exists: boolean;
+        is_file: boolean;
+        size_bytes: number | null;
+        error?: string;
+      };
+      processed_audio_path_candidates: Array<{
+        path: string;
+        exists: boolean;
+        size_bytes: number | null;
+        error?: string;
+      }>;
+      processing_roots: {
+        in_root: string;
+        srv_root: string;
+      };
+      record_counts: {
+        transcript_segments: number;
+        model_calls: number;
+        identifications: number;
+      };
+    };
   }> => {
     return feedsApi.getPostStats(guid);
   },
@@ -630,6 +710,10 @@ export const jobsApi = {
   },
   cancelJob: async (jobId: string): Promise<{ status: string; job_id: string; message: string }> => {
     const response = await api.post(`/api/jobs/${jobId}/cancel`);
+    return response.data;
+  },
+  cancelQueuedJobs: async (): Promise<{ status: string; cancelled_count: number; message: string }> => {
+    const response = await api.post('/api/jobs/cancel-queued');
     return response.data;
   },
   getJobManagerStatus: async (): Promise<JobManagerStatus> => {

@@ -15,6 +15,8 @@ from jinja2 import Template
 
 from podcast_processor.llm_model_call_utils import (
     extract_litellm_content,
+    extract_litellm_finish_reason,
+    extract_litellm_usage,
     render_prompt_and_upsert_model_call,
     try_update_model_call,
 )
@@ -57,7 +59,8 @@ class WordBoundaryRefiner:
 Ad: {{ad_start}}s-{{ad_end}}s
 {% for seg in context_segments %}[seq={{seg.sequence_num}} start={{seg.start_time}} end={{seg.end_time}}] {{seg.text}}
 {% endfor %}
-    Return JSON: {"refined_start_segment_seq": 0, "refined_start_phrase": "", "refined_end_segment_seq": 0, "refined_end_phrase": "", "start_adjustment_reason": "", "end_adjustment_reason": ""}
+Return only one JSON object (no markdown/code fences, no analysis text) with:
+{"refined_start_segment_seq": 0, "refined_start_phrase": "", "refined_end_segment_seq": 0, "refined_end_phrase": "", "start_adjustment_reason": "", "end_adjustment_reason": ""}
 """
         )
 
@@ -101,14 +104,28 @@ Ad: {{ad_start}}s-{{ad_end}}s
                 model=self.config.llm_model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.1,
-                max_tokens=2048,
+                max_tokens=4096,
                 timeout=self.config.openai_timeout,
                 api_key=self.config.llm_api_key,
                 base_url=self.config.openai_base_url,
             )
 
             content = extract_litellm_content(response)
+            finish_reason = extract_litellm_finish_reason(response)
+            usage = extract_litellm_usage(response)
             raw_response = content
+
+            self.logger.debug(
+                "Word boundary refine finish_reason=%s",
+                finish_reason or "unknown",
+                extra={
+                    "content_preview": (content or "")[:200],
+                    "prompt_tokens": usage.get("prompt_tokens"),
+                    "completion_tokens": usage.get("completion_tokens"),
+                    "total_tokens": usage.get("total_tokens"),
+                },
+            )
+
             self._update_model_call(
                 model_call_id,
                 status="received_response",
@@ -118,15 +135,23 @@ Ad: {{ad_start}}s-{{ad_end}}s
 
             parsed = self._parse_json(content)
             if not parsed:
+                parse_failure_reason = self._parse_failure_reason(finish_reason)
                 self.logger.warning(
-                    "Word boundary refine: no parseable JSON; falling back to original start",
-                    extra={"content_preview": (content or "")[:200]},
+                    "Word boundary refine: no parseable JSON (%s); falling back to original start",
+                    parse_failure_reason,
+                    extra={
+                        "finish_reason": finish_reason,
+                        "content_preview": (content or "")[:200],
+                        "prompt_tokens": usage.get("prompt_tokens"),
+                        "completion_tokens": usage.get("completion_tokens"),
+                        "total_tokens": usage.get("total_tokens"),
+                    },
                 )
                 self._update_model_call(
                     model_call_id,
                     status="success_heuristic",
                     response=raw_response,
-                    error_message="parse_failed",
+                    error_message=f"parse_failed:{parse_failure_reason}",
                 )
                 return self._fallback(ad_start, ad_end)
 
@@ -216,16 +241,205 @@ Ad: {{ad_start}}s-{{ad_end}}s
         return min(estimated_end, orig_end + MAX_END_EXTENSION_SECONDS)
 
     def _parse_json(self, content: str) -> dict[str, Any] | None:
-        cleaned = re.sub(r"```json|```", "", (content or "").strip())
-        json_candidates = re.findall(r"\{.*?\}", cleaned, re.DOTALL)
-        for candidate in json_candidates:
+        for candidate in self._json_parse_candidates(content):
+            parsed = self._parse_json_candidate(candidate)
+            if parsed is not None:
+                return parsed
+        partial = self._parse_partial_json_fields(content)
+        if partial:
+            return partial
+        return None
+
+    @staticmethod
+    def _parse_partial_json_fields(content: str) -> dict[str, Any]:
+        text = str(content or "")
+        parsed: dict[str, Any] = {}
+
+        def _extract_int_or_null(key: str) -> int | None | None:
+            match = re.search(
+                rf'"{re.escape(key)}"\s*:\s*(null|-?\d+)',
+                text,
+                flags=re.IGNORECASE,
+            )
+            if not match:
+                return None
+            value = match.group(1)
+            if value is None:
+                return None
+            if value.lower() == "null":
+                return None
             try:
-                loaded = json.loads(candidate)
+                return int(value)
+            except Exception:  # noqa: BLE001
+                return None
+
+        def _extract_string(key: str) -> str | None:
+            match = re.search(
+                rf'"{re.escape(key)}"\s*:\s*"([^"]*)"',
+                text,
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+            if not match:
+                return None
+            value = (match.group(1) or "").strip()
+            return value or None
+
+        start_seq = _extract_int_or_null("refined_start_segment_seq")
+        end_seq = _extract_int_or_null("refined_end_segment_seq")
+        start_phrase = _extract_string("refined_start_phrase")
+        end_phrase = _extract_string("refined_end_phrase")
+        start_reason = _extract_string("start_adjustment_reason")
+        end_reason = _extract_string("end_adjustment_reason")
+
+        if start_seq is not None or re.search(
+            r'"refined_start_segment_seq"\s*:\s*null', text, flags=re.IGNORECASE
+        ):
+            parsed["refined_start_segment_seq"] = start_seq
+        if end_seq is not None or re.search(
+            r'"refined_end_segment_seq"\s*:\s*null', text, flags=re.IGNORECASE
+        ):
+            parsed["refined_end_segment_seq"] = end_seq
+        if start_phrase is not None:
+            parsed["refined_start_phrase"] = start_phrase
+        if end_phrase is not None:
+            parsed["refined_end_phrase"] = end_phrase
+        if start_reason is not None:
+            parsed["start_adjustment_reason"] = start_reason
+        if end_reason is not None:
+            parsed["end_adjustment_reason"] = end_reason
+
+        return parsed
+
+    def _json_parse_candidates(self, content: str) -> list[str]:
+        text = (content or "").strip()
+        if not text:
+            return []
+
+        candidates: list[str] = [text]
+
+        for match in re.finditer(
+            r"```(?:json)?\s*(.*?)```", text, re.IGNORECASE | re.DOTALL
+        ):
+            block = str(match.group(1) or "").strip()
+            if block:
+                candidates.append(block)
+
+        unfenced = re.sub(r"```(?:json)?|```", "", text, flags=re.IGNORECASE).strip()
+        if unfenced:
+            candidates.append(unfenced)
+
+        expanded: list[str] = []
+        for candidate in candidates:
+            expanded.append(candidate)
+            expanded.extend(self._extract_json_objects(candidate))
+
+        return self._dedupe_preserve_order(expanded)
+
+    @staticmethod
+    def _dedupe_preserve_order(values: list[str]) -> list[str]:
+        deduped: list[str] = []
+        seen: set[str] = set()
+        for value in values:
+            normalized = value.strip()
+            if not normalized or normalized in seen:
+                continue
+            deduped.append(normalized)
+            seen.add(normalized)
+        return deduped
+
+    def _parse_json_candidate(self, candidate: str) -> dict[str, Any] | None:
+        attempts = [candidate]
+        repaired = self._repair_truncated_json(candidate)
+        if repaired and repaired != candidate:
+            attempts.append(repaired)
+
+        for attempt in attempts:
+            try:
+                loaded = json.loads(attempt)
                 if isinstance(loaded, dict):
                     return cast(dict[str, Any], loaded)
             except Exception:  # noqa: BLE001
                 continue
+
         return None
+
+    @staticmethod
+    def _repair_truncated_json(candidate: str) -> str | None:
+        text = (candidate or "").strip()
+        if not text:
+            return None
+
+        start_idx = text.find("{")
+        if start_idx < 0:
+            return None
+
+        repaired = text[start_idx:]
+        repaired = re.sub(
+            r"```(?:json)?|```", "", repaired, flags=re.IGNORECASE
+        ).strip()
+        repaired = repaired.rstrip(",")
+
+        # Drop an obviously incomplete trailing key/value pair if present.
+        repaired = re.sub(r',\s*"[^"]*$', "", repaired)
+        repaired = re.sub(r',\s*"[^"]*"$', "", repaired)
+        repaired = re.sub(r',\s*"[^"]*"\s*:\s*$', "", repaired)
+        repaired = re.sub(r',\s*"[^"]*"\s*:\s*"[^"]*$', "", repaired)
+
+        open_brackets = repaired.count("[")
+        close_brackets = repaired.count("]")
+        if close_brackets < open_brackets:
+            repaired += "]" * (open_brackets - close_brackets)
+
+        open_braces = repaired.count("{")
+        close_braces = repaired.count("}")
+        if close_braces < open_braces:
+            repaired += "}" * (open_braces - close_braces)
+
+        return repaired or None
+
+    @staticmethod
+    def _extract_json_objects(text: str) -> list[str]:
+        objects: list[str] = []
+        depth = 0
+        start_idx: int | None = None
+        in_string = False
+        escaped = False
+
+        for idx, char in enumerate(text):
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == '"':
+                    in_string = False
+                continue
+
+            if char == '"':
+                in_string = True
+                continue
+
+            if char == "{":
+                if depth == 0:
+                    start_idx = idx
+                depth += 1
+                continue
+
+            if char != "}" or depth == 0:
+                continue
+
+            depth -= 1
+            if depth == 0 and start_idx is not None:
+                objects.append(text[start_idx : idx + 1])
+                start_idx = None
+
+        return objects
+
+    @staticmethod
+    def _parse_failure_reason(finish_reason: str | None) -> str:
+        if str(finish_reason or "").lower() == "length":
+            return "length"
+        return "format"
 
     @staticmethod
     def _has_text(value: Any) -> bool:
@@ -297,6 +511,20 @@ Ad: {{ad_start}}s-{{ad_end}}s
                 None,
             )
 
+        segment_start = self._estimate_segment_boundary_time(
+            all_segments=all_segments,
+            segment_seq=start_segment_seq,
+            boundary="start",
+        )
+        if segment_start is not None:
+            constrained = self._constrain_start(float(segment_start), ad_start)
+            return (
+                constrained,
+                constrained != float(ad_start),
+                start_reason,
+                None,
+            )
+
         if self._has_text(start_word) or start_word_index is not None:
             estimated_start = self._estimate_word_time(
                 all_segments=all_segments,
@@ -325,6 +553,19 @@ Ad: {{ad_start}}s-{{ad_end}}s
         end_reason: str,
     ) -> tuple[float, bool, str, str | None]:
         if not self._has_text(end_phrase):
+            segment_end = self._estimate_segment_boundary_time(
+                all_segments=all_segments,
+                segment_seq=end_segment_seq,
+                boundary="end",
+            )
+            if segment_end is not None:
+                constrained = self._constrain_end(float(segment_end), ad_end)
+                return (
+                    constrained,
+                    constrained != float(ad_end),
+                    (end_reason or "refined"),
+                    None,
+                )
             return float(ad_end), False, (end_reason or "unchanged"), None
 
         estimated_end = self._estimate_phrase_time(
@@ -670,6 +911,30 @@ Ad: {{ad_start}}s-{{ad_end}}s
 
         idx_int = max(0, min(idx_int, len(words) - 1))
         return idx_int
+
+    def _estimate_segment_boundary_time(
+        self,
+        *,
+        all_segments: list[dict[str, Any]],
+        segment_seq: Any,
+        boundary: str,
+    ) -> float | None:
+        seg = self._find_segment(all_segments, segment_seq)
+        if not seg:
+            return None
+
+        try:
+            start_time = float(seg.get("start_time", 0.0))
+        except Exception:  # noqa: BLE001
+            start_time = 0.0
+        try:
+            end_time = float(seg.get("end_time", start_time))
+        except Exception:  # noqa: BLE001
+            end_time = start_time
+
+        if boundary == "end":
+            return end_time
+        return start_time
 
     def _update_model_call(
         self,

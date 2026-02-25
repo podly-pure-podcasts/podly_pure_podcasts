@@ -16,8 +16,8 @@ from shared.test_utils import create_standard_test_config
 class MockTranscriber(Transcriber):
     """Mock transcriber for testing TranscriptionManager."""
 
-    def __init__(self, mock_response=None):
-        self.mock_response = mock_response or []
+    def __init__(self, mock_response: list[Segment] | Exception | None = None):
+        self.mock_response: list[Segment] | Exception = mock_response or []
         self._model_name = "mock_transcriber"
 
     @property
@@ -25,8 +25,9 @@ class MockTranscriber(Transcriber):
         """Implementation of the abstract property"""
         return self._model_name
 
-    def transcribe(self, audio_path):
+    def transcribe(self, audio_file_path: str) -> list[Segment]:
         """Return mock segments or raise exception based on configuration."""
+        del audio_file_path
         if isinstance(self.mock_response, Exception):
             raise self.mock_response
         return self.mock_response

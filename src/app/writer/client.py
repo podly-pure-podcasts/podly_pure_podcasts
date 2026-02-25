@@ -1,7 +1,7 @@
 import os
 import uuid
 from collections.abc import Callable
-from queue import Empty
+from queue import Empty, Queue
 from typing import Any, cast
 
 from flask import current_app
@@ -14,12 +14,13 @@ from app.writer.protocol import WriteCommand, WriteCommandType, WriteResult
 class WriterClient:
     def __init__(self) -> None:
         self.manager: Any = None
-        self.queue: Any = None
+        self.queue: Queue[Any] | None = None
 
     def connect(self) -> None:
         if not self.manager:
-            self.manager = make_client_manager()
-            self.queue = self.manager.get_command_queue()
+            manager = make_client_manager()
+            self.manager = manager
+            self.queue = manager.get_command_queue()
 
     def _should_use_local_fallback(self) -> bool:
         if os.environ.get("PYTEST_CURRENT_TEST"):
@@ -128,6 +129,7 @@ class WriterClient:
     def submit(
         self, cmd: WriteCommand, wait: bool = False, timeout: int = 10
     ) -> WriteResult | None:
+        reply_q: Queue[Any] | None = None
         if not self.queue:
             try:
                 self.connect()
@@ -141,15 +143,17 @@ class WriterClient:
             if not self.manager:
                 raise RuntimeError("Manager not connected")
             # Create a temporary queue for the reply
-            reply_q = self.manager.Queue()
+            reply_q = cast(Queue[Any], self.manager.Queue())
             cmd.reply_queue = reply_q
 
         if self.queue:
             self.queue.put(cmd)
 
         if wait:
+            if reply_q is None:
+                raise RuntimeError("Reply queue was not initialized")
             try:
-                return reply_q.get(timeout=timeout)  # type: ignore
+                return cast(WriteResult, reply_q.get(timeout=timeout))
             except Empty as exc:
                 raise TimeoutError("Writer service did not respond") from exc
         return None

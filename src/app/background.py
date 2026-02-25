@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from app.extensions import scheduler
 from app.jobs_manager import (
@@ -39,6 +39,6 @@ def schedule_cleanup_job(retention_days: int | None) -> None:
         func=scheduled_cleanup_processed_posts,
         trigger="interval",
         hours=24,
-        next_run_time=datetime.utcnow() + timedelta(minutes=15),
+        next_run_time=datetime.now(UTC).replace(tzinfo=None) + timedelta(minutes=15),
         replace_existing=True,
     )

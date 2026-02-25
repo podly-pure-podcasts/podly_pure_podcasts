@@ -53,6 +53,13 @@ export default function LLMProcessingStats({
     return new Date(timestamp).toLocaleString();
   };
 
+  const formatBytes = (bytes: number | null) => {
+    if (bytes === null || Number.isNaN(bytes)) return 'unknown';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
   const toggleModelCallDetails = (callId: number) => {
     const newExpanded = new Set(expandedModelCalls);
     if (newExpanded.has(callId)) {
@@ -178,6 +185,82 @@ export default function LLMProcessingStats({
                           </div>
                         </div>
                       </div>
+
+                      {stats.debug_info && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                          <h3 className="font-semibold text-gray-900 mb-2 text-left">Debug Details</h3>
+                          <p className="text-xs text-amber-700 mb-4 text-left">
+                            Visible because <code>PODLY_STATS_DEBUG</code> is enabled.
+                          </p>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                            <div className="text-left">
+                              <span className="font-medium text-gray-700">GUID:</span>
+                              <span className="ml-2 text-gray-600 font-mono break-all">{stats.debug_info.guid}</span>
+                            </div>
+                            <div className="text-left">
+                              <span className="font-medium text-gray-700">Post ID / Feed ID:</span>
+                              <span className="ml-2 text-gray-600">{stats.debug_info.post_id} / {stats.debug_info.feed_id}</span>
+                            </div>
+                            <div className="text-left md:col-span-2">
+                              <span className="font-medium text-gray-700">Download URL:</span>
+                              <span className="ml-2 text-gray-600 font-mono break-all">{stats.debug_info.download_url}</span>
+                            </div>
+                            <div className="text-left md:col-span-2">
+                              <span className="font-medium text-gray-700">Processed Audio Path:</span>
+                              <span className="ml-2 text-gray-600 font-mono break-all">
+                                {stats.debug_info.processed_audio.path || 'missing'}
+                              </span>
+                              <div className="text-xs text-gray-500 mt-1">
+                                {stats.debug_info.processed_audio.exists
+                                  ? `exists (${formatBytes(stats.debug_info.processed_audio.size_bytes)})`
+                                  : 'missing'}
+                              </div>
+                            </div>
+                            <div className="text-left md:col-span-2">
+                              <span className="font-medium text-gray-700">Unprocessed Audio Path:</span>
+                              <span className="ml-2 text-gray-600 font-mono break-all">
+                                {stats.debug_info.unprocessed_audio.path || 'missing'}
+                              </span>
+                              <div className="text-xs text-gray-500 mt-1">
+                                {stats.debug_info.unprocessed_audio.exists
+                                  ? `exists (${formatBytes(stats.debug_info.unprocessed_audio.size_bytes)})`
+                                  : 'missing'}
+                              </div>
+                            </div>
+                            <div className="text-left md:col-span-2">
+                              <span className="font-medium text-gray-700">Data Roots:</span>
+                              <span className="ml-2 text-gray-600 font-mono break-all">
+                                in: {stats.debug_info.processing_roots.in_root} | srv: {stats.debug_info.processing_roots.srv_root}
+                              </span>
+                            </div>
+                            <div className="text-left">
+                              <span className="font-medium text-gray-700">Record Counts:</span>
+                              <span className="ml-2 text-gray-600">
+                                segments {stats.debug_info.record_counts.transcript_segments}, calls {stats.debug_info.record_counts.model_calls}, ids {stats.debug_info.record_counts.identifications}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="mt-4">
+                            <h4 className="font-medium text-gray-900 mb-2 text-left">Processed Audio Path Candidates</h4>
+                            {(stats.debug_info.processed_audio_path_candidates || []).length === 0 ? (
+                              <p className="text-xs text-gray-500 text-left">No candidates derived.</p>
+                            ) : (
+                              <div className="space-y-2">
+                                {(stats.debug_info.processed_audio_path_candidates || []).map((candidate, idx) => (
+                                  <div key={`${candidate.path}-${idx}`} className="bg-white border border-amber-100 rounded p-2">
+                                    <div className="font-mono text-xs text-gray-700 break-all text-left">{candidate.path}</div>
+                                    <div className="text-xs text-gray-500 mt-1 text-left">
+                                      {candidate.exists ? `exists (${formatBytes(candidate.size_bytes)})` : 'missing'}
+                                      {candidate.error ? ` - ${candidate.error}` : ''}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
 
                       {(() => {
                         const durationSeconds = stats.post?.duration

@@ -27,7 +27,9 @@ Each segment has a stable sequence number and timing.
 {% endfor %}
 
 **OUTPUT FORMAT**:
-Respond with valid JSON.
+Respond with valid JSON only.
+Do not output any analysis, rationale, bullets, or markdown fences.
+The first character of your response must be `{` and the last character must be `}`.
 
 - Identify the segment that contains the START of the ad break.
 - Identify a short phrase at the START of the ad break: the first 4 words of the promo/sponsor read.
@@ -53,6 +55,8 @@ Partial output is allowed:
   "end_adjustment_reason": "reason for end boundary change"
 }
 ```
+
+Keep `start_adjustment_reason` and `end_adjustment_reason` concise (max 12 words each).
 
 **REFINEMENT GUIDELINES**:
 - If no refinement needed, pick the best segment/word corresponding to the existing detected start.

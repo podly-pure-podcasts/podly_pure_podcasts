@@ -1,8 +1,9 @@
 """Write chapter metadata to processed MP3 files with adjusted timestamps."""
 
 import logging
+from typing import cast
 
-from mutagen.id3 import CHAP, CTOC, TIT2  # type: ignore[attr-defined]
+from mutagen.id3 import CHAP, CTOC, ID3, TIT2
 from mutagen.mp3 import MP3
 
 from podcast_processor.chapter_reader import Chapter
@@ -110,14 +111,15 @@ def write_chapters(
 
         # Create ID3 tags if they don't exist
         if audio.tags is None:
-            audio.add_tags()  # type: ignore[no-untyped-call]
+            audio.add_tags()
+        tags = cast(ID3, audio.tags)
 
         # Remove existing chapter frames
         keys_to_remove = [
-            key for key in audio.tags.keys() if key.startswith(("CHAP", "CTOC"))
+            key for key in tags.keys() if key.startswith(("CHAP", "CTOC"))
         ]
         for key in keys_to_remove:
-            del audio.tags[key]
+            del tags[key]
 
         # Add new chapter frames
         chapter_ids = []
@@ -126,10 +128,10 @@ def write_chapters(
             chapter_ids.append(element_id)
 
             # Create TIT2 sub-frame for chapter title
-            tit2 = TIT2(encoding=3, text=[chapter.title])  # type: ignore[no-untyped-call]
+            tit2 = TIT2(encoding=3, text=[chapter.title])
 
             # Create CHAP frame
-            chap = CHAP(  # type: ignore[no-untyped-call]
+            chap = CHAP(
                 element_id=element_id,
                 start_time=chapter.start_time_ms,
                 end_time=chapter.end_time_ms,
@@ -137,17 +139,17 @@ def write_chapters(
                 end_offset=0xFFFFFFFF,  # Not used
                 sub_frames=[tit2],
             )
-            audio.tags.add(chap)
+            tags.add(chap)
 
         # Create CTOC (Table of Contents) frame
         if chapter_ids:
-            ctoc = CTOC(  # type: ignore[no-untyped-call]
+            ctoc = CTOC(
                 element_id="toc",
                 flags=3,  # Top-level, ordered
                 child_element_ids=chapter_ids,
                 sub_frames=[],
             )
-            audio.tags.add(ctoc)
+            tags.add(ctoc)
 
         audio.save()
 

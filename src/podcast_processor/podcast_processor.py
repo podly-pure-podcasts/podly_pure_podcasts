@@ -32,6 +32,7 @@ from podcast_processor.transcription_manager import TranscriptionManager
 from shared.config import Config
 from shared.processing_paths import (
     ProcessingPaths,
+    find_existing_processed_audio_path,
     get_job_unprocessed_path,
     get_srv_root,
     paths_from_unprocessed_path,
@@ -806,51 +807,48 @@ class PodcastProcessor:
         Returns:
             True if processed audio exists and is valid, False otherwise
         """
-        # If we have a path in the database, check if the file actually exists
-        if post.processed_audio_path is not None:
-            if (
-                os.path.exists(post.processed_audio_path)
-                and os.path.getsize(post.processed_audio_path) > 0
-            ):
+        existing_processed_path = find_existing_processed_audio_path(
+            processed_audio_path=post.processed_audio_path,
+            unprocessed_audio_path=post.unprocessed_audio_path,
+            feed_title=getattr(post.feed, "title", None),
+            post_title=post.title,
+        )
+        if existing_processed_path:
+            processed_path_str = str(existing_processed_path)
+            if post.processed_audio_path != processed_path_str:
                 self.logger.info(
-                    f"Processed audio already available at: {post.processed_audio_path}"
+                    "Found existing processed audio for post '%s' at '%s'. "
+                    "Updated the database path.",
+                    post.title,
+                    processed_path_str,
                 )
-                return True
+                result = writer_client.update(
+                    "Post",
+                    post.id,
+                    {"processed_audio_path": processed_path_str},
+                    wait=True,
+                )
+                if not result or not result.success:
+                    raise RuntimeError(
+                        getattr(result, "error", "Failed to update post")
+                    )
+            else:
+                self.logger.info(
+                    "Processed audio already available at: %s",
+                    post.processed_audio_path,
+                )
+            return True
+
+        if post.processed_audio_path is not None:
             self.logger.info(
-                f"Database path {post.processed_audio_path} doesn't exist or is empty, resetting"
+                "Database path %s doesn't exist or is empty, resetting",
+                post.processed_audio_path,
             )
             result = writer_client.update(
                 "Post", post.id, {"processed_audio_path": None}, wait=True
             )
             if not result or not result.success:
                 raise RuntimeError(getattr(result, "error", "Failed to update post"))
-
-        # Check if file exists on disk at expected location
-        safe_feed_title = sanitize_title(post.feed.title)
-        safe_post_title = sanitize_title(post.title)
-        expected_processed_path = (
-            get_srv_root() / safe_feed_title / f"{safe_post_title}.mp3"
-        )
-
-        if (
-            expected_processed_path.exists()
-            and expected_processed_path.stat().st_size > 0
-        ):
-            # Found a local processed file
-            processed_path_str = str(expected_processed_path.resolve())
-            self.logger.info(
-                f"Found existing processed audio for post '{post.title}' at '{processed_path_str}'. "
-                "Updated the database path."
-            )
-            result = writer_client.update(
-                "Post",
-                post.id,
-                {"processed_audio_path": processed_path_str},
-                wait=True,
-            )
-            if not result or not result.success:
-                raise RuntimeError(getattr(result, "error", "Failed to update post"))
-            return True
 
         return False
 

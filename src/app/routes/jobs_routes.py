@@ -70,6 +70,26 @@ def api_cancel_job(job_id: str) -> ResponseReturnValue:
         )
 
 
+@jobs_bp.route("/api/jobs/cancel-queued", methods=["POST"])
+def api_cancel_queued_jobs() -> ResponseReturnValue:
+    try:
+        result = get_jobs_manager().cancel_queued_jobs()
+        db.session.expire_all()
+        return flask.jsonify(result), 200
+    except Exception as e:  # noqa: BLE001
+        logger.error("Failed to cancel queued jobs: %s", e)
+        return (
+            flask.jsonify(
+                {
+                    "status": "error",
+                    "error_code": "CANCEL_QUEUED_FAILED",
+                    "message": f"Failed to cancel queued jobs: {e!s}",
+                }
+            ),
+            500,
+        )
+
+
 @jobs_bp.route("/api/jobs/cleanup/preview", methods=["GET"])
 def api_cleanup_preview() -> ResponseReturnValue:
     _, error_response = require_admin("preview cleanup candidates")

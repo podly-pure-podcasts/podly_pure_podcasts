@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from app.extensions import db
@@ -47,7 +47,7 @@ def update_discord_settings_action(params: dict[str, Any]) -> dict[str, Any]:
         if field in params:
             setattr(settings, field, params.get(field))
 
-    settings.updated_at = datetime.utcnow()
+    settings.updated_at = datetime.now(UTC).replace(tzinfo=None)
     db.session.flush()
     return {"updated": True}
 
