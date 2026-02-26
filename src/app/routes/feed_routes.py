@@ -389,7 +389,7 @@ def get_feed_subscribers(feed_id: int) -> ResponseReturnValue:
         return jsonify({"error": "Feed not found"}), 404
 
     subscribers = []
-    for uf in feed.user_feeds:
+    for uf in cast(list[UserFeed], feed.user_feeds):
         u = uf.user
         if u is None:
             continue

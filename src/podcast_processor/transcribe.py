@@ -320,7 +320,7 @@ class GroqWhisperTranscriber(Transcriber):
                 )
                 if attempt == max_attempts:
                     raise
-                time.sleep(1.5 ** attempt)
+                time.sleep(1.5**attempt)
                 continue
 
             self.logger.info(

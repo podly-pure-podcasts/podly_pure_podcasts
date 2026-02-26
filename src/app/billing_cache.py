@@ -1,7 +1,8 @@
 """In-memory cache for Stripe subscription amounts to avoid redundant API calls."""
 
-import time
+import logging
 import threading
+import time
 from typing import Any
 
 logger = logging.getLogger("global_logger")
@@ -42,12 +43,12 @@ def fetch_subscription_amount(subscription_id: str) -> int | None:
     try:
         import os
 
-        import stripe  # type: ignore[import-untyped]
+        import stripe
 
         secret = os.getenv("STRIPE_SECRET_KEY")
         if not secret:
             return None
-            
+
         # Passing api_key prevents mutating global stripe state
         sub: Any = stripe.Subscription.retrieve(subscription_id, api_key=secret)
         items = sub.get("items", {}).get("data", [])

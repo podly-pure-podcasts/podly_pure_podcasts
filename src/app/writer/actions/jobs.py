@@ -100,9 +100,7 @@ def create_job_if_missing_action(params: dict[str, Any]) -> dict[str, Any]:
     if not post_guid:
         raise ValueError("job_data must contain post_guid")
 
-    existing = (
-        ProcessingJob.query.filter_by(post_guid=post_guid).first()
-    )
+    existing = ProcessingJob.query.filter_by(post_guid=post_guid).first()
     if existing:
         return {"job_id": None, "skipped": True}
 

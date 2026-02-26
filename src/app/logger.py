@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+
 from app.sanitize import redact_secrets
 
 
@@ -50,7 +51,7 @@ class ExtraFormatter(logging.Formatter):
             final_str = f"{base} | extra={extras_json}"
         else:
             final_str = base
-            
+
         return redact_secrets(final_str)
 
 

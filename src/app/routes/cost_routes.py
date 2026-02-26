@@ -1,7 +1,7 @@
 """Admin cost dashboard API endpoints.
 
 Calculates platform costs on-the-fly from existing tables — no migrations needed.
-Cost model: $0.04/hour × episode_duration / subscriber_count per user.
+Cost model: $0.04/hour x episode_duration / subscriber_count per user.
 """
 
 import logging
@@ -58,13 +58,12 @@ def api_admin_costs() -> flask.Response:
         year = int(request.args.get("year", now.year))
         month = int(request.args.get("month", now.month))
     except (ValueError, TypeError):
-        return jsonify({"error": "Invalid year or month"}), 400
+        return flask.make_response(jsonify({"error": "Invalid year or month"}), 400)
 
     month_start, month_end = _month_range(year, month)
 
     # --- Users ---
     users: list[User] = User.query.order_by(User.username).all()
-    user_map: dict[int, User] = {u.id: u for u in users}
 
     # --- Feeds and subscriber counts ---
     feeds: list[Feed] = Feed.query.all()
@@ -108,7 +107,7 @@ def api_admin_costs() -> flask.Response:
     feed_costs: dict[int, float] = {f.id: 0.0 for f in feeds}
     feed_episode_counts: dict[int, int] = {f.id: 0 for f in feeds}
 
-    for guid, job in job_by_guid.items():
+    for guid, _job in job_by_guid.items():
         post = post_map.get(guid)
         if not post:
             continue
@@ -188,7 +187,7 @@ def api_admin_costs_calls() -> flask.Response:
         page = max(1, int(request.args.get("page", 1)))
         per_page = min(200, max(1, int(request.args.get("per_page", 50))))
     except (ValueError, TypeError):
-        return jsonify({"error": "Invalid pagination params"}), 400
+        return flask.make_response(jsonify({"error": "Invalid pagination params"}), 400)
 
     total = db.session.query(ModelCall).count()
     calls: list[ModelCall] = (
