@@ -230,3 +230,61 @@ export interface LandingStatus {
   user_limit_total: number | null;
   slots_remaining: number | null;
 }
+
+export interface FeedSubscriber {
+  user_id: number;
+  username: string;
+  role: string;
+  subscription_status: string;
+  joined_at: string | null;
+}
+
+export interface FeedSubscribersResponse {
+  feed_id: number;
+  subscribers: FeedSubscriber[];
+}
+
+export interface CostUser {
+  id: number;
+  username: string;
+  role: string;
+  feed_count: number;
+  subscription_status: string;
+  stripe_subscription_id: string | null;
+  subscription_amount_cents: number | null;
+  monthly_cost: number;
+}
+
+export interface CostFeed {
+  id: number;
+  title: string;
+  subscriber_count: number;
+  episodes_this_month: number;
+  monthly_cost: number;
+}
+
+export interface CostSummary {
+  year: number;
+  month: number;
+  total_cost: number;
+  cost_rate_per_hour: number;
+  users: CostUser[];
+  feeds: CostFeed[];
+}
+
+export interface CallLogEntry {
+  id: number;
+  post_id: number;
+  model_name: string;
+  status: string;
+  timestamp: string | null;
+  retry_attempts: number;
+}
+
+export interface CallLog {
+  calls: CallLogEntry[];
+  total: number;
+  page: number;
+  per_page: number;
+  pages: number;
+}

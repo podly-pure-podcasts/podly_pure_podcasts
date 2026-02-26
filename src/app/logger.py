@@ -2,6 +2,8 @@ import json
 import logging
 import os
 
+from app.sanitize import redact_secrets
+
 
 class ExtraFormatter(logging.Formatter):
     """Formatter that appends structured extras to log lines.
@@ -46,8 +48,11 @@ class ExtraFormatter(logging.Formatter):
                 extras_json = json.dumps(extras, ensure_ascii=True, default=str)
             except Exception:  # noqa: BLE001
                 extras_json = str(extras)
-            return f"{base} | extra={extras_json}"
-        return base
+            final_str = f"{base} | extra={extras_json}"
+        else:
+            final_str = base
+
+        return redact_secrets(final_str)
 
 
 def setup_logger(
