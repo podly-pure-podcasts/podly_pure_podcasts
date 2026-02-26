@@ -240,8 +240,9 @@ class GroqWhisperTranscriber(Transcriber):
         )
         audio_chunk_path = audio_file_path + "_parts"
 
+        # 12MB seems to cause instability in Groq
         chunks = split_audio(
-            Path(audio_file_path), Path(audio_chunk_path), 12 * 1024 * 1024
+            Path(audio_file_path), Path(audio_chunk_path), 6 * 1024 * 1024
         )
 
         self.logger.info("[WHISPER_GROQ] Processing %d chunks", len(chunks))
@@ -294,32 +295,62 @@ class GroqWhisperTranscriber(Transcriber):
         return segments
 
     def get_segments_for_chunk(self, chunk_path: str) -> list[GroqTranscriptionSegment]:
-
-        self.logger.info("[GROQ_API_CALL] Sending chunk to Groq API: %s", chunk_path)
-        transcription = self.client.audio.transcriptions.create(
-            file=Path(chunk_path),
-            model=self.config.model,
-            response_format="verbose_json",  # Ensure segments are included
-            language=self.config.language,
-        )
-        self.logger.info(
-            "[GROQ_API_CALL] Received response from Groq API for: %s", chunk_path
-        )
-
-        if transcription.segments is None:  # type: ignore [attr-defined]
-            self.logger.warning(
-                "[GROQ_API_CALL] No segments found in transcription for %s", chunk_path
+        max_attempts = max(1, self.config.max_retries) if self.config.max_retries else 1
+        for attempt in range(1, max_attempts + 1):
+            self.logger.info(
+                "[GROQ_API_CALL] Sending chunk to Groq API: %s (attempt %d/%d)",
+                chunk_path,
+                attempt,
+                max_attempts,
             )
-            return []
+            try:
+                transcription = self.client.audio.transcriptions.create(
+                    file=Path(chunk_path),
+                    model=self.config.model,
+                    response_format="verbose_json",  # Ensure segments are included
+                    language=self.config.language,
+                )
+            except Exception as exc:
+                self.logger.warning(
+                    "[GROQ_API_CALL] Attempt %d/%d failed for %s: %s",
+                    attempt,
+                    max_attempts,
+                    chunk_path,
+                    exc,
+                )
+                if attempt == max_attempts:
+                    raise
+                time.sleep(1.5 ** attempt)
+                continue
 
-        groq_segments = [
-            GroqTranscriptionSegment(
-                start=seg["start"], end=seg["end"], text=seg["text"]
+            self.logger.info(
+                "[GROQ_API_CALL] Received response from Groq API for: %s (attempt %d/%d)",
+                chunk_path,
+                attempt,
+                max_attempts,
             )
-            for seg in transcription.segments  # type: ignore [attr-defined]
-        ]
 
-        self.logger.info(
-            "[GROQ_API_CALL] Got %d segments from chunk", len(groq_segments)
-        )
-        return groq_segments
+            if transcription.segments is None:  # type: ignore [attr-defined]
+                self.logger.warning(
+                    "[GROQ_API_CALL] No segments found in transcription for %s",
+                    chunk_path,
+                )
+                return []
+
+            groq_segments = [
+                GroqTranscriptionSegment(
+                    start=seg["start"], end=seg["end"], text=seg["text"]
+                )
+                for seg in transcription.segments  # type: ignore [attr-defined]
+            ]
+
+            self.logger.info(
+                "[GROQ_API_CALL] Got %d segments from chunk (attempt %d/%d)",
+                len(groq_segments),
+                attempt,
+                max_attempts,
+            )
+            return groq_segments
+
+        # unreachable, but satisfies type checker
+        return []

@@ -377,6 +377,35 @@ def update_feed_settings_endpoint(feed_id: int) -> ResponseReturnValue:
     return jsonify(_serialize_feed(feed, current_user=getattr(g, "current_user", None)))
 
 
+@feed_bp.route("/api/feeds/<int:feed_id>/subscribers", methods=["GET"])
+def get_feed_subscribers(feed_id: int) -> ResponseReturnValue:
+    """Return subscriber list for a feed (admin only)."""
+    _, error_response = require_admin("view feed subscribers")
+    if error_response is not None:
+        return error_response
+
+    feed = db.session.get(Feed, feed_id)
+    if feed is None:
+        return jsonify({"error": "Feed not found"}), 404
+
+    subscribers = []
+    for uf in feed.user_feeds:
+        u = uf.user
+        if u is None:
+            continue
+        subscribers.append(
+            {
+                "user_id": u.id,
+                "username": u.username,
+                "role": u.role,
+                "subscription_status": u.feed_subscription_status,
+                "joined_at": uf.created_at.isoformat() if uf.created_at else None,
+            }
+        )
+
+    return jsonify({"feed_id": feed_id, "subscribers": subscribers})
+
+
 def _refresh_feed_background(app: Flask, feed_id: int) -> None:
     with app.app_context():
         feed = db.session.get(Feed, feed_id)

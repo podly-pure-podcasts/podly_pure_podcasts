@@ -16,6 +16,9 @@ import type {
   BillingSummary,
   LandingStatus,
   PagedResult,
+  CostSummary,
+  CallLog,
+  FeedSubscribersResponse,
 } from '../types';
 
 const API_BASE_URL = '';
@@ -143,6 +146,11 @@ export const feedsApi = {
 
   updateFeedSettings: async (feedId: number, settings: FeedSettingsUpdate): Promise<Feed> => {
     const response = await api.patch(`/api/feeds/${feedId}/settings`, settings);
+    return response.data;
+  },
+
+  getSubscribers: async (feedId: number): Promise<FeedSubscribersResponse> => {
+    const response = await api.get(`/api/feeds/${feedId}/subscribers`);
     return response.data;
   },
 
@@ -695,6 +703,25 @@ export const billingApi = {
   },
   createPortalSession: async (): Promise<{ url: string }> => {
     const response = await api.post('/api/billing/portal-session');
+    return response.data;
+  },
+};
+
+export const costsApi = {
+  getCosts: async (year: number, month: number): Promise<CostSummary> => {
+    const response = await api.get('/api/admin/costs', { params: { year, month } });
+    return response.data;
+  },
+  getCalls: async (page: number = 1, perPage: number = 50): Promise<CallLog> => {
+    const response = await api.get('/api/admin/costs/calls', { params: { page, per_page: perPage } });
+    return response.data;
+  },
+  cleanupCancelledFeeds: async (): Promise<{ removed: number }> => {
+    const response = await api.post('/api/admin/costs/cleanup/cancelled-feeds');
+    return response.data;
+  },
+  cleanupOrphanFeeds: async (): Promise<{ removed: number }> => {
+    const response = await api.post('/api/admin/costs/cleanup/orphan-feeds');
     return response.data;
   },
 };

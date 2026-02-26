@@ -30,10 +30,16 @@ class CommandExecutor:
         )
         self.register_action("clear_all_jobs", writer_actions.clear_all_jobs_action)
         self.register_action(
+            "clear_active_jobs", writer_actions.clear_active_jobs_action
+        )
+        self.register_action(
             "cleanup_missing_audio_paths",
             writer_actions.cleanup_missing_audio_paths_action,
         )
         self.register_action("create_job", writer_actions.create_job_action)
+        self.register_action(
+            "create_job_if_missing", writer_actions.create_job_if_missing_action
+        )
         self.register_action(
             "cancel_existing_jobs", writer_actions.cancel_existing_jobs_action
         )

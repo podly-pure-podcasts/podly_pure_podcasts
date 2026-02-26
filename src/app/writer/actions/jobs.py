@@ -58,6 +58,19 @@ def clear_all_jobs_action(params: dict[str, Any]) -> int:
     return count
 
 
+def clear_active_jobs_action(params: dict[str, Any]) -> int:
+    """Clear only pending and running jobs. Preserves completed/failed/skipped/cancelled."""
+    active_jobs = ProcessingJob.query.filter(
+        ProcessingJob.status.in_(["pending", "running"])
+    ).all()
+    count = len(active_jobs)
+    for job in active_jobs:
+        db.session.delete(job)
+    if count > 0:
+        recalculate_run_counts(db.session)
+    return count
+
+
 def create_job_action(params: dict[str, Any]) -> dict[str, Any]:
     job_data = params.get("job_data")
     if not isinstance(job_data, dict):
@@ -75,6 +88,25 @@ def create_job_action(params: dict[str, Any]) -> dict[str, Any]:
 
     db.session.flush()
     return {"job_id": job.id}
+
+
+def create_job_if_missing_action(params: dict[str, Any]) -> dict[str, Any]:
+    """Create a new pending job only if no completed/skipped job already exists for the post."""
+    job_data = params.get("job_data")
+    if not isinstance(job_data, dict):
+        raise ValueError("job_data must be a dictionary")
+
+    post_guid = job_data.get("post_guid")
+    if not post_guid:
+        raise ValueError("job_data must contain post_guid")
+
+    existing = (
+        ProcessingJob.query.filter_by(post_guid=post_guid).first()
+    )
+    if existing:
+        return {"job_id": None, "skipped": True}
+
+    return create_job_action({"job_data": job_data})
 
 
 def cancel_existing_jobs_action(params: dict[str, Any]) -> int:
