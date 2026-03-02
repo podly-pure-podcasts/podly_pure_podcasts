@@ -1397,12 +1397,13 @@ export default function ConfigPage() {
                 />
                 {showBaseUrlInfo && (
                   <div className="mt-2 text-xs bg-blue-50 border border-blue-200 rounded p-3 space-y-2">
-                    <p className="font-medium text-blue-800">How model routing works:</p>
+                    <p className="font-medium text-blue-800">When do you need a Base URL?</p>
                     <div className="text-blue-700 space-y-1">
-                      <p>• Models with a prefix like <code className="bg-white px-1 rounded">groq/</code> or <code className="bg-white px-1 rounded">anthropic/</code> are routed automatically by LiteLLM — the Base URL is ignored.</p>
-                      <p>• Models <strong>without</strong> a prefix (e.g., <code className="bg-white px-1 rounded">gpt-4o</code>) use the Base URL you set here.</p>
+                      <p>• <strong>Groq, Anthropic, Gemini</strong> — leave empty. Models with a provider prefix (e.g. <code className="bg-white px-1 rounded">groq/</code>, <code className="bg-white px-1 rounded">anthropic/</code>) are routed automatically.</p>
+                      <p>• <strong>xAI Grok</strong> — set to <code className="bg-white px-1 rounded">https://api.x.ai/v1</code>. Models prefixed with <code className="bg-white px-1 rounded">xai/</code> also auto-route, so you can leave it empty if using <code className="bg-white px-1 rounded">xai/grok-3</code>.</p>
+                      <p>• <strong>OpenAI</strong> — leave empty (uses default). Only set this if you use a custom OpenAI-compatible endpoint.</p>
                     </div>
-                    <p className="text-blue-600 italic">If you're using Groq with a <code>groq/</code> prefix, you can leave Base URL empty.</p>
+                    <p className="text-blue-600 italic">Selecting a provider above auto-fills the correct Base URL for you.</p>
                   </div>
                 )}
               </div>

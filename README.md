@@ -137,13 +137,9 @@ cp .env.local.example .env.local
 Edit `.env.local`:
 
 ```bash
-# Required: LLM for ad detection
-LLM_API_KEY=gsk_your_groq_key
-LLM_MODEL=groq/llama-3.3-70b-versatile
-
-# Required: Whisper for transcription
-WHISPER_TYPE=groq
+# Required: Groq handles both transcription AND ad detection (free tier)
 GROQ_API_KEY=gsk_your_groq_key
+WHISPER_TYPE=groq
 
 # Recommended for podcast-app trigger/download links: enable authentication
 REQUIRE_AUTH=true
@@ -174,18 +170,26 @@ Open http://localhost:5001
 
 ### LLM Providers
 
+You can configure LLM providers via **Settings** in the web UI, or via environment variables in `.env.local`.
+
 | Provider | Model | Notes |
 |----------|-------|-------|
-| **Groq** | `groq/llama-3.3-70b-versatile` | Free tier, fast |
+| **Groq** | `groq/openai/gpt-oss-120b` | Free tier, fast |
 | **xAI Grok** | `xai/grok-3` | Recommended for accuracy (~$0.10/episode) |
 | **OpenAI** | `gpt-4o` | High quality |
+| **Anthropic** | `anthropic/claude-3-7-sonnet-latest` | High quality alternative |
+| **Google Gemini** | `gemini/gemini-2.0-flash` | Fast, good value |
 
-For xAI Grok:
+Models with a provider prefix (e.g. `groq/`, `xai/`, `anthropic/`) are routed automatically — no Base URL needed.
+
+For xAI Grok via env vars:
 ```bash
 LLM_API_KEY=xai-your-key
 LLM_MODEL=xai/grok-3
-OPENAI_BASE_URL=https://api.x.ai/v1
+# OPENAI_BASE_URL is optional — xai/ prefix auto-routes
 ```
+
+> **Tip:** You can also save and manage encrypted API keys in **Settings → LLM Configuration** without editing env vars.
 
 ### Whisper (Transcription)
 

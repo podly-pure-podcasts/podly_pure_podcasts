@@ -198,8 +198,8 @@ Podly uses [LiteLLM](https://docs.litellm.ai/) which supports 100+ providers:
 
 | Provider | Format | Example | Notes |
 |----------|--------|---------|-------|
-| **Groq** | `groq/<model>` | `groq/llama-3.3-70b-versatile` | Fast, cheap |
-| **xAI Grok** | `xai/<model>` | `xai/grok-3` | High quality, requires base URL |
+| **Groq** | `groq/<model>` | `groq/openai/gpt-oss-120b` | Fast, cheap |
+| **xAI Grok** | `xai/<model>` | `xai/grok-3` | High quality, `xai/` prefix auto-routes |
 | **OpenAI** | `<model>` or `openai/<model>` | `gpt-4o` | Excellent quality |
 | **Anthropic** | `anthropic/<model>` | `anthropic/claude-3-sonnet` | High quality |
 | **Ollama** | `ollama/<model>` | `ollama/llama3` | Local, free |
@@ -218,7 +218,7 @@ The `api_key` and `api_base` are passed explicitly in LiteLLM completion calls. 
 ```bash
 LLM_API_KEY=xai-your-api-key
 LLM_MODEL=xai/grok-3
-OPENAI_BASE_URL=https://api.x.ai/v1
+# OPENAI_BASE_URL is optional — xai/ prefix auto-routes
 ```
 
 ## Frontend Theme

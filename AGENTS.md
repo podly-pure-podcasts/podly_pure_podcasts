@@ -249,10 +249,13 @@ Podly uses [LiteLLM](https://docs.litellm.ai/) which supports 100+ providers. Re
 
 | Provider | Model Format | Base URL | Notes |
 |----------|--------------|----------|-------|
-| **Groq** | `groq/llama-3.3-70b-versatile` | *(ignored)* | Fast, free tier, handles both LLM + Whisper |
-| **xAI Grok** | `xai/grok-3` | `https://api.x.ai/v1` | **Recommended for accuracy**, ~$0.10/episode |
+| **Groq** | `groq/openai/gpt-oss-120b` | *(ignored)* | Fast, free tier, handles both LLM + Whisper |
+| **xAI Grok** | `xai/grok-3` | *(optional)* | **Recommended for accuracy**, ~$0.10/episode |
 | **OpenAI** | `gpt-4o` | *(default)* | Excellent quality, higher cost |
-| **Anthropic** | `anthropic/claude-3-sonnet` | *(ignored)* | High quality alternative |
+| **Anthropic** | `anthropic/claude-3-7-sonnet-latest` | *(ignored)* | High quality alternative |
+| **Google Gemini** | `gemini/gemini-2.0-flash` | *(ignored)* | Fast, good value |
+
+Models with a provider prefix (e.g. `groq/`, `xai/`, `anthropic/`) are routed automatically by LiteLLM — no Base URL needed.
 
 ### Recommended Setup
 
@@ -263,8 +266,8 @@ Podly uses [LiteLLM](https://docs.litellm.ai/) which supports 100+ providers. Re
 GROQ_API_KEY=gsk_...        # For Whisper transcription
 LLM_API_KEY=xai-...         # For ad detection
 LLM_MODEL=xai/grok-3
-OPENAI_BASE_URL=https://api.x.ai/v1
 WHISPER_TYPE=groq
+# OPENAI_BASE_URL is optional — xai/ prefix auto-routes
 ```
 
 ### Model Name Format

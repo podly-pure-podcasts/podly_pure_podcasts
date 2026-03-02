@@ -112,7 +112,7 @@ docker logs -f podly-pure-podcasts  # View logs
 - Groq API keys start with `gsk_...`
 - Grok (xAI) API keys start with `xai-...`
 
-LLM provider is configured via `LLM_MODEL` with LiteLLM format (e.g., `groq/llama-3.3-70b-versatile`, `xai/grok-3`).
+LLM provider is configured via `LLM_MODEL` with LiteLLM format (e.g., `groq/openai/gpt-oss-120b`, `xai/grok-3`).
 
 ## Prompt Presets
 
