@@ -1358,12 +1358,30 @@ export default function ConfigPage() {
             </Field>
             {pending?.whisper?.whisper_type === 'local' && (
               <Field label="Local Model" envMeta={getEnvHint('whisper.model', { env_var: 'WHISPER_LOCAL_MODEL' })}>
-                <input
-                  className="input"
-                  type="text"
-                  value={pending?.whisper?.model || 'base'}
-                  onChange={(e) => setField(['whisper', 'model'], e.target.value)}
-                />
+                <div className="space-y-2">
+                  <select
+                    className="input"
+                    value={LOCAL_WHISPER_MODELS.includes(pending?.whisper?.model || '') ? pending?.whisper?.model : '__custom__'}
+                    onChange={(e) => {
+                      if (e.target.value !== '__custom__') setField(['whisper', 'model'], e.target.value);
+                    }}
+                  >
+                    {LOCAL_WHISPER_MODELS.map((m) => <option key={m} value={m}>{m}</option>)}
+                    {!LOCAL_WHISPER_MODELS.includes(pending?.whisper?.model || '') && (
+                      <option value="__custom__">{pending?.whisper?.model ? `${pending.whisper.model} (custom)` : 'Custom...'}</option>
+                    )}
+                    <option value="__custom__">Custom...</option>
+                  </select>
+                  {!LOCAL_WHISPER_MODELS.includes(pending?.whisper?.model || '') && (
+                    <input
+                      className="input"
+                      type="text"
+                      placeholder="Enter custom model name"
+                      value={pending?.whisper?.model || 'base'}
+                      onChange={(e) => setField(['whisper', 'model'], e.target.value)}
+                    />
+                  )}
+                </div>
               </Field>
             )}
             {pending?.whisper?.whisper_type === 'remote' && (
@@ -1378,12 +1396,30 @@ export default function ConfigPage() {
                   />
                 </Field>
                 <Field label="Remote Model" envMeta={getEnvHint('whisper.model', { env_var: 'WHISPER_REMOTE_MODEL' })}>
-                  <input
-                    className="input"
-                    type="text"
-                    value={pending?.whisper?.model || 'whisper-1'}
-                    onChange={(e) => setField(['whisper', 'model'], e.target.value)}
-                  />
+                  <div className="space-y-2">
+                    <select
+                      className="input"
+                      value={REMOTE_WHISPER_MODELS.includes(pending?.whisper?.model || '') ? pending?.whisper?.model : '__custom__'}
+                      onChange={(e) => {
+                        if (e.target.value !== '__custom__') setField(['whisper', 'model'], e.target.value);
+                      }}
+                    >
+                      {REMOTE_WHISPER_MODELS.map((m) => <option key={m} value={m}>{m}</option>)}
+                      {!REMOTE_WHISPER_MODELS.includes(pending?.whisper?.model || '') && (
+                        <option value="__custom__">{pending?.whisper?.model ? `${pending.whisper.model} (custom)` : 'Custom...'}</option>
+                      )}
+                      <option value="__custom__">Custom...</option>
+                    </select>
+                    {!REMOTE_WHISPER_MODELS.includes(pending?.whisper?.model || '') && (
+                      <input
+                        className="input"
+                        type="text"
+                        placeholder="Enter custom model name"
+                        value={pending?.whisper?.model || 'whisper-1'}
+                        onChange={(e) => setField(['whisper', 'model'], e.target.value)}
+                      />
+                    )}
+                  </div>
                 </Field>
                 <Field label="Base URL" envMeta={getEnvHint('whisper.base_url')}>
                   <input
@@ -1432,12 +1468,30 @@ export default function ConfigPage() {
                   />
                 </Field>
                 <Field label="Model" envMeta={getEnvHint('whisper.model', { env_var: 'GROQ_WHISPER_MODEL' })}>
-                  <input
-                    className="input"
-                    type="text"
-                    value={pending?.whisper?.model || 'whisper-large-v3-turbo'}
-                    onChange={(e) => setField(['whisper', 'model'], e.target.value)}
-                  />
+                  <div className="space-y-2">
+                    <select
+                      className="input"
+                      value={GROQ_WHISPER_MODELS.includes(pending?.whisper?.model || '') ? pending?.whisper?.model : '__custom__'}
+                      onChange={(e) => {
+                        if (e.target.value !== '__custom__') setField(['whisper', 'model'], e.target.value);
+                      }}
+                    >
+                      {GROQ_WHISPER_MODELS.map((m) => <option key={m} value={m}>{m}</option>)}
+                      {!GROQ_WHISPER_MODELS.includes(pending?.whisper?.model || '') && (
+                        <option value="__custom__">{pending?.whisper?.model ? `${pending.whisper.model} (custom)` : 'Custom...'}</option>
+                      )}
+                      <option value="__custom__">Custom...</option>
+                    </select>
+                    {!GROQ_WHISPER_MODELS.includes(pending?.whisper?.model || '') && (
+                      <input
+                        className="input"
+                        type="text"
+                        placeholder="Enter custom model name"
+                        value={pending?.whisper?.model || 'whisper-large-v3-turbo'}
+                        onChange={(e) => setField(['whisper', 'model'], e.target.value)}
+                      />
+                    )}
+                  </div>
                 </Field>
                 <Field label="Language">
                   <input
@@ -1885,6 +1939,31 @@ function EnvVarHint({ meta }: { meta?: EnvOverrideEntry }) {
     <code className="mt-1 block text-xs text-gray-500 font-mono">{meta.env_var}</code>
   );
 }
+
+const GROQ_WHISPER_MODELS: string[] = [
+  'whisper-large-v3-turbo',
+  'whisper-large-v3',
+  'distil-whisper-large-v3-en',
+];
+
+const REMOTE_WHISPER_MODELS: string[] = [
+  'whisper-1',
+];
+
+const LOCAL_WHISPER_MODELS: string[] = [
+  'turbo',
+  'large-v3',
+  'large-v2',
+  'large',
+  'medium.en',
+  'medium',
+  'small.en',
+  'small',
+  'base.en',
+  'base',
+  'tiny.en',
+  'tiny',
+];
 
 const FALLBACK_LLM_MODELS: string[] = [
   'groq/openai/gpt-oss-120b',
