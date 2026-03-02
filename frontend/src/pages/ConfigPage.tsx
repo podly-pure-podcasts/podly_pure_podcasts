@@ -475,14 +475,10 @@ export default function ConfigPage() {
 
       const envMatch = llmOptions?.env_keys.find((item) => item.ref === nextRef);
       const savedMatch = llmOptions?.saved_keys.find((item) => item.ref === nextRef);
-      const model = savedMatch?.default_model ?? envMatch?.default_model;
-      const baseUrl = savedMatch?.default_openai_base_url ?? envMatch?.default_openai_base_url;
-
-      if (model) {
-        setField(['llm', 'llm_model'], model);
-      }
-      if (typeof baseUrl === 'string' && baseUrl.trim() !== '') {
-        setField(['llm', 'openai_base_url'], baseUrl);
+      const match = savedMatch ?? envMatch;
+      if (match) {
+        setField(['llm', 'llm_model'], match.default_model ?? '');
+        setField(['llm', 'openai_base_url'], match.default_openai_base_url ?? '');
       }
     },
     [llmOptions?.env_keys, llmOptions?.saved_keys, manualLlmKey, setField],
@@ -1281,12 +1277,8 @@ export default function ConfigPage() {
                 onChange={(e) => {
                   const nextProvider = e.target.value;
                   const providerDefaults = llmOptions?.providers.find((p) => p.id === nextProvider);
-                  if (providerDefaults?.default_model) {
-                    setField(['llm', 'llm_model'], providerDefaults.default_model);
-                  }
-                  if (typeof providerDefaults?.default_openai_base_url === 'string') {
-                    setField(['llm', 'openai_base_url'], providerDefaults.default_openai_base_url);
-                  }
+                  setField(['llm', 'llm_model'], providerDefaults?.default_model ?? '');
+                  setField(['llm', 'openai_base_url'], providerDefaults?.default_openai_base_url ?? '');
                 }}
               >
                 {(llmOptions?.providers ?? []).map((provider) => (
