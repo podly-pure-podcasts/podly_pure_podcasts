@@ -395,8 +395,11 @@ export default function ConfigPage() {
     if (isLlmKeyReference(raw)) {
       return raw;
     }
+    if (!raw && pending?.llm?.llm_api_key_preview) {
+      return 'saved';
+    }
     return 'manual';
-  }, [pending?.llm?.llm_api_key, pending?.llm?.llm_api_key_ref, isLlmKeyReference]);
+  }, [pending?.llm?.llm_api_key, pending?.llm?.llm_api_key_ref, pending?.llm?.llm_api_key_preview, isLlmKeyReference]);
 
   const currentLlmProvider = useMemo(() => {
     if (currentLlmKeyRef.startsWith('env:')) {
@@ -1090,6 +1093,9 @@ export default function ConfigPage() {
                     onChange={(e) => handleLlmKeySourceChange(e.target.value)}
                   >
                     <option value="manual">Manual key entry</option>
+                    {currentLlmKeyRef === 'saved' && (
+                      <option value="saved">Saved key ({pending?.llm?.llm_api_key_preview})</option>
+                    )}
                     {(llmOptions?.env_keys ?? []).map((item) => (
                       <option key={item.ref} value={item.ref}>
                         {`Environment: ${item.env_var} (${item.api_key_preview || 'configured'})`}
@@ -1117,14 +1123,14 @@ export default function ConfigPage() {
                     </button>
                   )}
                 </div>
-                {currentLlmKeyRef !== 'manual' && (
+                {currentLlmKeyRef !== 'manual' && currentLlmKeyRef !== 'saved' && (
                   <p className="text-xs text-gray-600">
                     Selected key reference: <code className="font-mono">{currentLlmKeyRef}</code>
                   </p>
                 )}
               </div>
             </Field>
-            {currentLlmKeyRef === 'manual' && (
+            {(currentLlmKeyRef === 'manual' || currentLlmKeyRef === 'saved') && (
               <Field label="Manual API Key" envMeta={getEnvHint('llm.llm_api_key')}>
                 <div className="space-y-2">
                   <input
