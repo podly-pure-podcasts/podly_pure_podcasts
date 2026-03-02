@@ -368,6 +368,15 @@ export default function ConfigPage() {
     return value.startsWith('env:') || value.startsWith('profile:');
   }, []);
 
+  const inferProviderFromApiKey = useCallback((key: string): string | null => {
+    const trimmed = key.trim();
+    if (trimmed.startsWith('gsk_')) return 'groq';
+    if (trimmed.startsWith('xai-')) return 'xai';
+    if (trimmed.startsWith('sk-ant-')) return 'anthropic';
+    if (trimmed.startsWith('sk-')) return 'openai';
+    return null;
+  }, []);
+
   const inferProviderFromModel = useCallback((model: unknown): string => {
     if (typeof model !== 'string' || model.trim() === '') return 'custom';
     const val = model.trim().toLowerCase();
@@ -1345,6 +1354,15 @@ export default function ConfigPage() {
                       setManualLlmKey(value);
                       setField(['llm', 'llm_api_key_ref'], null);
                       setField(['llm', 'llm_api_key'], value);
+
+                      const detected = inferProviderFromApiKey(value);
+                      if (detected) {
+                        const providerDefaults = llmOptions?.providers.find((p) => p.id === detected);
+                        if (providerDefaults) {
+                          setField(['llm', 'llm_model'], providerDefaults.default_model ?? '');
+                          setField(['llm', 'openai_base_url'], providerDefaults.default_openai_base_url ?? '');
+                        }
+                      }
                     }}
                   />
                   <div className="flex items-center gap-2">
