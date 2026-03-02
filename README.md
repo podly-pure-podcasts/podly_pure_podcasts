@@ -109,6 +109,15 @@ When you tap "Process this episode" in your podcast app:
 2. When complete, close the tab and return to your podcast app
 3. Refresh the feed and play the ad-free episode
 
+### Authentication Modes and RSS Behavior
+
+`REQUIRE_AUTH=true` is recommended for podcast app use.
+
+- `REQUIRE_AUTH=true`: Podly generates tokenized RSS/feed links (`feed_token` + `feed_secret`). Podcast apps can use trigger and download links directly.
+- `REQUIRE_AUTH=false`: Feed URLs are public and not tokenized. In the current release, trigger and download endpoints still rely on token/session auth, so podcast-app on-demand links may fail with auth-related errors.
+
+If logs show `reason=not_whitelisted`, that episode is disabled for processing. Enable it in the Podcasts page first.
+
 ---
 
 ## Quick Start (Docker)
@@ -136,7 +145,7 @@ LLM_MODEL=groq/llama-3.3-70b-versatile
 WHISPER_TYPE=groq
 GROQ_API_KEY=gsk_your_groq_key
 
-# Recommended: Enable authentication
+# Recommended for podcast-app trigger/download links: enable authentication
 REQUIRE_AUTH=true
 PODLY_ADMIN_USERNAME=admin
 PODLY_ADMIN_PASSWORD=your-secure-password

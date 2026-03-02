@@ -16,7 +16,10 @@ Sign up at [console.groq.com](https://console.groq.com/keys) and create an API k
 git clone https://github.com/lukefind/podly-unicorn.git
 cd podly-unicorn
 cp .env.local.example .env.local
-# Edit .env.local with your API key
+# Edit .env.local with your API key and auth settings (recommended)
+# REQUIRE_AUTH=true
+# PODLY_ADMIN_USERNAME=admin
+# PODLY_ADMIN_PASSWORD=choose-a-strong-password
 docker compose up -d --build
 ```
 
@@ -53,6 +56,13 @@ Episodes are processed **on-demand** when you request it. This saves resources a
 
 Enable **Auto process new episodes** in show settings to automatically process new episodes when they're released.
 
+### Auth Requirement for Podcast Apps
+
+For the best RSS experience in podcast apps, set `REQUIRE_AUTH=true`.
+
+- With auth enabled: Podly issues tokenized RSS links that podcast apps can use for trigger + download flows.
+- With auth disabled: feeds are public, but trigger/download links in podcast apps may fail in the current release because those endpoints expect token/session auth.
+
 ---
 
 ## Key Features
@@ -72,6 +82,8 @@ Enable **Auto process new episodes** in show settings to automatically process n
 | Problem | Solution |
 |---------|----------|
 | Episode not processed | Tap the trigger link in the episode description |
+| Logs show `reason=not_whitelisted` | Enable that episode in Podly (it is currently disabled for processing) |
+| Podcast app shows `Authentication required` or trigger link fails when auth is off | Enable `REQUIRE_AUTH=true`, restart, then copy a fresh Podly RSS URL from the UI |
 | Processing stuck | Check logs: `docker logs -f podly-pure-podcasts` |
 | API errors | Verify your API key in Settings |
 | Port in use | Stop other apps on port 5001 or change port in compose.yml |

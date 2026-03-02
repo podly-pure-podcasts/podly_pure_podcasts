@@ -2,6 +2,13 @@
 
 This document explains the on-demand processing architecture for Podly Unicorn, covering the conceptual model, why specific design decisions were made, and how to test the system.
 
+## Important Auth Assumption
+
+This trigger flow assumes `REQUIRE_AUTH=true` and tokenized feed URLs.
+
+- With `REQUIRE_AUTH=true`: RSS links include `feed_token`/`feed_secret`, and podcast apps can use `/trigger` and download links as documented below.
+- With `REQUIRE_AUTH=false`: feed links are not tokenized. In the current release, `/trigger` and `/api/posts/<guid>/download` still expect token/session auth, so podcast-app trigger/download behavior is limited.
+
 ---
 
 ## Conceptual Model
