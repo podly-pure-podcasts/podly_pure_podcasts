@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { FormEvent, ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
@@ -1789,9 +1790,9 @@ export default function ConfigPage() {
         />
       )}
       
-      {/* Sticky floating save bar */}
-      {hasEdits && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-purple-200 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md shadow-[0_-4px_20px_rgba(0,0,0,0.1)]">
+      {/* Sticky floating save bar - rendered via portal to escape overflow:hidden containers */}
+      {hasEdits && createPortal(
+        <div className="fixed bottom-0 left-0 right-0 z-[9999] border-t border-purple-200 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md shadow-[0_-4px_20px_rgba(0,0,0,0.1)]">
           <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
             <span className="text-sm text-pink-600 dark:text-pink-400 font-medium">Unsaved changes</span>
             <div className="flex items-center gap-3">
@@ -1813,7 +1814,8 @@ export default function ConfigPage() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Extra padding to prevent floating bar / audio player from obscuring bottom settings */}
