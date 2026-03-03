@@ -393,28 +393,30 @@ export default function FeedDetailView() {
         )}
 
         {/* Episodes List */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto">
           {episodesLoading ? (
             <div className="flex items-center justify-center h-32">
               <div className={`animate-spin rounded-full h-6 w-6 border-b-2 ${isOriginal ? 'border-blue-300' : 'border-purple-600'}`} />
             </div>
           ) : episodes && episodes.length > 0 ? (
-            <div className="space-y-3">
-              {episodes.map((episode: Episode) => (
+            <div>
+              {episodes.map((episode: Episode, idx: number) => (
                 <div
                   key={episode.id}
-                  className={`p-4 rounded-xl border transition-all ${
-                    isOriginal
-                      ? episode.whitelisted || episode.has_processed_audio
-                        ? 'bg-blue-900/50 border-blue-300/40 shadow-sm'
-                        : 'bg-blue-900/30 border-blue-300/30 border-dashed'
-                      : episode.whitelisted || episode.has_processed_audio
-                        ? 'bg-white/80 dark:bg-purple-950/50 border-purple-200/60 dark:border-purple-700/40 shadow-sm'
-                        : 'bg-purple-100/30 dark:bg-purple-950/30 border-purple-200/30 dark:border-purple-800/20 border-dashed'
+                  className={`px-4 sm:px-6 py-3 sm:py-4 transition-colors ${
+                    idx > 0
+                      ? isOriginal
+                        ? 'border-t border-blue-300/15'
+                        : 'border-t border-purple-100/40 dark:border-purple-800/20'
+                      : ''
+                  } ${
+                    !(episode.whitelisted || episode.has_processed_audio)
+                      ? isOriginal ? 'opacity-60' : 'opacity-50'
+                      : ''
                   }`}
                 >
                   {/* Top row: Title + Status badge */}
-                  <div className="flex items-start justify-between gap-3 mb-2">
+                  <div className="flex items-start justify-between gap-3 mb-1.5">
                     <div className="flex-1 min-w-0">
                       <button
                         onClick={() => setSelectedEpisode(episode)}
@@ -430,28 +432,25 @@ export default function FeedDetailView() {
                     {/* Status indicator */}
                     <div className="flex-shrink-0">
                       {episode.has_processed_audio ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 rounded-lg">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 rounded-full">
                           <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                           </svg>
                           Ready
                         </span>
                       ) : episode.whitelisted ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 rounded-lg">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 rounded-full">
                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" />
                           </svg>
                           Enabled
                         </span>
                       ) : (
-                        <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg border border-dashed ${
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full ${
                           isOriginal
-                            ? 'bg-blue-900/45 text-blue-200 border-blue-300/40'
-                            : 'bg-purple-100/50 dark:bg-purple-900/30 text-purple-400 dark:text-purple-500 border-purple-300/50 dark:border-purple-700/50'
+                            ? 'text-blue-300/70'
+                            : 'text-purple-400 dark:text-purple-500'
                         }`}>
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                          </svg>
                           Disabled
                         </span>
                       )}
@@ -459,11 +458,11 @@ export default function FeedDetailView() {
                   </div>
 
                   {/* Middle row: Metadata */}
-                  <div className={`flex items-center gap-2 text-sm mb-3 ${isOriginal ? 'text-blue-200' : 'text-purple-400 dark:text-purple-500'}`}>
+                  <div className={`flex items-center gap-2 text-xs mb-2.5 ${isOriginal ? 'text-blue-300/70' : 'text-purple-400 dark:text-purple-500'}`}>
                     <span>{formatDate(episode.release_date)}</span>
                     {episode.duration && (
                       <>
-                        <span className={isOriginal ? 'text-blue-300/80' : 'text-purple-200 dark:text-purple-600'}>•</span>
+                        <span>·</span>
                         <span>{formatDuration(episode.duration)}</span>
                       </>
                     )}

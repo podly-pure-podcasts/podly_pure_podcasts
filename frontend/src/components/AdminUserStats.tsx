@@ -52,7 +52,7 @@ export default function AdminUserStats({ onRoleChange, onDeleteUser, onResetPass
         </div>
       </div>
 
-      {/* User Cards */}
+      {/* User List */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {data.users.map((user) => (
           <UserStatCard 
@@ -217,19 +217,18 @@ function DownloadAttemptsModal({ userId, username, onClose }: DownloadAttemptsMo
           )}
 
           {data && data.attempts.length > 0 && (
-            <div className="space-y-2">
-              {/* Card view - always shown, no table */}
-              {data.attempts.map((attempt) => (
-                <div key={attempt.id} className="rounded-lg p-3 border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-gray-800">
-                  <div className="flex items-start justify-between gap-2 mb-2">
+            <div>
+              {data.attempts.map((attempt, idx) => (
+                <div key={attempt.id} className={`px-3 sm:px-4 py-2.5 ${idx > 0 ? 'border-t border-purple-100/40 dark:border-purple-800/20' : ''}`}>
+                  <div className="flex items-start justify-between gap-2 mb-1">
                     <div className="text-purple-900 dark:text-purple-100 text-sm font-medium line-clamp-2">{attempt.post_title}</div>
                     {getEventTypeBadge(attempt.event_type, attempt.decision)}
                   </div>
-                  <div className="text-purple-700 dark:text-purple-300 text-xs mb-2">{attempt.feed_title}</div>
                   <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className="text-purple-600 dark:text-purple-300">{attempt.feed_title}</span>
                     {getAuthTypeBadge(attempt.auth_type)}
                     <span className="text-gray-500 dark:text-gray-400">{attempt.download_source}</span>
-                    <span className="text-gray-500 dark:text-gray-400 ml-auto">{formatDate(attempt.downloaded_at)}</span>
+                    <span className="text-gray-400 dark:text-gray-500 ml-auto">{formatDate(attempt.downloaded_at)}</span>
                   </div>
                 </div>
               ))}

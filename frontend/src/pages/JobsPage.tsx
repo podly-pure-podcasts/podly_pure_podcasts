@@ -322,10 +322,10 @@ export default function JobsPage() {
         <div className="text-sm text-gray-600">No jobs to display.</div>
       ) : null}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {jobs.map((job) => (
-          <div key={job.job_id} className="bg-white/80 backdrop-blur-sm border border-purple-200/50 rounded-xl shadow-sm p-4 space-y-3 unicorn-card">
-            <div className="flex items-center justify-between">
+      <div className="bg-white/80 backdrop-blur-sm border border-purple-200/50 rounded-xl overflow-hidden unicorn-card">
+        {jobs.map((job, idx) => (
+          <div key={job.job_id} className={`px-4 py-3.5 ${idx > 0 ? 'border-t border-purple-100/40' : ''}`}>
+            <div className="flex items-center justify-between gap-2 mb-1">
               {job.feed_id ? (
                 <Link 
                   to={`/podcasts?feed=${job.feed_id}`}
@@ -340,75 +340,47 @@ export default function JobsPage() {
               )}
               <StatusBadge status={job.status} />
             </div>
-            <div className="text-xs text-purple-500 truncate">{job.feed_title || 'Unknown feed'}</div>
+            <div className="text-xs text-purple-500 truncate mb-2">{job.feed_title || 'Unknown feed'}</div>
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs text-purple-700">
-                <span>Priority</span>
-                <span className="font-medium">{job.priority}</span>
-              </div>
-              <div className="flex items-center justify-between text-xs text-purple-700">
-                <span>Step</span>
-                <span className="font-medium">{job.step}/{job.total_steps} {job.step_name ? `· ${job.step_name}` : ''}</span>
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center justify-between text-xs text-purple-700">
-                  <span>Progress</span>
-                  <span className="font-medium">{Math.round(job.progress_percentage)}%</span>
-                </div>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="flex-1">
                 <ProgressBar value={job.progress_percentage} />
               </div>
+              <span className="text-xs font-medium text-purple-700 w-8 text-right">{Math.round(job.progress_percentage)}%</span>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
-              <div>
-                <div className="text-gray-500">Triggered By</div>
-                <div className="font-medium">
-                  {job.triggered_by_username || (job.trigger_source === 'auto_feed_refresh' ? 'System' : '—')}
-                </div>
-              </div>
-              <div>
-                <div className="text-gray-500">Source</div>
-                <div className="font-medium">
-                  {job.trigger_source === 'manual_ui' && 'Manual (UI)'}
-                  {job.trigger_source === 'manual_reprocess' && 'Reprocess'}
-                  {job.trigger_source === 'auto_feed_refresh' && 'Auto-download'}
-                  {job.trigger_source === 'on_demand_rss' && 'RSS Request'}
-                  {!job.trigger_source && '—'}
-                </div>
-              </div>
-              <div>
-                <div className="text-gray-500">Created</div>
-                <div>{job.created_at ? formatDateTime(job.created_at) : '—'}</div>
-              </div>
-              <div>
-                <div className="text-gray-500">Started</div>
-                <div>{job.started_at ? formatDateTime(job.started_at) : '—'}</div>
-              </div>
-              {job.error_message ? (
-                <div className="col-span-2">
-                  <div className="text-gray-500">Message</div>
-                  <button
-                    onClick={() => setSelectedJobError({ 
-                      title: job.post_title || 'Job Error', 
-                      error: job.error_message!, 
-                      jobId: job.job_id 
-                    })}
-                    className="text-red-700 truncate text-left hover:text-red-900 hover:underline w-full"
-                    title="Click to view full error"
-                  >
-                    {job.error_message}
-                  </button>
-                </div>
-              ) : null}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
+              <span>Step {job.step}/{job.total_steps}{job.step_name ? ` · ${job.step_name}` : ''}</span>
+              <span>Priority {job.priority}</span>
+              {job.triggered_by_username && <span>by {job.triggered_by_username}</span>}
+              {!job.triggered_by_username && job.trigger_source === 'auto_feed_refresh' && <span>by System</span>}
+              <span>
+                {job.trigger_source === 'manual_ui' && 'Manual (UI)'}
+                {job.trigger_source === 'manual_reprocess' && 'Reprocess'}
+                {job.trigger_source === 'auto_feed_refresh' && 'Auto-download'}
+                {job.trigger_source === 'on_demand_rss' && 'RSS Request'}
+              </span>
+              {job.error_message && (
+                <button
+                  onClick={() => setSelectedJobError({ 
+                    title: job.post_title || 'Job Error', 
+                    error: job.error_message!, 
+                    jobId: job.job_id 
+                  })}
+                  className="text-red-600 truncate text-left hover:text-red-800 hover:underline max-w-[200px]"
+                  title="Click to view full error"
+                >
+                  {job.error_message}
+                </button>
+              )}
             </div>
 
             {(job.status === 'pending' || job.status === 'running') && (
-              <div className="mt-3 pt-3 border-t border-gray-200">
+              <div className="mt-2.5 pt-2.5 border-t border-gray-100">
                 <button
                   onClick={() => { void cancelJob(job.job_id); }}
                   disabled={cancellingJobs.has(job.job_id)}
-                  className="w-full inline-flex items-center justify-center rounded-md bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  className="px-3 py-1.5 text-xs font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {cancellingJobs.has(job.job_id) ? 'Cancelling...' : 'Cancel Job'}
                 </button>

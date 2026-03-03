@@ -190,8 +190,8 @@ export default function PresetsPage() {
         {/* Presets List */}
         <div className="lg:col-span-1 space-y-4">
           <h2 className="text-lg font-semibold text-gray-900">Available Presets</h2>
-          <div className="space-y-3">
-            {presets?.map((preset: PromptPreset) => (
+          <div className="bg-white/80 dark:bg-purple-950/50 rounded-xl border border-purple-200/50 dark:border-purple-700/30 overflow-hidden">
+            {presets?.map((preset: PromptPreset, idx: number) => (
               <div
                 key={preset.id}
                 onClick={() => {
@@ -199,33 +199,29 @@ export default function PresetsPage() {
                   setIsEditing(false);
                   setIsCreating(false);
                 }}
-                className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                className={`px-4 py-3 cursor-pointer transition-colors ${
+                  idx > 0 ? 'border-t border-purple-100/40 dark:border-purple-800/20' : ''
+                } ${
                   selectedPreset?.id === preset.id
-                    ? `${getAggressivenessColor(preset.aggressiveness).border} ${getAggressivenessColor(preset.aggressiveness).bg}`
-                    : 'border-purple-200/50 dark:border-purple-700/30 bg-white/80 dark:bg-purple-950/50 hover:border-purple-300 dark:hover:border-purple-600/50'
+                    ? `${getAggressivenessColor(preset.aggressiveness).bg}`
+                    : 'hover:bg-purple-50 dark:hover:bg-purple-900/20'
                 }`}
               >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-gray-900">{preset.name}</h3>
-                      {preset.is_active && (
-                        <span className="px-2 py-0.5 text-xs font-medium bg-blue-500 text-white rounded-full">
-                          Active
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm text-gray-600 mt-1 line-clamp-2">{preset.description}</p>
-                    <div className="flex items-center gap-3 mt-2">
-                      <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${getAggressivenessColor(preset.aggressiveness).bg} ${getAggressivenessColor(preset.aggressiveness).text}`}>
-                        {preset.aggressiveness}
-                      </span>
-                      <span className="text-xs text-gray-500">
-                        {(preset.min_confidence * 100).toFixed(0)}% min
-                      </span>
-                    </div>
-                  </div>
+                <div className="flex items-center gap-2 mb-0.5">
+                  <h3 className="font-semibold text-sm text-gray-900 dark:text-gray-100">{preset.name}</h3>
+                  {preset.is_active && (
+                    <span className="px-1.5 py-0.5 text-[10px] font-medium bg-blue-500 text-white rounded-full">
+                      Active
+                    </span>
+                  )}
+                  <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded-full ${getAggressivenessColor(preset.aggressiveness).bg} ${getAggressivenessColor(preset.aggressiveness).text}`}>
+                    {preset.aggressiveness}
+                  </span>
                 </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">{preset.description}</p>
+                <span className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
+                  {(preset.min_confidence * 100).toFixed(0)}% min confidence
+                </span>
               </div>
             ))}
           </div>

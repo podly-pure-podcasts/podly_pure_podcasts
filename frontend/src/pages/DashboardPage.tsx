@@ -263,16 +263,21 @@ export default function DashboardPage() {
               </Link>
             </div>
           </div>
-          <div className="p-4">
+          <div>
             {activeJobs.length > 0 ? (
-              <div className="space-y-3">
-                {activeJobs.slice(0, 5).map((job: { job_id: string; post_title: string | null; status: string; progress_percentage: number; step_name: string | null }) => (
+              <div>
+                {activeJobs.slice(0, 5).map((job: { job_id: string; post_title: string | null; status: string; progress_percentage: number; step_name: string | null }, idx: number) => (
                   <div
                     key={job.job_id}
-                    className="p-3 bg-gradient-to-r from-purple-50/50 to-pink-50/50 rounded-lg border border-purple-100/50"
-                    style={isOriginal ? { background: 'linear-gradient(to right, rgba(59, 130, 246, 0.16), rgba(14, 165, 233, 0.12))', borderColor: 'rgba(147, 197, 253, 0.25)' } : undefined}
+                    className={`px-4 py-3 ${
+                      idx > 0
+                        ? isOriginal
+                          ? 'border-t border-blue-300/15'
+                          : 'border-t border-purple-100/40'
+                        : ''
+                    }`}
                   >
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center justify-between mb-1.5">
                       <p className={`text-sm font-medium truncate flex-1 ${isOriginal ? 'text-blue-100' : 'text-purple-900'}`}>{job.post_title || 'Processing...'}</p>
                       <span className={`ml-2 px-2 py-0.5 text-xs font-medium rounded-full ${
                         isOriginal
@@ -299,7 +304,7 @@ export default function DashboardPage() {
                   </div>
                 ))}
                 {activeJobs.length > 5 && (
-                  <p className="text-sm text-gray-500 text-center">+{activeJobs.length - 5} more jobs</p>
+                  <p className="text-sm text-gray-500 text-center py-2">+{activeJobs.length - 5} more jobs</p>
                 )}
               </div>
             ) : (

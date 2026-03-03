@@ -237,7 +237,7 @@ export default function PodcastsLayout() {
             }`}
           />
 
-          <div className="flex-1 overflow-y-auto space-y-2 pb-16">
+          <div className="flex-1 overflow-y-auto pb-16">
             {/* Pinned Combined RSS entry - uses same card styling */}
             {requireAuth && feedsArray.length > 0 && (
               <FeedSidebarItem
@@ -451,23 +451,19 @@ function FeedSidebarItem({
   const { theme } = useTheme();
   const isOriginal = theme === 'original';
   const baseClasses = isOriginal
-    ? isCombined
-      ? isSelected
-        ? 'bg-blue-700/35 border-2 border-blue-300/70'
-        : 'bg-blue-900/45 border-2 border-blue-300/45 hover:border-blue-200/65'
-      : isSelected
-        ? 'bg-blue-700/35 border-2 border-blue-300/70'
-        : 'bg-blue-900/35 border border-blue-300/35 hover:border-blue-200/55 hover:shadow-sm'
-    : isCombined
-      ? isSelected
-        ? 'bg-purple-100 dark:bg-purple-900/40 border-2 border-purple-500'
-        : 'bg-gradient-to-r from-pink-50 via-purple-50 to-cyan-50 dark:from-pink-950/30 dark:via-purple-950/30 dark:to-cyan-950/30 border-2 border-purple-300 dark:border-purple-600 hover:border-purple-400 dark:hover:border-purple-500'
-      : isSelected
-        ? 'bg-purple-100 dark:bg-purple-900/40 border-2 border-purple-500'
-        : 'bg-white/80 dark:bg-purple-950/50 border border-purple-200/50 dark:border-purple-700/30 hover:border-purple-300 dark:hover:border-purple-600/50 hover:shadow-sm';
+    ? isSelected
+      ? 'bg-blue-700/25'
+      : 'hover:bg-blue-800/20'
+    : isSelected
+      ? 'bg-purple-100 dark:bg-purple-900/30'
+      : 'hover:bg-purple-50 dark:hover:bg-purple-900/20';
+
+  const borderClass = isOriginal
+    ? 'border-t border-blue-300/15'
+    : 'border-t border-purple-100/40 dark:border-purple-800/20';
 
   return (
-    <div className={`p-3 rounded-lg transition-all ${baseClasses}`}>
+    <div className={`px-2 py-2.5 rounded-lg transition-colors ${baseClasses} ${isCombined ? '' : borderClass}`}>
       <div 
         className="flex items-center gap-3 cursor-pointer"
         onClick={onClick}

@@ -801,9 +801,9 @@ export default function ConfigPage() {
               ⚠️ Pending Signups ({pendingUsers.users.length})
             </h3>
           </div>
-          <div className="p-4 space-y-2">
-            {pendingUsers.users.map((u) => (
-              <div key={u.id} className="border border-gray-200 dark:border-purple-700 rounded-lg p-3 bg-white dark:bg-slate-800/60 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div>
+            {pendingUsers.users.map((u, idx) => (
+              <div key={u.id} className={`px-4 py-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between ${idx > 0 ? 'border-t border-amber-200/60 dark:border-amber-700/40' : ''}`}>
                 <div className="min-w-0">
                   <div className="text-sm font-semibold text-gray-900 dark:text-purple-100 truncate">{u.email || u.username}</div>
                   <div className="text-xs text-gray-500 dark:text-purple-400">Requested {new Date(u.created_at).toLocaleString()}</div>
