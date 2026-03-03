@@ -27,6 +27,7 @@ interface CombinedEpisode {
   image_url: string | null;
   feed_id: number;
   feed_title: string;
+  feed_image: string | null;
   trigger_url: string | null;
 }
 
@@ -216,8 +217,19 @@ export default function CombinedEpisodesView() {
                     : 'bg-purple-100/30 dark:bg-purple-950/30 border-purple-200/30 dark:border-purple-800/20 border-dashed'
                 }`}
               >
-                {/* Top row: Title + Status badge */}
-                <div className="flex items-start justify-between gap-3 mb-2">
+                {/* Top row: Thumbnail + Title + Status badge */}
+                <div className="flex items-start gap-3 mb-2">
+                  {/* Episode/Feed thumbnail */}
+                  <Link
+                    to={`/podcasts?feed=${episode.feed_id}`}
+                    className="flex-shrink-0"
+                  >
+                    <img
+                      src={episode.image_url || episode.feed_image || '/images/logos/unicorn-logo.png'}
+                      alt=""
+                      className="w-12 h-12 rounded-lg object-cover border border-purple-200/50 dark:border-purple-700/50"
+                    />
+                  </Link>
                   <div className="flex-1 min-w-0">
                     <button
                       onClick={() => setSelectedEpisode(episode)}
