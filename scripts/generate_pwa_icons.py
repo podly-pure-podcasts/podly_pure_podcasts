@@ -1,9 +1,9 @@
 """
-Generate white-backed PWA icons from the current Podly logo.
+Generate blue-backed PWA icons from the current Podly logo.
 
 Android adaptive icons look best when the mark sits inside a clear safe zone
-with a solid background. This keeps the blue Podly logo readable on busy or
-dark home screens without depending on transparency.
+with a solid background. This keeps the Podly logo readable on busy home
+screens without depending on transparency.
 """
 import sys
 from pathlib import Path
@@ -17,11 +17,11 @@ OUTPUT_512 = LOGOS_DIR / "web-app-manifest-512x512.png"
 MASKABLE_192 = LOGOS_DIR / "manifest-icon-192.maskable.png"
 MASKABLE_512 = LOGOS_DIR / "manifest-icon-512.maskable.png"
 
-BG_COLOR = (255, 255, 255)
+BG_COLOR = (10, 22, 40)
 
 
 def make_icon(source_path: Path, size: int, safe_zone_ratio: float) -> Image.Image:
-    """Place the current logo on a solid white square canvas."""
+    """Place the current logo on a solid square canvas."""
     src = Image.open(source_path).convert("RGBA")
     safe = int(size * safe_zone_ratio)
     src_resized = src.resize((safe, safe), Image.LANCZOS)
