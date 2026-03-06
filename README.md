@@ -24,8 +24,8 @@ Podly automatically removes advertisements from podcasts using AI. Add your favo
 <div align="center">
   <table>
     <tr>
-      <td><img src="frontend/public/images/screenshots/podcasts-mobile.png" alt="Mobile View" width="300" /></td>
-      <td><img src="frontend/public/images/screenshots/processed mobile.png" alt="Processed Episode" width="300" /></td>
+      <td><img src="frontend/public/images/screenshots/podcasts-mobile.jpeg" alt="Mobile View" width="300" /></td>
+      <td><img src="frontend/public/images/screenshots/presets-mobile.png" alt="Presets Page" width="300" /></td>
     </tr>
     <tr>
       <td align="center"><em>Mobile podcasts view</em></td>
