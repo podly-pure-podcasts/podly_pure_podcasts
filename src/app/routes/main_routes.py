@@ -40,6 +40,55 @@ def index() -> flask.Response:
     )
 
 
+def _should_serve_spa_fallback(path: str) -> bool:
+    """Only treat extensionless paths as React routes.
+
+    Requests for missing files should return 404 instead of silently serving
+    index.html, otherwise PWA/TWA checks end up receiving HTML for files like
+    /.well-known/assetlinks.json and /manifest.json.
+    """
+    if path.startswith(".well-known/"):
+        return False
+
+    return os.path.splitext(path)[1] == ""
+
+
+def _build_assetlinks_payload() -> list[dict[str, object]] | None:
+    package_name = os.environ.get("PODLY_ANDROID_PACKAGE_NAME", "").strip()
+    raw_fingerprints = os.environ.get("PODLY_ANDROID_SHA256_CERT_FINGERPRINTS", "")
+    fingerprints = [value.strip() for value in raw_fingerprints.split(",") if value.strip()]
+
+    if not package_name or not fingerprints:
+        return None
+
+    return [
+        {
+            "relation": ["delegate_permission/common.handle_all_urls"],
+            "target": {
+                "namespace": "android_app",
+                "package_name": package_name,
+                "sha256_cert_fingerprints": fingerprints,
+            },
+        }
+    ]
+
+
+@main_bp.route("/.well-known/assetlinks.json")
+def assetlinks() -> flask.Response:
+    """Serve Digital Asset Links for Android wrappers and TWAs."""
+    static_folder = current_app.static_folder
+    if static_folder:
+        static_path = os.path.join(static_folder, ".well-known", "assetlinks.json")
+        if os.path.exists(static_path):
+            return send_from_directory(static_folder, ".well-known/assetlinks.json")
+
+    payload = _build_assetlinks_payload()
+    if payload is not None:
+        return flask.jsonify(payload)
+
+    flask.abort(404)
+
+
 @main_bp.route("/<path:path>")
 def catch_all(path: str) -> flask.Response:
     """Serve React app for all frontend routes, or serve static files."""
@@ -55,11 +104,12 @@ def catch_all(path: str) -> flask.Response:
         except werkzeug.exceptions.NotFound:
             pass
 
-        # If it's not a static file, serve the React SPA shell
-        try:
-            return send_from_directory(static_folder, "index.html")
-        except werkzeug.exceptions.NotFound:
-            pass
+        if _should_serve_spa_fallback(path):
+            # Route-like URLs are handled by the React router.
+            try:
+                return send_from_directory(static_folder, "index.html")
+            except werkzeug.exceptions.NotFound:
+                pass
 
     # Fallback to 404
     flask.abort(404)

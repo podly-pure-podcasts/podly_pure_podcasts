@@ -2,6 +2,7 @@
   "name": "Podly",
   "short_name": "Podly",
   "description": "Ad-free podcasts with AI-powered ad removal",
+  "lang": "en",
   "id": "/",
   "start_url": "/",
   "scope": "/",
@@ -23,6 +24,18 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
+    },
+    {
+      "src": "/images/logos/manifest-icon-192.maskable.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/images/logos/manifest-icon-512.maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
