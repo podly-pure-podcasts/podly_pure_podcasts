@@ -85,7 +85,7 @@ jobs:
       matrix:
         variant:
           - name: "lite"
-            base: "python:3.11-slim"
+            base: "python:3.12-slim"
             gpu: "false"
             gpu_nvidia: "false"
             gpu_amd: "false"
@@ -161,13 +161,13 @@ jobs:
       matrix:
         variant:
           - name: "latest"
-            base: "python:3.11-slim"
+            base: "python:3.12-slim"
             gpu: "false"
             gpu_nvidia: "false"
             gpu_amd: "false"
             lite_build: "false"
           - name: "lite"
-            base: "python:3.11-slim"
+            base: "python:3.12-slim"
             gpu: "false"
             gpu_nvidia: "false"
             gpu_amd: "false"
@@ -256,7 +256,7 @@ jobs:
         variant:
           - {
               name: "latest",
-              base: "python:3.11-slim",
+              base: "python:3.12-slim",
               gpu: "false",
               gpu_nvidia: "false",
               gpu_amd: "false",
@@ -264,7 +264,7 @@ jobs:
             }
           - {
               name: "lite",
-              base: "python:3.11-slim",
+              base: "python:3.12-slim",
               gpu: "false",
               gpu_nvidia: "false",
               gpu_amd: "false",

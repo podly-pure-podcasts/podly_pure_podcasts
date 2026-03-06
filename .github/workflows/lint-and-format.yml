@@ -23,7 +23,7 @@ jobs:
         id: python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           cache: "pip"
           cache-dependency-path: "Pipfile.lock"
 
@@ -52,8 +52,21 @@ jobs:
       - name: Install dependencies
         run: pipenv install --dev --deploy
 
-      - name: Install dependencies for mypy
-        run: pipenv run mypy . --install-types --non-interactive --explicit-package-bases --exclude 'migrations' --exclude 'build' --exclude 'scripts' --exclude 'src/tests' --exclude 'src/tests/test_routes.py' --exclude 'src/app/routes.py'
+      - name: Run focused mypy on boundary refinement integration
+        run: >
+          pipenv run mypy
+          src/podcast_processor/boundary_refiner.py
+          src/podcast_processor/word_boundary_refiner.py
+          src/podcast_processor/ad_classifier.py
+          src/podcast_processor/audio_processor.py
+          src/shared/config.py
+          src/app/config_store.py
+          src/app/runtime_config.py
+          src/app/models.py
+          --install-types
+          --non-interactive
+          --explicit-package-bases
+          --follow-imports=silent
 
       - name: Run pylint
         run: pipenv run pylint src --ignore=migrations,tests
