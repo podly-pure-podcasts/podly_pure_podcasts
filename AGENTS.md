@@ -186,14 +186,16 @@ Admins can set a custom default preset for individual shows/feeds. This override
 ## Frontend
 
 ### Theme
-Uses "Unicorn" pastel theme with Tailwind CSS. Key files:
+Three switchable themes: **Blue** (default), Light, Dark. Key files:
+- `frontend/src/theme.ts` - Theme labels, logos, brand names
+- `frontend/src/contexts/ThemeContext.tsx` - Theme state (localStorage)
 - `frontend/tailwind.config.js` - Custom colors
-- `frontend/src/index.css` - Global overrides
+- `frontend/src/index.css` - Global overrides, blue theme `[data-theme="original"]` selectors
 
 ### Logo
-Custom unicorn logo at `frontend/public/images/logos/unicorn-logo.png`. Used in:
-- Sidebar header (`Sidebar.tsx`)
-- Login page (`LoginPage.tsx`)
+Blue-theme logo at `frontend/public/images/logos/original-logo.png` (primary).
+Unicorn logo at `frontend/public/images/logos/unicorn-logo.png` (light/dark themes).
+Used in sidebar header (`Sidebar.tsx`) and login page (`LoginPage.tsx`).
 
 ### Modals
 Use `createPortal` from `react-dom` to render modals to `document.body` to avoid z-index issues with parent containers.

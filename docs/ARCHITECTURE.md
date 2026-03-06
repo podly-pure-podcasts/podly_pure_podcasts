@@ -49,7 +49,7 @@ podly_pure_podcasts/
 
 ## Database Schema
 
-### Key Tables
+### Core Tables
 
 | Table | Purpose |
 |-------|---------|
@@ -61,8 +61,29 @@ podly_pure_podcasts/
 | `prompt_preset` | Ad detection prompt configurations |
 | `processing_statistics` | Per-episode processing stats |
 | `processing_job` | Background job queue |
-| `llm_settings` | LLM API configuration |
-| `whisper_settings` | Whisper configuration |
+| `jobs_manager_run` | Job batch orchestration runs |
+
+### Auth & User Tables
+
+| Table | Purpose |
+|-------|---------|
+| `users` | User accounts (username, password hash, role, status) |
+| `user_feed_subscription` | Per-user feed subscriptions (privacy filtering) |
+| `user_download` | Activity/download tracking (RSS reads, audio downloads, triggers) |
+| `feed_access_token` | Tokenized feed access (feed-scoped and combined feed tokens) |
+| `password_reset_token` | Time-limited password reset tokens |
+
+### Settings Tables (Singletons)
+
+| Table | Purpose |
+|-------|---------|
+| `llm_settings` | LLM API configuration (model, key reference, timeouts) |
+| `llm_key_profile` | Encrypted API key storage (Fernet/AES) |
+| `whisper_settings` | Whisper configuration (type, model, API keys) |
+| `processing_settings` | Processing parameters (segments per prompt) |
+| `output_settings` | Output parameters (fade, confidence, segment length) |
+| `app_settings` | App-level config (auto-whitelist, cleanup, signups) |
+| `email_settings` | SMTP configuration for notifications |
 
 ### Database Location
 
@@ -171,24 +192,78 @@ This saves compute resources and API costs.
 ## API Routes
 
 ### Feeds & Episodes
-- `GET /api/feeds` - List all feeds
-- `POST /api/feeds` - Add new feed
-- `GET /api/feeds/<id>/posts` - List episodes
+- `POST /feed` - Add new feed (by RSS URL)
+- `GET /feed/<id>` - Get feed RSS XML
+- `DELETE /feed/<id>` - Delete feed
+- `GET /feed/combined` - Combined RSS feed (all user subscriptions)
+- `GET /api/feeds/all` - List all feeds (admin browse)
+- `GET /api/feeds/search` - Search podcasts (iTunes API)
+- `GET /api/feeds/combined/episodes` - Combined episodes list (JSON)
+- `POST /api/feeds/<id>/refresh` - Refresh single feed
+- `POST /api/feeds/refresh-all` - Refresh all feeds
+- `POST /api/feeds/<id>/subscribe` - Subscribe to feed
+- `POST /api/feeds/<id>/unsubscribe` - Unsubscribe from feed
+- `POST /api/feeds/<id>/auto-download` - Toggle auto-process
+- `POST /api/feeds/<id>/default-preset` - Set per-feed preset
+- `POST /api/feeds/<id>/visibility` - Toggle feed hidden/visible
+- `POST /api/feeds/<id>/share-link` - Generate tokenized RSS link
+- `POST /api/feeds/combined/share-link` - Generate combined feed link
+- `GET /api/feeds/<id>/posts` - List episodes for feed
 - `POST /api/posts/<guid>/process` - Start processing
 - `POST /api/posts/<guid>/reprocess` - Clear and reprocess
 - `GET /api/posts/<guid>/download` - Download processed audio
+- `POST /api/posts/<guid>/whitelist` - Enable/disable episode
+- `GET /api/posts/<guid>/stats` - Episode processing statistics
+- `GET /api/posts/<guid>/status` - Processing job status
+- `GET /trigger` - Trigger page (podcast app landing page)
+- `GET /api/trigger/status` - Polling endpoint for trigger page
 
-### Presets
+### Presets & Stats
 - `GET /api/presets` - List all presets
 - `POST /api/presets` - Create custom preset
 - `PUT /api/presets/<id>` - Update preset
 - `DELETE /api/presets/<id>` - Delete custom preset
 - `POST /api/presets/<id>/activate` - Set active preset
+- `GET /api/stats/summary` - Processing stats summary
+- `GET /api/stats/episodes` - Per-episode stats list
+- `GET /api/stats/episodes/<id>` - Single episode stats detail
 
-### Configuration
-- `GET /api/config` - Get all settings
-- `PUT /api/config/llm` - Update LLM settings
-- `PUT /api/config/whisper` - Update Whisper settings
+### Configuration (Admin)
+- `GET /api/config` - Get all settings (LLM, Whisper, Processing, Output, App, Email)
+- `PUT /api/config` - Save all settings
+- `POST /api/config/test-llm` - Test LLM connection
+- `POST /api/config/test-whisper` - Test Whisper connection
+- `POST /api/config/test-email` - Send test email
+- `GET /api/config/llm-options` - Provider catalog, models, saved key profiles
+- `POST /api/config/llm-key-profiles` - Save encrypted API key profile
+- `DELETE /api/config/llm-key-profiles/<id>` - Delete key profile
+
+### Auth & User Management
+- `GET /api/auth/status` - Auth system status
+- `POST /api/auth/login` - Login
+- `POST /api/auth/logout` - Logout
+- `GET /api/auth/me` - Current user info
+- `POST /api/auth/change-password` - Change own password
+- `POST /api/auth/signup` - Request account (pending approval)
+- `POST /api/auth/password-reset/request` - Request password reset email
+- `POST /api/auth/password-reset/confirm` - Confirm password reset
+- `GET /api/auth/users` - List users (admin)
+- `POST /api/auth/users` - Create user (admin)
+- `PATCH /api/auth/users/<username>` - Update user (admin)
+- `DELETE /api/auth/users/<username>` - Delete user (admin)
+- `GET /api/admin/users/pending` - Pending signups (admin)
+- `POST /api/admin/users/<id>/approve` - Approve signup (admin)
+- `GET /api/admin/user-stats` - Per-user statistics (admin)
+- `GET /api/admin/user-activity` - User activity log (admin)
+- `GET /api/admin/download-attempts` - Download attempts log (admin)
+
+### Jobs
+- `GET /api/jobs/active` - Active processing jobs
+- `GET /api/jobs/all` - All jobs
+- `GET /api/jobs/history` - Job history
+- `POST /api/jobs/clear-history` - Clear completed job history
+- `POST /api/jobs/<id>/cancel` - Cancel a job
+- `GET /api/job-manager/status` - Job manager status
 
 ## LLM Configuration
 
@@ -221,17 +296,23 @@ LLM_MODEL=xai/grok-3
 # OPENAI_BASE_URL is optional — xai/ prefix auto-routes
 ```
 
-## Frontend Theme
+## Frontend Themes
 
-The "Unicorn" theme uses a pastel color palette defined in:
+Podly supports three switchable themes. **Blue** is the default for new users.
+
+| Theme | Internal Name | Description |
+|-------|---------------|-------------|
+| **Blue** | `original` | Deep blue gradient, professional look (default) |
+| **Light** | `light` | Pastel unicorn theme with rainbow accents |
+| **Dark** | `dark` | Dark purple unicorn theme |
+
+Theme configuration:
+- `frontend/src/theme.ts` - Theme labels, logos, brand names
+- `frontend/src/contexts/ThemeContext.tsx` - Theme state (localStorage persistence)
 - `frontend/tailwind.config.js` - Custom colors
-- `frontend/src/index.css` - Global CSS overrides and animations
+- `frontend/src/index.css` - Global CSS overrides, `.unicorn-card`, `.rainbow-text`, blue theme overrides
 
-Key CSS classes:
-- `.unicorn-card` - Hover effects for cards
-- `.rainbow-text` - Animated gradient text
-- `.unicorn-glow` - Soft glow effect
-- `.modal-content` - Reset colors inside modals
+Blue theme uses `[data-theme="original"]` CSS selectors and inline `style={}` for component-level overrides.
 
 ## Docker
 
@@ -288,4 +369,4 @@ See `.env.local.example` for all options. Key variables:
 
 ---
 
-*Last updated: December 2025*
+*Last updated: March 2026*
