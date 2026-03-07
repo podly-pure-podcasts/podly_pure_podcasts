@@ -222,6 +222,7 @@ export const feedsApi = {
         user_id: number;
         username: string;
         subscribed_at: string | null;
+        is_private?: boolean;
         auto_download?: boolean;
       }>;
       subscriber_count: number;
