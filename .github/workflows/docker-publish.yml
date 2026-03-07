@@ -314,7 +314,7 @@ jobs:
   build-arm64:
     needs: changes
     if: ${{ needs.changes.outputs.skip == 'false' && github.event_name != 'pull_request' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     strategy:
       matrix:
         variant:
@@ -378,10 +378,6 @@ jobs:
           docker system prune -af
           echo "Available disk space after cleanup:"
           df -h
-
-      - name: Set up QEMU
-        if: ${{ steps.select.outputs.enabled == 'true' }}
-        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         if: ${{ steps.select.outputs.enabled == 'true' }}
