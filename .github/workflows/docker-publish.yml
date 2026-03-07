@@ -45,8 +45,9 @@ jobs:
           echo "Files changed:"
           echo "$files_changed"
 
-          # If no files are documentation, then we should continue
-          non_doc_files=$(echo "$files_changed" | grep -v -E '(\.md$|^docs/|LICENCE)')
+          # grep exits 1 when every changed file matches the docs-only filter.
+          # Treat that as "no non-doc files" rather than a failed workflow step.
+          non_doc_files=$(printf '%s\n' "$files_changed" | grep -v -E '(^$|\.md$|^docs/|^LICENSE$|^LICENCE$)' || true)
 
           if [ -z "$non_doc_files" ]; then
             echo "Only documentation files were changed. Skipping Docker validation."
