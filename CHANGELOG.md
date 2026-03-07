@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/lukefind/podly-unicorn/compare/v1.0.0...v1.0.1) (2026-03-07)
+
+
+### Bug Fixes
+
+* make blue theme modal surfaces solid ([fd76019](https://github.com/lukefind/podly-unicorn/commit/fd760193e1548cf1fe1ef0b22882ff7562242824))
+
 # 1.0.0 (2026-03-06)
 
 
