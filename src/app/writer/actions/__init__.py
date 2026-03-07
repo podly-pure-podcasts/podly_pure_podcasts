@@ -33,8 +33,10 @@ from .feeds import (
 from .feeds import whitelist_post_action as whitelist_post_action
 from .jobs import cancel_existing_jobs_action as cancel_existing_jobs_action
 from .jobs import cleanup_stale_jobs_action as cleanup_stale_jobs_action
+from .jobs import clear_active_jobs_action as clear_active_jobs_action
 from .jobs import clear_all_jobs_action as clear_all_jobs_action
 from .jobs import create_job_action as create_job_action
+from .jobs import create_job_if_missing_action as create_job_if_missing_action
 from .jobs import dequeue_job_action as dequeue_job_action
 from .jobs import mark_cancelled_action as mark_cancelled_action
 from .jobs import reassign_pending_jobs_action as reassign_pending_jobs_action

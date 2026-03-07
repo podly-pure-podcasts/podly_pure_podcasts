@@ -8,12 +8,14 @@ import DefaultTab from './tabs/DefaultTab';
 import AdvancedTab from './tabs/AdvancedTab';
 import UserManagementTab from './tabs/UserManagementTab';
 import DiscordTab from './tabs/DiscordTab';
+import CostsTab from './tabs/CostsTab';
 
 const TABS: { id: ConfigTabId; label: string; adminOnly?: boolean }[] = [
   { id: 'default', label: 'Default' },
   { id: 'advanced', label: 'Advanced' },
   { id: 'users', label: 'User Management', adminOnly: true },
   { id: 'discord', label: 'Discord', adminOnly: true },
+  { id: 'costs', label: 'Costs', adminOnly: true },
 ];
 
 export default function ConfigTabs() {
@@ -130,6 +132,7 @@ export default function ConfigTabs() {
           {activeTab === 'advanced' && <AdvancedTab />}
           {activeTab === 'users' && isAdmin && <UserManagementTab />}
           {activeTab === 'discord' && isAdmin && <DiscordTab />}
+          {activeTab === 'costs' && isAdmin && <CostsTab />}
         </div>
 
         {/* Env Warning Modal */}

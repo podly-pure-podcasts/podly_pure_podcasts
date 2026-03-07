@@ -515,6 +515,24 @@ class JobsManager:
             logger.error(f"Error clearing all jobs: {e}")
             return {"status": "error", "message": f"Failed to clear jobs: {e!s}"}
 
+    def clear_active_jobs(self) -> dict[str, Any]:
+        """
+        Clear only pending and running jobs on startup.
+        Completed, failed, skipped, and cancelled jobs are preserved for history.
+        """
+        try:
+            result = writer_client.action("clear_active_jobs", {}, wait=True)
+            count = result.data if result and result.success else 0
+            logger.info(f"Cleared {count} active (pending/running) jobs on startup")
+            return {
+                "status": "success",
+                "cleared_jobs": count,
+                "message": f"Cleared {count} active jobs from database",
+            }
+        except Exception as e:  # noqa: BLE001
+            logger.error(f"Error clearing active jobs: {e}")
+            return {"status": "error", "message": f"Failed to clear active jobs: {e!s}"}
+
     def start_refresh_all_feeds(
         self,
         trigger: str = "scheduled",
