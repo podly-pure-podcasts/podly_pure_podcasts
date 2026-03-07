@@ -173,6 +173,7 @@ export interface EnvOverrideEntry {
   value?: string;
   value_preview?: string | null;
   is_secret?: boolean;
+  read_only?: boolean;
 }
 
 export type EnvOverrideMap = Record<string, EnvOverrideEntry>;

@@ -229,10 +229,14 @@ def _register_override(
     *,
     secret: bool = False,
 ) -> None:
-    """Register an environment override in the metadata dict."""
+    """Register an environment override in the metadata dict.
+
+    Fields with env overrides are marked as read_only since env vars are
+    authoritative and cannot be modified via the UI.
+    """
     if not env_var or value is None:
         return
-    entry: dict[str, Any] = {"env_var": env_var}
+    entry: dict[str, Any] = {"env_var": env_var, "read_only": True}
     if secret:
         entry["is_secret"] = True
         entry["value_preview"] = _mask_secret(value)
@@ -375,6 +379,95 @@ def _build_env_override_metadata(data: dict[str, Any]) -> dict[str, Any]:
     return overrides
 
 
+def _get_env_overridden_fields() -> set[str]:
+    """Return set of field paths that are overridden by environment variables.
+
+    These fields should not be modified via the API - env vars are authoritative.
+    """
+    overridden: set[str] = set()
+
+    # LLM API key
+    if (
+        os.environ.get("LLM_API_KEY")
+        or os.environ.get("OPENAI_API_KEY")
+        or os.environ.get("GROQ_API_KEY")
+    ):
+        overridden.add("llm.llm_api_key")
+
+    if os.environ.get("OPENAI_BASE_URL"):
+        overridden.add("llm.openai_base_url")
+
+    if os.environ.get("LLM_MODEL"):
+        overridden.add("llm.llm_model")
+
+    # Whisper type
+    if os.environ.get("WHISPER_TYPE"):
+        overridden.add("whisper.whisper_type")
+
+    # Remote whisper
+    if os.environ.get("WHISPER_REMOTE_API_KEY") or os.environ.get("OPENAI_API_KEY"):
+        overridden.add("whisper.api_key")
+    if os.environ.get("WHISPER_REMOTE_BASE_URL") or os.environ.get("OPENAI_BASE_URL"):
+        overridden.add("whisper.base_url")
+    if os.environ.get("WHISPER_REMOTE_MODEL"):
+        overridden.add("whisper.model")
+
+    # Groq whisper
+    if os.environ.get("GROQ_API_KEY"):
+        overridden.add("whisper.api_key")
+    if os.environ.get("GROQ_WHISPER_MODEL") or os.environ.get("WHISPER_GROQ_MODEL"):
+        overridden.add("whisper.model")
+
+    # Local whisper
+    if os.environ.get("WHISPER_LOCAL_MODEL"):
+        overridden.add("whisper.model")
+
+    return overridden
+
+
+def _strip_env_overridden_fields(
+    payload: dict[str, Any],
+) -> tuple[dict[str, Any], list[str]]:
+    """Remove env-overridden fields from payload, return cleaned payload and list of stripped fields."""
+    overridden = _get_env_overridden_fields()
+    stripped: list[str] = []
+
+    cleaned = dict(payload)
+
+    llm = cleaned.get("llm")
+    if isinstance(llm, dict):
+        llm = dict(llm)
+        if "llm.llm_api_key" in overridden and "llm_api_key" in llm:
+            llm.pop("llm_api_key")
+            stripped.append("llm.llm_api_key")
+        if "llm.openai_base_url" in overridden and "openai_base_url" in llm:
+            llm.pop("openai_base_url")
+            stripped.append("llm.openai_base_url")
+        if "llm.llm_model" in overridden and "llm_model" in llm:
+            llm.pop("llm_model")
+            stripped.append("llm.llm_model")
+        cleaned["llm"] = llm
+
+    whisper = cleaned.get("whisper")
+    if isinstance(whisper, dict):
+        whisper = dict(whisper)
+        if "whisper.whisper_type" in overridden and "whisper_type" in whisper:
+            whisper.pop("whisper_type")
+            stripped.append("whisper.whisper_type")
+        if "whisper.api_key" in overridden and "api_key" in whisper:
+            whisper.pop("api_key")
+            stripped.append("whisper.api_key")
+        if "whisper.base_url" in overridden and "base_url" in whisper:
+            whisper.pop("base_url")
+            stripped.append("whisper.base_url")
+        if "whisper.model" in overridden and "model" in whisper:
+            whisper.pop("model")
+            stripped.append("whisper.model")
+        cleaned["whisper"] = whisper
+
+    return cleaned, stripped
+
+
 @config_bp.route("/api/config", methods=["PUT"])
 def api_put_config() -> flask.Response:
     _, error_response = require_admin()
@@ -390,6 +483,14 @@ def api_put_config() -> flask.Response:
     whisper_payload = payload.get("whisper")
     if isinstance(whisper_payload, dict):
         whisper_payload.pop("api_key_preview", None)
+
+    # Strip env-overridden fields - env vars are authoritative and cannot be overwritten via API
+    payload, stripped_fields = _strip_env_overridden_fields(payload)
+    if stripped_fields:
+        logger.info(
+            "Stripped env-overridden fields from config update: %s",
+            ", ".join(stripped_fields),
+        )
 
     try:
         result = writer_client.action(

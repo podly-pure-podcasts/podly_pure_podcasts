@@ -193,6 +193,17 @@ Podly can be run in Docker with support for both NVIDIA GPU and non-NVIDIA envir
 - `CUDA_VISIBLE_DEVICES`: GPU device selection for CUDA acceleration
 - `CORS_ORIGINS`: Backend CORS configuration (defaults to accept requests from any origin)
 
+**Env Var Precedence for Config Settings**:
+
+Environment variables for Podly config settings (e.g. `LLM_MODEL`, `WHISPER_TYPE`, `GROQ_API_KEY`) always take precedence over values stored in the database or set through the web UI. This follows the [12-factor app](https://12factor.net/config) principle:
+
+- At runtime, env vars are overlaid on top of database values — the database is never mutated by env vars.
+- The API strips env-controlled fields from incoming config updates to prevent the UI from overwriting operator intent.
+- In the web UI, env-controlled fields appear as read-only with a visual indicator.
+- To give control back to the UI, simply remove the env var and restart the container.
+
+See `.env.local.example` for all available environment variables.
+
 ## FAQ
 
 Q: What does "whitelisted" mean in the UI?

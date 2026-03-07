@@ -18,10 +18,14 @@ const LLM_MODEL_ALIASES: string[] = [
 ];
 
 export default function LLMSection() {
-  const { pending, setField, getEnvHint, handleSave, isSaving } = useConfigContext();
+  const { pending, setField, getEnvHint, isFieldReadOnly, handleSave, isSaving } = useConfigContext();
   const [showBaseUrlInfo, setShowBaseUrlInfo] = useState(false);
 
   if (!pending) return null;
+
+  const apiKeyReadOnly = isFieldReadOnly('llm.llm_api_key');
+  const baseUrlReadOnly = isFieldReadOnly('llm.openai_base_url');
+  const modelReadOnly = isFieldReadOnly('llm.llm_model');
 
   const handleTestLLM = () => {
     toast.promise(configApi.testLLM({ llm: pending.llm as LLMConfig }), {
@@ -47,11 +51,12 @@ export default function LLMSection() {
       <Section title="LLM">
         <Field label="API Key" envMeta={getEnvHint('llm.llm_api_key')}>
           <input
-            className="input"
+            className={`input ${apiKeyReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
             type="text"
             placeholder={pending?.llm?.llm_api_key_preview || ''}
             value={pending?.llm?.llm_api_key || ''}
             onChange={(e) => setField(['llm', 'llm_api_key'], e.target.value)}
+            disabled={apiKeyReadOnly}
           />
         </Field>
 
@@ -76,11 +81,12 @@ export default function LLMSection() {
           </div>
           <div className="flex-1 space-y-2">
             <input
-              className="input"
+              className={`input ${baseUrlReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
               type="text"
               placeholder="https://api.openai.com/v1"
               value={pending?.llm?.openai_base_url || ''}
               onChange={(e) => setField(['llm', 'openai_base_url'], e.target.value)}
+              disabled={baseUrlReadOnly}
             />
             {showBaseUrlInfo && <BaseUrlInfoBox />}
           </div>
@@ -91,11 +97,12 @@ export default function LLMSection() {
             <div className="relative">
               <input
                 list="llm-model-datalist"
-                className="input"
+                className={`input ${modelReadOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 type="text"
                 value={pending?.llm?.llm_model ?? ''}
                 onChange={(e) => setField(['llm', 'llm_model'], e.target.value)}
                 placeholder="e.g. groq/openai/gpt-oss-120b"
+                disabled={modelReadOnly}
               />
             </div>
           </Field>

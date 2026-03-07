@@ -83,6 +83,7 @@ export interface UseConfigStateReturn {
   // Helpers
   getEnvHint: (path: string, fallback?: EnvOverrideEntry) => EnvOverrideEntry | undefined;
   getWhisperApiKey: (w: WhisperConfig | undefined) => string;
+  isFieldReadOnly: (path: string) => boolean;
 
   // Recommended defaults
   groqRecommendedModel: string;
@@ -117,6 +118,14 @@ export function useConfigState(): UseConfigStateReturn {
   const getEnvHint = useCallback(
     (path: string, fallback?: EnvOverrideEntry) =>
       envOverrides[path] ?? fallback ?? DEFAULT_ENV_HINTS[path],
+    [envOverrides]
+  );
+
+  const isFieldReadOnly = useCallback(
+    (path: string) => {
+      const override = envOverrides[path];
+      return override?.read_only === true;
+    },
     [envOverrides]
   );
 
@@ -540,6 +549,7 @@ export function useConfigState(): UseConfigStateReturn {
     // Helpers
     getEnvHint,
     getWhisperApiKey,
+    isFieldReadOnly,
 
     // Recommended defaults
     groqRecommendedModel,
