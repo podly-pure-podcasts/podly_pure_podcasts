@@ -1,9 +1,18 @@
 import logging
+<<<<<<< HEAD
 from typing import Any
 
 from app.extensions import db
 from app.models import ModelCall, Post, TranscriptSegment
 from app.writer.client import writer_client
+=======
+from typing import Any, List, Optional
+
+from sqlalchemy.exc import IntegrityError
+
+from app.extensions import db
+from app.models import Identification, ModelCall, Post, TranscriptSegment
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
 from shared.config import (
     Config,
     GroqWhisperConfig,
@@ -28,17 +37,28 @@ class TranscriptionManager:
         self,
         logger: logging.Logger,
         config: Config,
+<<<<<<< HEAD
         model_call_query: Any | None = None,
         segment_query: Any | None = None,
         db_session: Any | None = None,
         transcriber: Transcriber | None = None,
+=======
+        model_call_query: Optional[Any] = None,
+        segment_query: Optional[Any] = None,
+        db_session: Optional[Any] = None,
+        transcriber: Optional[Transcriber] = None,
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
     ):
         self.logger = logger
         self.config = config
         self.transcriber = transcriber or self._create_transcriber()
+<<<<<<< HEAD
         self._model_call_query_provided = model_call_query is not None
         self.model_call_query = model_call_query or ModelCall.query
         self._segment_query_provided = segment_query is not None
+=======
+        self.model_call_query = model_call_query or ModelCall.query
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         self.segment_query = segment_query or TranscriptSegment.query
         self.db_session = db_session or db.session
 
@@ -61,6 +81,7 @@ class TranscriptionManager:
 
     def _check_existing_transcription(
         self, post: Post
+<<<<<<< HEAD
     ) -> list[TranscriptSegment] | None:
         """Checks for existing successful transcription and returns segments if valid.
 
@@ -80,6 +101,12 @@ class TranscriptionManager:
 
         existing_whisper_call = (
             model_call_query.filter_by(
+=======
+    ) -> Optional[List[TranscriptSegment]]:
+        """Checks for existing successful transcription and returns segments if valid."""
+        existing_whisper_call = (
+            self.model_call_query.filter_by(
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
                 post_id=post.id,
                 model_name=self.transcriber.model_name,
                 status="success",
@@ -92,8 +119,13 @@ class TranscriptionManager:
             self.logger.info(
                 f"Found existing successful Whisper ModelCall {existing_whisper_call.id} for post {post.id}."
             )
+<<<<<<< HEAD
             db_segments: list[TranscriptSegment] = (
                 segment_query.filter_by(post_id=post.id)
+=======
+            db_segments: List[TranscriptSegment] = (
+                self.segment_query.filter_by(post_id=post.id)
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
                 .order_by(TranscriptSegment.sequence_num)
                 .all()
             )
@@ -119,6 +151,7 @@ class TranscriptionManager:
             )
         return None
 
+<<<<<<< HEAD
     def get_reusable_transcription(self, post: Post) -> list[TranscriptSegment] | None:
         """Return existing transcript segments only when they are reusable as-is.
 
@@ -152,6 +185,9 @@ class TranscriptionManager:
         return model_call
 
     def transcribe(self, post: Post) -> list[TranscriptSegment]:
+=======
+    def transcribe(self, post: Post) -> List[TranscriptSegment]:
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         """
         Transcribes a podcast audio file, or retrieves existing transcription.
 
@@ -165,6 +201,7 @@ class TranscriptionManager:
             f"Starting transcription process for post {post.id} using {self.transcriber.model_name}"
         )
 
+<<<<<<< HEAD
         existing_segments = self.get_reusable_transcription(post)
         if existing_segments is not None:
             return existing_segments
@@ -173,10 +210,48 @@ class TranscriptionManager:
         current_whisper_call = self._get_or_create_whisper_model_call(post)
         self.logger.info(
             f"Prepared Whisper ModelCall {current_whisper_call.id} for post {post.id}."
+=======
+        existing_segments = self._check_existing_transcription(post)
+        if existing_segments is not None:
+            return existing_segments
+
+        # Create a new ModelCall record for this transcription attempt (upsert-safe)
+        current_whisper_call = ModelCall(
+            post_id=post.id,
+            model_name=self.transcriber.model_name,
+            first_segment_sequence_num=0,  # Placeholder, will be updated
+            last_segment_sequence_num=-1,  # Placeholder, indicates no segments yet
+            prompt="Whisper transcription job",  # Standardized prompt for Whisper calls
+            status="pending",
+        )
+        try:
+            self.db_session.add(current_whisper_call)
+            self.db_session.commit()
+        except IntegrityError:
+            # Another process/thread created the same unique ModelCall concurrently
+            self.db_session.rollback()
+            current_whisper_call = (
+                self.model_call_query.filter_by(
+                    post_id=post.id,
+                    model_name=self.transcriber.model_name,
+                    first_segment_sequence_num=0,
+                    last_segment_sequence_num=-1,
+                )
+                .order_by(ModelCall.timestamp.desc())
+                .first()
+            )
+            if not current_whisper_call:
+                # If not found despite conflict, re-raise
+                raise
+
+        self.logger.info(
+            f"Created new Whisper ModelCall {current_whisper_call.id} for post {post.id}."
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         )
 
         try:
             self.logger.info(
+<<<<<<< HEAD
                 f"[TRANSCRIBE_START] Calling transcriber {self.transcriber.model_name} for post {post.id}, audio: {post.unprocessed_audio_path}"
             )
             # Expire session state before long-running transcription to avoid stale locks
@@ -225,12 +300,41 @@ class TranscriptionManager:
                 f"Successfully stored {len(db_segments)} transcript segments and updated ModelCall {current_whisper_call.id} for post {post.id}."
             )
             return db_segments
+=======
+                f"Calling transcriber {self.transcriber.model_name} for post {post.id}..."
+            )
+            pydantic_segments = self.transcriber.transcribe(post.unprocessed_audio_path)
+            self.logger.info(
+                f"Transcription by {self.transcriber.model_name} for post {post.id} resulted in {len(pydantic_segments)} segments."
+            )
+
+            self._delete_existing_segments_for_post(post.id)
+
+            db_transcript_segments = self._persist_segments(post.id, pydantic_segments)
+
+            # Update ModelCall with success status and details
+            current_whisper_call.first_segment_sequence_num = 0
+            current_whisper_call.last_segment_sequence_num = (
+                len(db_transcript_segments) - 1
+            )
+            current_whisper_call.response = (
+                f"{len(db_transcript_segments)} segments transcribed."
+            )
+            current_whisper_call.status = "success"
+
+            self.db_session.commit()
+            self.logger.info(
+                f"Successfully stored {len(db_transcript_segments)} transcript segments and updated ModelCall {current_whisper_call.id} for post {post.id}."
+            )
+            return db_transcript_segments
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
 
         except Exception as e:
             self.logger.error(
                 f"Transcription failed for post {post.id} using {self.transcriber.model_name}. Error: {e}",
                 exc_info=True,
             )
+<<<<<<< HEAD
 
             fail_res = writer_client.action(
                 "mark_model_call_failed",
@@ -249,3 +353,66 @@ class TranscriptionManager:
                 )
 
             raise
+=======
+            self.db_session.rollback()  # Rollback any potential partial additions from the try block
+
+            # Re-fetch the ModelCall using THIS session to avoid cross-session conflicts
+            call_to_update = (
+                self.db_session.query(ModelCall).get(current_whisper_call.id)
+                if current_whisper_call.id
+                else None
+            )
+            if call_to_update:
+                call_to_update.status = "failed_permanent"
+                call_to_update.error_message = str(e)
+                self.db_session.commit()
+                self.logger.info(
+                    f"Updated ModelCall {call_to_update.id} to status 'failed_permanent' for post {post.id}."
+                )
+            else:
+                # This case should be rare if the initial commit of pending status was successful.
+                self.logger.error(
+                    f"Could not find ModelCall to update failure status for post {post.id} after transcription error."
+                )
+
+            raise
+
+    # ------------------------ Internal helpers ------------------------
+    def _delete_existing_segments_for_post(self, post_id: int) -> None:
+        """Delete existing transcript segments and their identifications for a post."""
+        existing_segment_ids = [
+            row[0]
+            for row in self.db_session.query(TranscriptSegment.id)
+            .filter_by(post_id=post_id)
+            .all()
+        ]
+        if not existing_segment_ids:
+            return
+        # Delete identifications that reference existing segments
+        self.db_session.query(Identification).filter(
+            Identification.transcript_segment_id.in_(existing_segment_ids)
+        ).delete(synchronize_session=False)
+        # Delete existing transcript segments
+        self.segment_query.filter_by(post_id=post_id).delete(synchronize_session=False)
+        self.db_session.flush()
+
+    def _persist_segments(
+        self, post_id: int, pydantic_segments: List[Any]
+    ) -> List[TranscriptSegment]:
+        """Persist pydantic segments to DB and return created ORM objects."""
+        db_transcript_segments: List[TranscriptSegment] = []
+        for i, segment_data in enumerate(pydantic_segments or []):
+            start_time = round(segment_data.start, 1)
+            end_time = round(segment_data.end, 1)
+            db_segment = TranscriptSegment(
+                post_id=post_id,
+                sequence_num=i,
+                start_time=start_time,
+                end_time=end_time,
+                text=segment_data.text,
+            )
+            db_transcript_segments.append(db_segment)
+        if db_transcript_segments:
+            self.db_session.add_all(db_transcript_segments)
+        return db_transcript_segments
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e

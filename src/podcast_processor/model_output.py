@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import logging
 import re
 from typing import Literal
@@ -6,6 +7,12 @@ from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
+=======
+from typing import List
+
+from pydantic import BaseModel
+
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
 
 class AdSegmentPrediction(BaseModel):
     segment_offset: float
@@ -13,6 +20,7 @@ class AdSegmentPrediction(BaseModel):
 
 
 class AdSegmentPredictionList(BaseModel):
+<<<<<<< HEAD
     ad_segments: list[AdSegmentPrediction]
     content_type: (
         Literal[
@@ -90,11 +98,15 @@ def _attempt_json_repair(json_str: str) -> str:
     logger.info("Repaired JSON by adding missing closing brackets/braces")
 
     return repaired
+=======
+    ad_segments: List[AdSegmentPrediction]
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
 
 
 def clean_and_parse_model_output(model_output: str) -> AdSegmentPredictionList:
     start_marker, end_marker = "{", "}"
 
+<<<<<<< HEAD
     assert model_output.count(start_marker) >= 1, (
         f"No opening brace found in: {model_output[:200]}"
     )
@@ -109,11 +121,19 @@ def clean_and_parse_model_output(model_output: str) -> AdSegmentPredictionList:
     close_braces = model_output.count(end_marker)
     if close_braces >= open_braces and close_braces > 0:
         model_output = model_output[: 1 + model_output.rindex(end_marker)]
+=======
+    assert model_output.count(start_marker) >= 1, f"{model_output}"
+    assert model_output.count(end_marker) >= 1, f"{model_output}"
+    model_output = model_output[
+        model_output.index(start_marker) : 1 + model_output.rindex(end_marker)
+    ]
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
 
     model_output = model_output.replace("'", '"')
     model_output = model_output.replace("\n", "")
     model_output = model_output.strip()
 
+<<<<<<< HEAD
     # First attempt: try to parse as-is
     try:
         return AdSegmentPredictionList.model_validate_json(model_output)
@@ -132,3 +152,6 @@ def clean_and_parse_model_output(model_output: str) -> AdSegmentPredictionList:
             )
             # Re-raise the original error with more context
             raise first_error from repair_error
+=======
+    return AdSegmentPredictionList.parse_raw(model_output)
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e

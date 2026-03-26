@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import logging
 import math
 import os
@@ -13,10 +14,22 @@ logger = logging.getLogger("global_logger")
 def get_audio_duration_ms(file_path: str) -> int | None:
     try:
         logger.debug("[FFMPEG_PROBE] Probing audio file: %s", file_path)
+=======
+import math
+from pathlib import Path
+from typing import List, Optional, Tuple
+
+import ffmpeg  # type: ignore[import-untyped]
+
+
+def get_audio_duration_ms(file_path: str) -> Optional[int]:
+    try:
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         probe = ffmpeg.probe(file_path)
         format_info = probe["format"]
         duration_seconds = float(format_info["duration"])
         duration_milliseconds = duration_seconds * 1000
+<<<<<<< HEAD
         logger.debug("[FFMPEG_PROBE] Duration: %.2f seconds", duration_seconds)
         return int(duration_milliseconds)
     except ffmpeg.Error as e:
@@ -45,11 +58,26 @@ def clip_segments_with_fade(
     use_vbr: bool = False,
     vbr_quality: int = 2,
     cbr_bitrate: str = "192k",
+=======
+        return int(duration_milliseconds)
+    except ffmpeg.Error as e:
+        print("An error occurred while trying to probe the file:")
+        print(e.stderr.decode())
+        return None
+
+
+def clip_segments_with_fade(
+    ad_segments_ms: List[Tuple[int, int]],
+    fade_ms: int,
+    in_path: str,
+    out_path: str,
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
 ) -> None:
 
     audio_duration_ms = get_audio_duration_ms(in_path)
     assert audio_duration_ms is not None
 
+<<<<<<< HEAD
     encoding_args = _get_encoding_args(use_vbr, vbr_quality, cbr_bitrate)
 
     # Try the complex filter approach first, fall back to simple if it fails
@@ -78,14 +106,36 @@ def clip_segments_with_fade(
 
 def _clip_segments_complex(
     ad_segments_ms: list[tuple[int, int]],
+=======
+    # Try the complex filter approach first, fall back to simple if it fails
+    # Catch both ffmpeg.Error (runtime) and ValueError/Exception (filter graph construction)
+    try:
+        _clip_segments_complex(ad_segments_ms, fade_ms, in_path, out_path, audio_duration_ms)
+    except ffmpeg.Error as e:
+        print(f"Complex filter failed (ffmpeg error), trying simple approach: {e.stderr.decode() if e.stderr else str(e)}")
+        _clip_segments_simple(ad_segments_ms, in_path, out_path, audio_duration_ms)
+    except Exception as e:
+        # Catches filter graph construction errors like "multiple outgoing edges"
+        print(f"Complex filter failed (graph error), trying simple approach: {str(e)}")
+        _clip_segments_simple(ad_segments_ms, in_path, out_path, audio_duration_ms)
+
+
+def _clip_segments_complex(
+    ad_segments_ms: List[Tuple[int, int]],
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
     fade_ms: int,
     in_path: str,
     out_path: str,
     audio_duration_ms: int,
+<<<<<<< HEAD
     encoding_args: dict[str, Any],
 ) -> None:
     """Original complex approach with fades."""
 
+=======
+) -> None:
+    """Original complex approach with fades - can fail with many segments."""
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
     trimmed_list = []
 
     last_end = 0
@@ -115,6 +165,7 @@ def _clip_segments_complex(
             )
         )
 
+<<<<<<< HEAD
     logger.info(
         "[FFMPEG_CONCAT] Starting audio concatenation: %s -> %s (%d segments)",
         in_path,
@@ -163,10 +214,30 @@ def _clip_segments_simple(
     keep_segments: list[tuple[int, int]] = []
     last_end = 0
 
+=======
+    ffmpeg.concat(*trimmed_list, v=0, a=1).output(out_path).overwrite_output().run()
+
+
+def _clip_segments_simple(
+    ad_segments_ms: List[Tuple[int, int]],
+    in_path: str,
+    out_path: str,
+    audio_duration_ms: int,
+) -> None:
+    """Simpler approach without fades - more reliable for many segments."""
+    import tempfile
+    import os
+    
+    # Build list of segments to KEEP (inverse of ad segments)
+    keep_segments = []
+    last_end = 0
+    
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
     for start_ms, end_ms in ad_segments_ms:
         if start_ms > last_end:
             keep_segments.append((last_end, start_ms))
         last_end = end_ms
+<<<<<<< HEAD
 
     if last_end < audio_duration_ms:
         keep_segments.append((last_end, audio_duration_ms))
@@ -182,11 +253,26 @@ def _clip_segments_simple(
     with tempfile.TemporaryDirectory() as temp_dir:
         segment_files = []
 
+=======
+    
+    if last_end < audio_duration_ms:
+        keep_segments.append((last_end, audio_duration_ms))
+    
+    if not keep_segments:
+        # No content to keep - this shouldn't happen but handle it
+        raise ValueError("No audio segments to keep after ad removal")
+    
+    # Create temp directory for intermediate files
+    with tempfile.TemporaryDirectory() as temp_dir:
+        segment_files = []
+        
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         # Extract each segment to keep
         for i, (start_ms, end_ms) in enumerate(keep_segments):
             segment_path = os.path.join(temp_dir, f"segment_{i}.mp3")
             start_sec = start_ms / 1000.0
             duration_sec = (end_ms - start_ms) / 1000.0
+<<<<<<< HEAD
 
             (
                 ffmpeg.input(in_path)
@@ -213,12 +299,36 @@ def _clip_segments_simple(
         (
             ffmpeg.input(concat_list_path, format="concat", safe=0)
             .output(out_path, acodec="libmp3lame", **encoding_args)
+=======
+            
+            (
+                ffmpeg.input(in_path)
+                .output(segment_path, ss=start_sec, t=duration_sec, acodec="libmp3lame", q=2)
+                .overwrite_output()
+                .run(quiet=True)
+            )
+            segment_files.append(segment_path)
+        
+        # Create concat file list
+        concat_list_path = os.path.join(temp_dir, "concat_list.txt")
+        with open(concat_list_path, "w") as f:
+            for seg_file in segment_files:
+                f.write(f"file '{seg_file}'\n")
+        
+        # Concatenate all segments
+        (
+            ffmpeg.input(concat_list_path, format="concat", safe=0)
+            .output(out_path, acodec="libmp3lame", q=2)
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
             .overwrite_output()
             .run(quiet=True)
         )
 
+<<<<<<< HEAD
     logger.info("[FFMPEG_SIMPLE] Completed simple audio concatenation: %s", out_path)
 
+=======
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
 
 def trim_file(in_path: Path, out_path: Path, start_ms: int, end_ms: int) -> None:
     duration_ms = end_ms - start_ms
@@ -229,6 +339,7 @@ def trim_file(in_path: Path, out_path: Path, start_ms: int, end_ms: int) -> None
     start_sec = max(start_ms, 0) / 1000.0
     duration_sec = duration_ms / 1000.0
 
+<<<<<<< HEAD
     logger.debug(
         "[FFMPEG_TRIM] Trimming %s -> %s (start=%.2fs, duration=%.2fs)",
         in_path,
@@ -236,6 +347,8 @@ def trim_file(in_path: Path, out_path: Path, start_ms: int, end_ms: int) -> None
         start_sec,
         duration_sec,
     )
+=======
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
     (
         ffmpeg.input(str(in_path))
         .output(
@@ -254,6 +367,7 @@ def split_audio(
     audio_file_path: Path,
     audio_chunk_path: Path,
     chunk_size_bytes: int,
+<<<<<<< HEAD
 ) -> list[tuple[Path, int]]:
 
     audio_chunk_path.mkdir(parents=True, exist_ok=True)
@@ -263,6 +377,12 @@ def split_audio(
         audio_file_path,
         chunk_size_bytes,
     )
+=======
+) -> List[Tuple[Path, int]]:
+
+    audio_chunk_path.mkdir(parents=True, exist_ok=True)
+
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
     duration_ms = get_audio_duration_ms(str(audio_file_path))
     assert duration_ms is not None
     if chunk_size_bytes <= 0:
@@ -276,6 +396,7 @@ def split_audio(
     chunk_duration_ms = max(1, math.ceil(duration_ms * chunk_ratio))
 
     num_chunks = max(1, math.ceil(duration_ms / chunk_duration_ms))
+<<<<<<< HEAD
     logger.info(
         "[FFMPEG_SPLIT] Will create %d chunks (duration per chunk: %d ms)",
         num_chunks,
@@ -283,6 +404,10 @@ def split_audio(
     )
 
     chunks: list[tuple[Path, int]] = []
+=======
+
+    chunks: List[Tuple[Path, int]] = []
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
 
     for i in range(num_chunks):
         start_offset_ms = i * chunk_duration_ms
@@ -292,6 +417,7 @@ def split_audio(
         end_offset_ms = min(duration_ms, (i + 1) * chunk_duration_ms)
 
         export_path = audio_chunk_path / f"{i}.mp3"
+<<<<<<< HEAD
         logger.debug(
             "[FFMPEG_SPLIT] Creating chunk %d/%d: %s", i + 1, num_chunks, export_path
         )
@@ -299,4 +425,9 @@ def split_audio(
         chunks.append((export_path, start_offset_ms))
 
     logger.info("[FFMPEG_SPLIT] Split complete: created %d chunks", len(chunks))
+=======
+        trim_file(audio_file_path, export_path, start_offset_ms, end_offset_ms)
+        chunks.append((export_path, start_offset_ms))
+
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
     return chunks

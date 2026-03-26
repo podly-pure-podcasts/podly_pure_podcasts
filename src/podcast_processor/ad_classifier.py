@@ -1,14 +1,21 @@
 import logging
+<<<<<<< HEAD
 import math
 import time
 from datetime import UTC, datetime
 from typing import Any
+=======
+import time
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
 
 import litellm
 from jinja2 import Template
 from litellm.exceptions import InternalServerError
 from litellm.types.utils import Choices
 from pydantic import ValidationError
+<<<<<<< HEAD
 from sqlalchemy import and_
 
 from app.extensions import db
@@ -16,6 +23,13 @@ from app.models import Identification, ModelCall, Post, TranscriptSegment
 from app.writer.client import writer_client
 from podcast_processor.boundary_refiner import BoundaryRefiner
 from podcast_processor.cue_detector import CueDetector
+=======
+from sqlalchemy.exc import IntegrityError
+
+from app.extensions import db
+from app.models import Identification, ModelCall, Post, TranscriptSegment
+from podcast_processor.boundary_refiner import BoundaryRefiner
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
 from podcast_processor.llm_concurrency_limiter import (
     ConcurrencyContext,
     LLMConcurrencyLimiter,
@@ -62,19 +76,44 @@ class AdClassifier:
     def __init__(
         self,
         config: Config,
+<<<<<<< HEAD
         logger: logging.Logger | None = None,
         model_call_query: Any | None = None,
         identification_query: Any | None = None,
         db_session: Any | None = None,
+=======
+        logger: Optional[logging.Logger] = None,
+        model_call_query: Optional[Any] = None,
+        identification_query: Optional[Any] = None,
+        db_session: Optional[Any] = None,
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
     ):
         self.config = config
         self.logger = logger or logging.getLogger("global_logger")
         self.model_call_query = model_call_query or ModelCall.query
         self.identification_query = identification_query or Identification.query
         self.db_session = db_session or db.session
+<<<<<<< HEAD
 
         # Initialize rate limiter for the configured model
         self.rate_limiter: TokenRateLimiter | None
+=======
+        self.boundary_refiner = BoundaryRefiner(
+            config=config,
+            logger=self.logger,
+            model_call_query=self.model_call_query,
+            db_session=self.db_session,
+        )
+        self.word_boundary_refiner = WordBoundaryRefiner(
+            config=config,
+            logger=self.logger,
+            model_call_query=self.model_call_query,
+            db_session=self.db_session,
+        )
+
+        # Initialize rate limiter for the configured model
+        self.rate_limiter: Optional[TokenRateLimiter]
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         if self.config.llm_enable_token_rate_limiting:
             tokens_per_minute = self.config.llm_max_input_tokens_per_minute
             if tokens_per_minute is None:
@@ -95,7 +134,11 @@ class AdClassifier:
             self.logger.info("Token rate limiting disabled")
 
         # Initialize concurrency limiter for LLM API calls
+<<<<<<< HEAD
         self.concurrency_limiter: LLMConcurrencyLimiter | None
+=======
+        self.concurrency_limiter: Optional[LLMConcurrencyLimiter]
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         max_concurrent = getattr(self.config, "llm_max_concurrent_calls", 3)
         if max_concurrent > 0:
             self.concurrency_limiter = get_concurrency_limiter(max_concurrent)
@@ -106,6 +149,7 @@ class AdClassifier:
             self.concurrency_limiter = None
             self.logger.info("LLM concurrency limiting disabled")
 
+<<<<<<< HEAD
         # Initialize cue detector for neighbor expansion
         self.cue_detector = CueDetector()
 
@@ -125,6 +169,12 @@ class AdClassifier:
         self,
         *,
         transcript_segments: list[TranscriptSegment],
+=======
+    def classify(
+        self,
+        *,
+        transcript_segments: List[TranscriptSegment],
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         system_prompt: str,
         user_prompt_template: Template,
         post: Post,
@@ -146,8 +196,16 @@ class AdClassifier:
             self.logger.info(
                 f"No transcript segments to classify for post {post.id}. Skipping."
             )
+<<<<<<< HEAD
             return
 
+=======
+            self._clear_refined_ad_boundaries(post)
+            return
+
+        self._clear_refined_ad_boundaries(post)
+
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         classify_params = ClassifyParams(
             system_prompt=system_prompt,
             user_prompt_template=user_prompt_template,
@@ -160,7 +218,11 @@ class AdClassifier:
 
         try:
             current_index = 0
+<<<<<<< HEAD
             next_overlap_segments: list[TranscriptSegment] = []
+=======
+            next_overlap_segments: List[TranscriptSegment] = []
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
             max_iterations = (
                 total_segments + 10
             )  # Safety limit to prevent infinite loops
@@ -180,6 +242,7 @@ class AdClassifier:
                         "Breaking to avoid infinite loop."
                     )
                     break
+<<<<<<< HEAD
 
             # Expand neighbors using bulk operations
             # NOTE: Use self.db_session.query() instead of self.identification_query
@@ -214,10 +277,13 @@ class AdClassifier:
             if self.boundary_refiner:
                 self._refine_boundaries(transcript_segments, post)
 
+=======
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         except ClassifyException as e:
             self.logger.error(f"Classification failed for post {post.id}: {e}")
             return
 
+<<<<<<< HEAD
     def _step(
         self,
         classify_params: ClassifyParams,
@@ -225,6 +291,17 @@ class AdClassifier:
         current_index: int,
         transcript_segments: list[TranscriptSegment],
     ) -> tuple[int, list[TranscriptSegment]]:
+=======
+        self._refine_ad_boundaries(post, transcript_segments)
+
+    def _step(
+        self,
+        classify_params: ClassifyParams,
+        prev_overlap_segments: List[TranscriptSegment],
+        current_index: int,
+        transcript_segments: List[TranscriptSegment],
+    ) -> Tuple[int, List[TranscriptSegment]]:
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         overlap_segments = self._apply_overlap_cap(prev_overlap_segments)
         remaining_segments = transcript_segments[current_index:]
 
@@ -289,11 +366,19 @@ class AdClassifier:
     def _process_chunk(
         self,
         *,
+<<<<<<< HEAD
         chunk_segments: list[TranscriptSegment],
         system_prompt: str,
         post: Post,
         user_prompt_str: str,
     ) -> list[TranscriptSegment]:
+=======
+        chunk_segments: List[TranscriptSegment],
+        system_prompt: str,
+        post: Post,
+        user_prompt_str: str,
+    ) -> List[TranscriptSegment]:
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         """Process a chunk of transcript segments for classification."""
         if not chunk_segments:
             return []
@@ -336,14 +421,24 @@ class AdClassifier:
     def _build_chunk_payload(
         self,
         *,
+<<<<<<< HEAD
         overlap_segments: list[TranscriptSegment],
         remaining_segments: list[TranscriptSegment],
         total_segments: list[TranscriptSegment],
+=======
+        overlap_segments: List[TranscriptSegment],
+        remaining_segments: List[TranscriptSegment],
+        total_segments: List[TranscriptSegment],
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         post: Post,
         system_prompt: str,
         user_prompt_template: Template,
         max_new_segments: int,
+<<<<<<< HEAD
     ) -> tuple[list[TranscriptSegment], str, int, bool]:
+=======
+    ) -> Tuple[List[TranscriptSegment], str, int, bool]:
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         """Construct chunk data while enforcing overlap and token constraints."""
         if not remaining_segments:
             return ([], "", 0, False)
@@ -409,12 +504,21 @@ class AdClassifier:
     def _combine_overlap_segments(
         self,
         *,
+<<<<<<< HEAD
         overlap_segments: list[TranscriptSegment],
         base_segments: list[TranscriptSegment],
     ) -> list[TranscriptSegment]:
         """Combine overlap and new segments while preserving order and removing duplicates."""
         combined: list[TranscriptSegment] = []
         seen_ids: set[int] = set()
+=======
+        overlap_segments: List[TranscriptSegment],
+        base_segments: List[TranscriptSegment],
+    ) -> List[TranscriptSegment]:
+        """Combine overlap and new segments while preserving order and removing duplicates."""
+        combined: List[TranscriptSegment] = []
+        seen_ids: Set[int] = set()
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
 
         for segment in overlap_segments:
             if segment.id not in seen_ids:
@@ -441,6 +545,7 @@ class AdClassifier:
     def _compute_next_overlap_segments(
         self,
         *,
+<<<<<<< HEAD
         chunk_segments: list[TranscriptSegment],
         identified_segments: list[TranscriptSegment],
         max_overlap_segments: int,
@@ -500,6 +605,76 @@ class AdClassifier:
             if max_override is None
             else max_override
         )
+=======
+        chunk_segments: List[TranscriptSegment],
+        identified_segments: List[TranscriptSegment],
+        max_overlap_segments: int,
+    ) -> List[TranscriptSegment]:
+        """Determine which segments should be carried forward to the next chunk."""
+        if not identified_segments or max_overlap_segments <= 0:
+            self.logger.debug(
+                "Skipping overlap computation: identified_segments=%s, max_overlap=%s",
+                len(identified_segments) if identified_segments else 0,
+                max_overlap_segments,
+            )
+            return []
+
+        # Find the earliest identified ad segment in the chunk
+        identified_ids = {seg.id for seg in identified_segments}
+        earliest_index = None
+        for i, seg in enumerate(chunk_segments):
+            if seg.id in identified_ids:
+                earliest_index = i
+                break
+
+        if earliest_index is None:
+            self.logger.debug(
+                "No ad segments found in chunk; no overlap to carry forward"
+            )
+            return []
+
+        self.logger.debug(
+            "Found earliest ad segment at index %s (seq_num %s)",
+            earliest_index,
+            chunk_segments[earliest_index].sequence_num,
+        )
+
+        # Take from earliest ad to end of chunk
+        overlap_segments = chunk_segments[earliest_index:]
+
+        self.logger.debug(
+            "Taking from earliest ad to end: %s segments (seq_nums %s-%s)",
+            len(overlap_segments),
+            overlap_segments[0].sequence_num,
+            overlap_segments[-1].sequence_num,
+        )
+
+        # Cap at max_overlap_segments from the end
+        if len(overlap_segments) > max_overlap_segments:
+            trimmed = overlap_segments[-max_overlap_segments:]
+            self.logger.debug(
+                "Trimming overlap from %s to %s segments (max=%s). "
+                "Keeping seq_nums: %s",
+                len(overlap_segments),
+                len(trimmed),
+                max_overlap_segments,
+                [seg.sequence_num for seg in trimmed],
+            )
+            return trimmed
+
+        self.logger.debug(
+            "Carrying forward %s overlap segments: seq_nums %s",
+            len(overlap_segments),
+            [seg.sequence_num for seg in overlap_segments],
+        )
+        return overlap_segments
+
+    def _apply_overlap_cap(
+        self, overlap_segments: List[TranscriptSegment]
+    ) -> List[TranscriptSegment]:
+        """Ensure stored overlap obeys configured limits."""
+        max_overlap = self.config.processing.max_overlap_segments
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         if max_overlap <= 0 or not overlap_segments:
             if max_overlap <= 0 and overlap_segments:
                 self.logger.debug(
@@ -528,6 +703,7 @@ class AdClassifier:
         )
         return trimmed
 
+<<<<<<< HEAD
     def _segments_covering_tail(
         self, *, chunk_segments: list[TranscriptSegment], seconds: float
     ) -> list[TranscriptSegment]:
@@ -550,6 +726,8 @@ class AdClassifier:
 
         return list(reversed(tail_segments))
 
+=======
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
     def _validate_token_limit(self, user_prompt_str: str, system_prompt: str) -> bool:
         """Validate that the prompt doesn't exceed the configured token limit."""
         if self.config.llm_max_input_tokens_per_call is None:
@@ -586,7 +764,11 @@ class AdClassifier:
 
     def _prepare_api_call(
         self, model_call_obj: ModelCall, system_prompt: str
+<<<<<<< HEAD
     ) -> dict[str, Any] | None:
+=======
+    ) -> Optional[Dict[str, Any]]:
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         """Prepare API call arguments and validate token limits."""
         # Prepare messages for the API call
         messages = [
@@ -614,6 +796,7 @@ class AdClassifier:
                     f"Consider reducing num_segments_to_input_to_prompt."
                 )
                 self.logger.error(error_msg)
+<<<<<<< HEAD
                 if model_call_obj.id is not None:
                     res = writer_client.update(
                         "ModelCall",
@@ -628,6 +811,12 @@ class AdClassifier:
                     # Update local object to reflect database state
                     model_call_obj.status = "failed"
                     model_call_obj.error_message = error_msg
+=======
+                model_call_obj.status = "failed"
+                model_call_obj.error_message = error_msg
+                self.db_session.add(model_call_obj)
+                self.db_session.commit()
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
                 return None
 
         # Prepare completion arguments
@@ -637,6 +826,17 @@ class AdClassifier:
             "timeout": self.config.openai_timeout,
         }
 
+<<<<<<< HEAD
+=======
+        # Pass API key explicitly for providers that need it (xAI, etc.)
+        if self.config.llm_api_key:
+            completion_args["api_key"] = self.config.llm_api_key
+
+        # Pass base URL if configured
+        if self.config.openai_base_url:
+            completion_args["api_base"] = self.config.openai_base_url
+
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         # Use max_completion_tokens for newer OpenAI models (o1, gpt-5, gpt-4o variants)
         # OpenAI deprecated max_tokens for these models in favor of max_completion_tokens
         # Check if this is a model that requires max_completion_tokens
@@ -661,7 +861,11 @@ class AdClassifier:
     def _generate_user_prompt(
         self,
         *,
+<<<<<<< HEAD
         current_chunk_db_segments: list[TranscriptSegment],
+=======
+        current_chunk_db_segments: List[TranscriptSegment],
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         post: Post,
         user_prompt_template: Template,
         includes_start: bool,
@@ -690,6 +894,7 @@ class AdClassifier:
         first_seq_num: int,
         last_seq_num: int,
         user_prompt_str: str,
+<<<<<<< HEAD
     ) -> ModelCall | None:
         """Get an existing ModelCall or create a new one via writer."""
         model = self.config.llm_model
@@ -714,6 +919,72 @@ class AdClassifier:
         model_call = self.db_session.get(ModelCall, int(model_call_id))
         if model_call is None:
             raise RuntimeError(f"ModelCall {model_call_id} not found after upsert")
+=======
+    ) -> Optional[ModelCall]:
+        """Get an existing ModelCall or create a new one."""
+        model = self.config.llm_model
+        model_call: Optional[ModelCall] = (
+            self.model_call_query.filter_by(
+                post_id=post.id,
+                model_name=model,
+                first_segment_sequence_num=first_seq_num,
+                last_segment_sequence_num=last_seq_num,
+            )
+            .order_by(ModelCall.timestamp.desc())
+            .first()
+        )
+
+        if model_call:
+            self.logger.info(
+                f"Found existing ModelCall {model_call.id} (status: {model_call.status}) for post {post.id}, segments {first_seq_num}-{last_seq_num}."
+            )
+            if model_call.status in ["pending", "failed_retries"]:
+                model_call.status = "pending"
+                model_call.prompt = user_prompt_str
+                model_call.retry_attempts = 0
+                model_call.error_message = None
+                model_call.response = None
+        else:
+            self.logger.info(
+                f"Creating new ModelCall for post {post.id}, segments {first_seq_num}-{last_seq_num}, model {model}."
+            )
+            model_call = ModelCall(
+                post_id=post.id,
+                first_segment_sequence_num=first_seq_num,
+                last_segment_sequence_num=last_seq_num,
+                model_name=model,
+                prompt=user_prompt_str,
+                status="pending",
+            )
+            try:
+                self.db_session.add(model_call)
+                self.db_session.commit()
+            except IntegrityError:
+                # Someone else created the same unique row concurrently; fetch and reuse
+                self.db_session.rollback()
+                model_call = (
+                    self.model_call_query.filter_by(
+                        post_id=post.id,
+                        model_name=model,
+                        first_segment_sequence_num=first_seq_num,
+                        last_segment_sequence_num=last_seq_num,
+                    )
+                    .order_by(ModelCall.timestamp.desc())
+                    .first()
+                )
+                if not model_call:
+                    raise
+                # If found, update prompt/status to pending for retry
+                model_call.status = "pending"
+                model_call.prompt = user_prompt_str
+                model_call.retry_attempts = 0
+                model_call.error_message = None
+                model_call.response = None
+
+        # If we got here without creating, ensure commit for any field updates
+        if self.db_session.is_active:
+            self.db_session.commit()
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         return model_call
 
     def _should_call_llm(self, model_call: ModelCall) -> bool:
@@ -730,7 +1001,11 @@ class AdClassifier:
                 self._handle_test_mode_call(model_call)
             else:
                 self._call_model(model_call_obj=model_call, system_prompt=system_prompt)
+<<<<<<< HEAD
         except Exception as e:
+=======
+        except Exception as e:  # pylint: disable=broad-exception-caught
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
             self.logger.error(
                 f"LLM interaction via _call_model for ModelCall {model_call.id} resulted in an exception: {e}",
                 exc_info=True,
@@ -739,6 +1014,7 @@ class AdClassifier:
     def _handle_test_mode_call(self, model_call: ModelCall) -> None:
         """Handle LLM call in test mode."""
         self.logger.info("Test mode: Simulating successful LLM call for classify.")
+<<<<<<< HEAD
         test_response = AdSegmentPredictionList(ad_segments=[]).model_dump_json()
         res = writer_client.update(
             "ModelCall",
@@ -757,13 +1033,26 @@ class AdClassifier:
         model_call.status = "success"
         model_call.response = test_response
         model_call.error_message = None
+=======
+        model_call.response = AdSegmentPredictionList(ad_segments=[]).model_dump_json()
+        model_call.status = "success"
+        model_call.error_message = None
+        model_call.retry_attempts = 1
+        self.db_session.add(model_call)
+        self.db_session.commit()
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
 
     def _process_successful_response(
         self,
         *,
         model_call: ModelCall,
+<<<<<<< HEAD
         current_chunk_db_segments: list[TranscriptSegment],
     ) -> list[TranscriptSegment]:
+=======
+        current_chunk_db_segments: List[TranscriptSegment],
+    ) -> List[TranscriptSegment]:
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         """Process a successful LLM response and create Identification records."""
         self.logger.info(
             f"LLM call for ModelCall {model_call.id} was successful. Parsing response."
@@ -782,6 +1071,10 @@ class AdClassifier:
                 self.logger.info(
                     f"Created {created_identification_count} new Identification records for ModelCall {model_call.id}."
                 )
+<<<<<<< HEAD
+=======
+            self.db_session.commit()
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
             return matched_segments
         except (ValidationError, AssertionError) as e:
             self.logger.error(
@@ -794,6 +1087,7 @@ class AdClassifier:
         self,
         *,
         prediction_list: AdSegmentPredictionList,
+<<<<<<< HEAD
         current_chunk_db_segments: list[TranscriptSegment],
         model_call: ModelCall,
     ) -> tuple[int, list[TranscriptSegment]]:
@@ -810,6 +1104,18 @@ class AdClassifier:
             )
 
             if adjusted_confidence < self.config.output.min_confidence:
+=======
+        current_chunk_db_segments: List[TranscriptSegment],
+        model_call: ModelCall,
+    ) -> Tuple[int, List[TranscriptSegment]]:
+        """Create Identification records from the prediction list."""
+        created_count = 0
+        matched_segments: List[TranscriptSegment] = []
+        processed_segment_ids: Set[int] = set()
+
+        for pred in prediction_list.ad_segments:
+            if pred.confidence < self.config.output.min_confidence:
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
                 self.logger.info(
                     f"Ad prediction offset {pred.segment_offset:.2f} for post {model_call.post_id} ignored due to low confidence: {pred.confidence:.2f} (min: {self.config.output.min_confidence})"
                 )
@@ -840,6 +1146,7 @@ class AdClassifier:
                 )
                 continue
 
+<<<<<<< HEAD
             to_insert.append(
                 {
                     "transcript_segment_id": matched_segment.id,
@@ -934,13 +1241,30 @@ class AdClassifier:
                 model_call.post_id,
             )
         return created
+=======
+            identification = Identification(
+                transcript_segment_id=matched_segment.id,
+                model_call_id=model_call.id,
+                label="ad",
+                confidence=pred.confidence,
+            )
+            self.db_session.add(identification)
+            created_count += 1
+
+        return created_count, matched_segments
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
 
     def _find_matching_segment(
         self,
         *,
         segment_offset: float,
+<<<<<<< HEAD
         current_chunk_db_segments: list[TranscriptSegment],
     ) -> TranscriptSegment | None:
+=======
+        current_chunk_db_segments: List[TranscriptSegment],
+    ) -> Optional[TranscriptSegment]:
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         """Find the TranscriptSegment that matches the given segment offset."""
         min_diff = float("inf")
         matched_segment = None
@@ -952,6 +1276,7 @@ class AdClassifier:
         return matched_segment
 
     def _segment_has_ad_identification(self, transcript_segment_id: int) -> bool:
+<<<<<<< HEAD
         """Check if a transcript segment already has an ad identification.
 
         NOTE: Uses self.db_session.query() for session consistency.
@@ -966,6 +1291,176 @@ class AdClassifier:
             is not None
         )
 
+=======
+        """Check if a transcript segment already has an ad identification."""
+        return (
+            self.identification_query.filter_by(
+                transcript_segment_id=transcript_segment_id,
+                label="ad",
+            ).first()
+            is not None
+        )
+
+    def _clear_refined_ad_boundaries(self, post: Post) -> None:
+        if not hasattr(post, "refined_ad_boundaries"):
+            return
+        post.refined_ad_boundaries = None
+        post.refined_ad_boundaries_updated_at = None
+        self.db_session.add(post)
+        self.db_session.commit()
+
+    def _refine_ad_boundaries(
+        self,
+        post: Post,
+        transcript_segments: List[TranscriptSegment],
+    ) -> None:
+        if not getattr(self.config, "enable_boundary_refinement", False):
+            return
+
+        ad_groups = self._build_ad_groups(post)
+        if not ad_groups:
+            post.refined_ad_boundaries = []
+            post.refined_ad_boundaries_updated_at = datetime.utcnow()
+            self.db_session.add(post)
+            self.db_session.commit()
+            return
+
+        serialized_segments = [
+            {
+                "sequence_num": segment.sequence_num,
+                "start_time": segment.start_time,
+                "end_time": segment.end_time,
+                "text": segment.text,
+            }
+            for segment in transcript_segments
+        ]
+
+        refined_boundaries: List[Dict[str, Any]] = []
+        for group in ad_groups:
+            boundary_refinement = self.boundary_refiner.refine(
+                group["orig_start"],
+                group["orig_end"],
+                group["confidence"],
+                serialized_segments,
+                post_id=post.id,
+                first_seq_num=group["first_seq_num"],
+                last_seq_num=group["last_seq_num"],
+            )
+
+            refined_start = boundary_refinement.refined_start
+            refined_end = boundary_refinement.refined_end
+            start_reason = boundary_refinement.start_adjustment_reason
+            end_reason = boundary_refinement.end_adjustment_reason
+            refined_by = "boundary"
+
+            if getattr(self.config, "enable_word_level_boundary_refiner", False):
+                word_refinement = self.word_boundary_refiner.refine(
+                    refined_start,
+                    refined_end,
+                    group["confidence"],
+                    serialized_segments,
+                    post_id=post.id,
+                    first_seq_num=group["first_seq_num"],
+                    last_seq_num=group["last_seq_num"],
+                )
+                refined_start = word_refinement.refined_start
+                refined_end = word_refinement.refined_end
+                start_reason = word_refinement.start_adjustment_reason
+                end_reason = word_refinement.end_adjustment_reason
+                refined_by = "word"
+
+            refined_boundaries.append(
+                {
+                    "orig_start": round(float(group["orig_start"]), 3),
+                    "orig_end": round(float(group["orig_end"]), 3),
+                    "refined_start": round(float(refined_start), 3),
+                    "refined_end": round(float(refined_end), 3),
+                    "first_seq_num": int(group["first_seq_num"]),
+                    "last_seq_num": int(group["last_seq_num"]),
+                    "confidence": round(float(group["confidence"]), 4),
+                    "start_adjustment_reason": start_reason,
+                    "end_adjustment_reason": end_reason,
+                    "refined_by": refined_by,
+                }
+            )
+
+        post.refined_ad_boundaries = refined_boundaries
+        post.refined_ad_boundaries_updated_at = datetime.utcnow()
+        self.db_session.add(post)
+        self.db_session.commit()
+
+    def _build_ad_groups(self, post: Post) -> List[Dict[str, Any]]:
+        ad_identifications = (
+            self.identification_query.join(
+                TranscriptSegment,
+                Identification.transcript_segment_id == TranscriptSegment.id,
+            )
+            .join(ModelCall, Identification.model_call_id == ModelCall.id)
+            .filter(
+                TranscriptSegment.post_id == post.id,
+                Identification.label == "ad",
+                Identification.confidence >= self.config.output.min_confidence,
+                ModelCall.status == "success",
+            )
+            .order_by(TranscriptSegment.sequence_num.asc())
+            .all()
+        )
+
+        valid_items: List[Tuple[TranscriptSegment, float]] = []
+        seen_segment_ids: Set[int] = set()
+        for identification in ad_identifications:
+            segment = identification.transcript_segment
+            if segment is None or segment.id in seen_segment_ids:
+                continue
+            seen_segment_ids.add(segment.id)
+            valid_items.append((segment, float(identification.confidence or 0.0)))
+
+        if not valid_items:
+            return []
+
+        groups: List[Dict[str, Any]] = []
+        current_segments: List[TranscriptSegment] = []
+        current_confidences: List[float] = []
+
+        for segment, confidence in valid_items:
+            if not current_segments:
+                current_segments = [segment]
+                current_confidences = [confidence]
+                continue
+
+            previous = current_segments[-1]
+            if segment.sequence_num <= previous.sequence_num + 1:
+                current_segments.append(segment)
+                current_confidences.append(confidence)
+                continue
+
+            groups.append(
+                self._group_payload(current_segments, current_confidences)
+            )
+            current_segments = [segment]
+            current_confidences = [confidence]
+
+        if current_segments:
+            groups.append(self._group_payload(current_segments, current_confidences))
+
+        return groups
+
+    def _group_payload(
+        self,
+        segments: List[TranscriptSegment],
+        confidences: List[float],
+    ) -> Dict[str, Any]:
+        return {
+            "first_seq_num": segments[0].sequence_num,
+            "last_seq_num": segments[-1].sequence_num,
+            "orig_start": segments[0].start_time,
+            "orig_end": segments[-1].end_time,
+            "confidence": (
+                sum(confidences) / len(confidences) if confidences else 0.0
+            ),
+        }
+
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
     def _is_retryable_error(self, error: Exception) -> bool:
         """Determine if an error should be retried."""
         if isinstance(error, InternalServerError):
@@ -986,8 +1481,13 @@ class AdClassifier:
         self,
         model_call_obj: ModelCall,
         system_prompt: str,
+<<<<<<< HEAD
         max_retries: int | None = None,
     ) -> str | None:
+=======
+        max_retries: Optional[int] = None,
+    ) -> Optional[str]:
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         """Call the LLM model with retry logic."""
         # Use configured retry count if not specified
         retry_count = (
@@ -996,7 +1496,11 @@ class AdClassifier:
             else getattr(self.config, "llm_max_retry_attempts", 3)
         )
 
+<<<<<<< HEAD
         last_error: Exception | None = None
+=======
+        last_error: Optional[Exception] = None
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         raw_response_content = None
         original_retry_attempts = (
             0
@@ -1005,7 +1509,11 @@ class AdClassifier:
         )
 
         for attempt in range(retry_count):
+<<<<<<< HEAD
             retry_attempts_value = original_retry_attempts + attempt + 1
+=======
+            model_call_obj.retry_attempts = original_retry_attempts + attempt + 1
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
             current_attempt_num = attempt + 1
 
             self.logger.info(
@@ -1013,6 +1521,7 @@ class AdClassifier:
             )
 
             try:
+<<<<<<< HEAD
                 # Persist retry attempt + pending status via writer
                 if model_call_obj.id is not None:
                     pending_res = writer_client.update(
@@ -1025,6 +1534,10 @@ class AdClassifier:
                         raise RuntimeError(
                             getattr(pending_res, "error", "Failed to update ModelCall")
                         )
+=======
+                if model_call_obj.status != "pending":
+                    model_call_obj.status = "pending"
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
 
                 # Prepare API call and validate token limits
                 completion_args = self._prepare_api_call(model_call_obj, system_prompt)
@@ -1044,6 +1557,7 @@ class AdClassifier:
                 assert content is not None
                 raw_response_content = content
 
+<<<<<<< HEAD
                 success_res = writer_client.update(
                     "ModelCall",
                     model_call_obj.id,
@@ -1063,6 +1577,13 @@ class AdClassifier:
                 model_call_obj.status = "success"
                 model_call_obj.response = raw_response_content
                 model_call_obj.error_message = None
+=======
+                model_call_obj.response = raw_response_content
+                model_call_obj.status = "success"
+                model_call_obj.error_message = None
+                self.db_session.add(model_call_obj)
+                self.db_session.commit()
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
                 self.logger.info(
                     f"Model call {model_call_obj.id} successful on attempt {current_attempt_num}."
                 )
@@ -1083,6 +1604,7 @@ class AdClassifier:
                         f"Non-retryable LLM error for ModelCall {model_call_obj.id} (attempt {current_attempt_num}): {e}",
                         exc_info=True,
                     )
+<<<<<<< HEAD
                     fail_res = writer_client.update(
                         "ModelCall",
                         model_call_obj.id,
@@ -1096,6 +1618,12 @@ class AdClassifier:
                     # Update local object to reflect database state
                     model_call_obj.status = "failed_permanent"
                     model_call_obj.error_message = str(e)
+=======
+                    model_call_obj.status = "failed_permanent"
+                    model_call_obj.error_message = str(e)
+                    self.db_session.add(model_call_obj)
+                    self.db_session.commit()
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
                     raise  # Re-raise non-retryable exceptions immediately
 
         # If we get here, all retries were exhausted
@@ -1111,7 +1639,11 @@ class AdClassifier:
         self,
         *,
         model_call_obj: ModelCall,
+<<<<<<< HEAD
         error: InternalServerError | Exception,
+=======
+        error: Union[InternalServerError, Exception],
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         attempt: int,
         current_attempt_num: int,
     ) -> None:
@@ -1119,6 +1651,7 @@ class AdClassifier:
         self.logger.error(
             f"LLM retryable error for ModelCall {model_call_obj.id} (attempt {current_attempt_num}): {error}"
         )
+<<<<<<< HEAD
         res = writer_client.update(
             "ModelCall",
             model_call_obj.id,
@@ -1129,6 +1662,11 @@ class AdClassifier:
             raise RuntimeError(getattr(res, "error", "Failed to update ModelCall"))
         # Update local object to reflect database state
         model_call_obj.error_message = str(error)
+=======
+        model_call_obj.error_message = str(error)
+        self.db_session.add(model_call_obj)
+        self.db_session.commit()
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
 
         # Use longer backoff for rate limiting errors
         error_str = str(error).lower()
@@ -1154,12 +1692,17 @@ class AdClassifier:
         self,
         model_call_obj: ModelCall,
         max_retries: int,
+<<<<<<< HEAD
         last_error: Exception | None,
+=======
+        last_error: Optional[Exception],
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
     ) -> None:
         """Handle the case when all retries are exhausted."""
         self.logger.error(
             f"Failed to call model for ModelCall {model_call_obj.id} after {max_retries} attempts."
         )
+<<<<<<< HEAD
         if last_error:
             error_message = str(last_error)
         else:
@@ -1542,3 +2085,12 @@ class AdClassifier:
             raise RuntimeError(
                 getattr(res, "error", "Failed to replace identifications")
             )
+=======
+        model_call_obj.status = "failed_retries"
+        if last_error:
+            model_call_obj.error_message = str(last_error)
+        else:
+            model_call_obj.error_message = f"Maximum retries ({max_retries}) exceeded without a specific InternalServerError."
+        self.db_session.add(model_call_obj)
+        self.db_session.commit()
+>>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e

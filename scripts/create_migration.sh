@@ -11,7 +11,7 @@ REPO_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
 MIGRATION_MSG=${1:-"migration"}
 
 # Prefer using repo-local src/instance to avoid writing to /app
-export PODLY_INSTANCE_DIR="$REPO_ROOT/src/instance"
+export PODLY_INSTANCE_DIR="${PODLY_INSTANCE_DIR:-$REPO_ROOT/src/instance}"
 
 echo "Using PODLY_INSTANCE_DIR=$PODLY_INSTANCE_DIR"
 
