@@ -10,6 +10,7 @@ These tests verify:
 
 import hashlib
 import secrets
+from collections.abc import Generator
 
 import pytest
 from flask import Flask
@@ -25,7 +26,7 @@ def _hash_token(secret: str) -> str:
 
 
 @pytest.fixture
-def app_with_routes() -> Flask:
+def app_with_routes() -> Generator[Flask, None, None]:
     """Create a Flask app with routes registered in correct order."""
     app = Flask(__name__)
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"

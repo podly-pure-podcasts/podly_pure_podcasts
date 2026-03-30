@@ -10,10 +10,6 @@ import threading
 import time
 from collections import deque
 from datetime import datetime
-<<<<<<< HEAD
-=======
-from typing import Dict, List, Optional, Tuple, Union
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
 
 logger = logging.getLogger(__name__)
 
@@ -36,11 +32,7 @@ class TokenRateLimiter:
         """
         self.tokens_per_minute = tokens_per_minute
         self.window_seconds = window_minutes * 60
-<<<<<<< HEAD
         self.token_usage: deque[tuple[float, int]] = (
-=======
-        self.token_usage: deque[Tuple[float, int]] = (
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
             deque()
         )  # [(timestamp, token_count), ...]
         self.lock = threading.Lock()
@@ -49,11 +41,7 @@ class TokenRateLimiter:
             f"Initialized TokenRateLimiter: {tokens_per_minute} tokens/{window_minutes}min"
         )
 
-<<<<<<< HEAD
     def count_tokens(self, messages: list[dict[str, str]], model: str) -> int:
-=======
-    def count_tokens(self, messages: List[Dict[str, str]], model: str) -> int:
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         """
         Count tokens in messages using litellm's token counting.
 
@@ -70,11 +58,7 @@ class TokenRateLimiter:
             estimated_tokens = total_chars // 4
             logger.debug(f"Estimated {estimated_tokens} tokens for model {model}")
             return estimated_tokens
-<<<<<<< HEAD
         except Exception as e:  # noqa: BLE001
-=======
-        except Exception as e:
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
             # Fallback: conservative estimate
             logger.warning(f"Token counting failed, using fallback. Error: {e}")
             return 1000  # Conservative fallback
@@ -91,13 +75,8 @@ class TokenRateLimiter:
         return sum(count for _, count in self.token_usage)
 
     def check_rate_limit(
-<<<<<<< HEAD
         self, messages: list[dict[str, str]], model: str
     ) -> tuple[bool, float]:
-=======
-        self, messages: List[Dict[str, str]], model: str
-    ) -> Tuple[bool, float]:
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         """
         Check if we can make an API call without hitting rate limits.
 
@@ -137,11 +116,7 @@ class TokenRateLimiter:
 
             return False, wait_seconds
 
-<<<<<<< HEAD
     def record_usage(self, messages: list[dict[str, str]], model: str) -> None:
-=======
-    def record_usage(self, messages: List[Dict[str, str]], model: str) -> None:
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         """
         Record token usage for a successful API call.
 
@@ -158,11 +133,7 @@ class TokenRateLimiter:
                 f"Recorded {token_count} tokens at {datetime.fromtimestamp(current_time)}"
             )
 
-<<<<<<< HEAD
     def wait_if_needed(self, messages: list[dict[str, str]], model: str) -> None:
-=======
-    def wait_if_needed(self, messages: List[Dict[str, str]], model: str) -> None:
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         """
         Wait if necessary to avoid hitting rate limits, then record usage.
 
@@ -181,11 +152,7 @@ class TokenRateLimiter:
         # Record the usage immediately before making the call
         self.record_usage(messages, model)
 
-<<<<<<< HEAD
     def get_usage_stats(self) -> dict[str, int | float]:
-=======
-    def get_usage_stats(self) -> Dict[str, Union[int, float]]:
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         """Get current usage statistics."""
         current_time = time.time()
         with self.lock:
@@ -202,26 +169,15 @@ class TokenRateLimiter:
 
 
 # Global rate limiter instance
-<<<<<<< HEAD
 _RATE_LIMITER: TokenRateLimiter | None = None
-=======
-_rate_limiter: Optional[TokenRateLimiter] = None
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
 
 
 def get_rate_limiter(tokens_per_minute: int = 30000) -> TokenRateLimiter:
     """Get or create the global rate limiter instance."""
-<<<<<<< HEAD
     global _RATE_LIMITER
     if _RATE_LIMITER is None or _RATE_LIMITER.tokens_per_minute != tokens_per_minute:
         _RATE_LIMITER = TokenRateLimiter(tokens_per_minute=tokens_per_minute)
     return _RATE_LIMITER
-=======
-    global _rate_limiter  # pylint: disable=global-statement
-    if _rate_limiter is None or _rate_limiter.tokens_per_minute != tokens_per_minute:
-        _rate_limiter = TokenRateLimiter(tokens_per_minute=tokens_per_minute)
-    return _rate_limiter
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
 
 
 def configure_rate_limiter_for_model(model: str) -> TokenRateLimiter:
@@ -245,10 +201,7 @@ def configure_rate_limiter_for_model(model: str) -> TokenRateLimiter:
         "gpt-4o": 150000,
         "gpt-4": 40000,
         # Google Gemini models
-<<<<<<< HEAD
         "gemini/gemini-3-flash-preview": 60000,
-=======
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         "gemini/gemini-2.5-flash": 60000,
         "gemini/gemini-2.5-pro": 30000,
     }

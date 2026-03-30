@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import json
 import logging
 import os
@@ -7,12 +6,6 @@ import threading
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
-=======
-import logging
-import os
-import threading
-from typing import Any, Callable, Dict, List, Optional
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
 
 import litellm
 from jinja2 import Template
@@ -20,7 +13,6 @@ from sqlalchemy.orm import object_session
 
 from app.extensions import db
 from app.models import Post, ProcessingJob, TranscriptSegment
-<<<<<<< HEAD
 from app.writer.client import writer_client
 from podcast_processor.ad_classifier import AdClassifier
 from podcast_processor.audio import clip_segments_exact
@@ -42,15 +34,6 @@ from podcast_processor.chapter_writer import (
     write_adjusted_chapters,
 )
 from podcast_processor.podcast_downloader import PodcastDownloader, sanitize_title
-=======
-from podcast_processor.ad_classifier import AdClassifier
-from podcast_processor.audio_processor import AudioProcessor
-from podcast_processor.podcast_downloader import (
-    DownloadError,
-    PodcastDownloader,
-    sanitize_title,
-)
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
 from podcast_processor.processing_status_manager import ProcessingStatusManager
 from podcast_processor.prompt import (
     DEFAULT_SYSTEM_PROMPT_PATH,
@@ -60,10 +43,7 @@ from podcast_processor.transcription_manager import TranscriptionManager
 from shared.config import Config
 from shared.processing_paths import (
     ProcessingPaths,
-<<<<<<< HEAD
     find_existing_processed_audio_path,
-=======
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
     get_job_unprocessed_path,
     get_srv_root,
     paths_from_unprocessed_path,
@@ -72,11 +52,7 @@ from shared.processing_paths import (
 logger = logging.getLogger("global_logger")
 
 
-<<<<<<< HEAD
 def get_post_processed_audio_path(post: Post) -> ProcessingPaths | None:
-=======
-def get_post_processed_audio_path(post: Post) -> Optional[ProcessingPaths]:
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
     """
     Generate the processed audio path based on the post's unprocessed audio path.
     Returns None if unprocessed_audio_path is not set.
@@ -92,7 +68,6 @@ def get_post_processed_audio_path(post: Post) -> Optional[ProcessingPaths]:
         return None
 
     return paths_from_unprocessed_path(unprocessed_path, title)
-<<<<<<< HEAD
 
 
 def get_post_processed_audio_path_cached(
@@ -112,8 +87,6 @@ def get_post_processed_audio_path_cached(
         return None
 
     return paths_from_unprocessed_path(unprocessed_path, feed_title)
-=======
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
 
 
 class PodcastProcessor:
@@ -123,7 +96,6 @@ class PodcastProcessor:
     """
 
     lock_lock = threading.Lock()
-<<<<<<< HEAD
     locks: dict[str, threading.Lock] = {}  # Now keyed by post GUID instead of file path
 
     def __init__(
@@ -802,240 +774,11 @@ class PodcastProcessor:
             job, "running", 3, "Chapters filtered", 75.0
         )
         self._raise_if_cancelled(job, 3, cancel_callback)
-=======
-    locks: Dict[str, threading.Lock] = {}  # Now keyed by post GUID instead of file path
-
-    def __init__(
-        self,
-        config: Config,
-        logger: Optional[logging.Logger] = None,
-        transcription_manager: Optional[TranscriptionManager] = None,
-        ad_classifier: Optional[AdClassifier] = None,
-        audio_processor: Optional[AudioProcessor] = None,
-        status_manager: Optional[ProcessingStatusManager] = None,
-        db_session: Optional[Any] = None,
-        downloader: Optional[PodcastDownloader] = None,
-    ) -> None:
-        super().__init__()
-        self.logger = logger or logging.getLogger("global_logger")
-        self.output_dir = str(get_srv_root())
-        self.config: Config = config
-        self.db_session = db_session or db.session
-
-        # Initialize downloader
-        self.downloader = downloader or PodcastDownloader(logger=self.logger)
-
-        # Initialize status manager
-        self.status_manager = status_manager or ProcessingStatusManager(
-            self.db_session, self.logger
-        )
-
-        litellm.api_base = self.config.openai_base_url
-        litellm.api_key = self.config.llm_api_key
-
-        # Initialize components with default implementations if not provided
-        if transcription_manager is None:
-            self.transcription_manager = TranscriptionManager(self.logger, config)
-        else:
-            self.transcription_manager = transcription_manager
-
-        if ad_classifier is None:
-            self.ad_classifier = AdClassifier(config)
-        else:
-            self.ad_classifier = ad_classifier
-
-        if audio_processor is None:
-            self.audio_processor = AudioProcessor(config=config, logger=self.logger)
-        else:
-            self.audio_processor = audio_processor
-
-    def process(
-        self,
-        post: Post,
-        job_id: str,
-        cancel_callback: Optional[Callable[[], bool]] = None,
-    ) -> str:
-        """
-        Process a podcast by downloading, transcribing, identifying ads, and removing ad segments.
-        Updates the existing job record for tracking progress.
-
-        Args:
-            post: The Post object containing the podcast to process
-            job_id: Job ID of the existing job to update (required)
-            cancel_callback: Optional callback to check for cancellation
-
-        Returns:
-            Path to the processed audio file
-        """
-        job = ProcessingJob.query.get(job_id)
-        if not job:
-            raise ProcessorException(f"Job with ID {job_id} not found")
-
-        # Cache GUID early to avoid ORM access during error cleanup if the session rolls back
-        cached_lock_key = getattr(post, "guid", None)
-
-        try:
-            self.logger.debug(
-                "processor.process enter: job_id=%s post_guid=%s job_bound=%s",
-                job_id,
-                getattr(post, "guid", None),
-                object_session(job) is not None,
-            )
-            # Update job to running status
-            self.status_manager.update_job_status(
-                job, "running", 0, "Starting processing"
-            )
-
-            # Validate post
-            if not post.whitelisted:
-                raise ProcessorException(f"Post with GUID {post.guid} not whitelisted")
-
-            # Check if processed audio already exists (database or disk)
-            if self._check_existing_processed_audio(post):
-                self.status_manager.update_job_status(
-                    job, "completed", 4, "Processing complete", 100.0
-                )
-                return str(post.processed_audio_path)
-
-            # Step 1: Download (if needed)
-            self._handle_download_step(post, job)
-            self._raise_if_cancelled(job, cancel_callback)
-
-            # Get processing paths and acquire lock
-            processed_audio_path = self._acquire_processing_lock(post, job)
-
-            try:
-                if os.path.exists(processed_audio_path):
-                    self.logger.info(f"Audio already processed: {post}")
-                    # Update the database with the processed audio path
-                    post.processed_audio_path = processed_audio_path
-                    self.db_session.commit()
-                    self.status_manager.update_job_status(
-                        job, "completed", 4, "Processing complete", 100.0
-                    )
-                    return processed_audio_path
-
-                # Perform the main processing steps
-                self._perform_processing_steps(
-                    post, job, processed_audio_path, cancel_callback
-                )
-
-                self.logger.info(f"Processing podcast: {post} complete")
-                return processed_audio_path
-            finally:
-                # Release lock using cached GUID without touching ORM state after potential rollback
-                try:
-                    if cached_lock_key is not None:
-                        lock = PodcastProcessor.locks.get(cached_lock_key)
-                        if lock is not None and lock.locked():
-                            lock.release()
-                except Exception:
-                    # Best-effort lock release; avoid masking original exceptions
-                    pass
-
-        except ProcessorException as e:
-            error_msg = str(e)
-            if "Processing job in progress" in error_msg:
-                self.status_manager.update_job_status(
-                    job,
-                    "failed",
-                    job.current_step,
-                    "Another processing job is already running for this episode",
-                )
-            else:
-                self.status_manager.update_job_status(
-                    job, "failed", job.current_step, error_msg
-                )
-            raise
-
-        except Exception as e:
-            self.logger.error(
-                "processor.process unexpected error: job_id=%s %s",
-                job_id,
-                e,
-                exc_info=True,
-            )
-            self.status_manager.update_job_status(
-                job, "failed", job.current_step, f"Unexpected error: {str(e)}"
-            )
-            raise
-
-    def _acquire_processing_lock(self, post: Post, job: ProcessingJob) -> str:
-        """
-        Acquire processing lock for the post and return the processed audio path.
-        Lock is now based on post GUID for better granularity and reliability.
-
-        Args:
-            post: The Post object to process
-            job: The ProcessingJob for tracking
-
-        Returns:
-            Path to the processed audio file
-
-        Raises:
-            ProcessorException: If lock cannot be acquired or paths are invalid
-        """
-        # Get processing paths
-        working_paths = get_post_processed_audio_path(post)
-        if working_paths is None:
-            raise ProcessorException("Processed audio path not found")
-
-        processed_audio_path = str(working_paths.post_processed_audio_path)
-
-        # Use post GUID as lock key instead of file path for better granularity
-        lock_key = post.guid
-
-        # Acquire lock (this is where we cancel existing jobs if we can get the lock)
-        locked = False
-        with PodcastProcessor.lock_lock:
-            if lock_key not in PodcastProcessor.locks:
-                PodcastProcessor.locks[lock_key] = threading.Lock()
-                PodcastProcessor.locks[lock_key].acquire(blocking=False)
-                locked = True
-
-        if not locked and not PodcastProcessor.locks[lock_key].acquire(blocking=False):
-            raise ProcessorException("Processing job in progress")
-
-        # Cancel existing jobs since we got the lock
-        self.status_manager.cancel_existing_jobs(post.guid, job.id)
-
-        self.make_dirs(working_paths)
-        return processed_audio_path
-
-    def _perform_processing_steps(
-        self,
-        post: Post,
-        job: ProcessingJob,
-        processed_audio_path: str,
-        cancel_callback: Optional[Callable[[], bool]] = None,
-    ) -> None:
-        """
-        Perform the main processing steps: transcription, ad classification, and audio processing.
-
-        Args:
-            post: The Post object to process
-            job: The ProcessingJob for tracking
-            processed_audio_path: Path where the processed audio will be saved
-        """
-        # Step 2: Transcribe audio
-        self.status_manager.update_job_status(
-            job, "running", 2, "Transcribing audio", 50.0
-        )
-        transcript_segments = self.transcription_manager.transcribe(post)
-        self._raise_if_cancelled(job, cancel_callback)
-
-        # Step 3: Classify ad segments (returns the preset ID used)
-        preset_id = self._classify_ad_segments(post, job, transcript_segments)
-        post.processed_with_preset_id = preset_id
-        self.db_session.commit()
-        self._raise_if_cancelled(job, cancel_callback)
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
 
         # Step 4: Process audio (remove ad segments)
         self.status_manager.update_job_status(
             job, "running", 4, "Processing audio", 90.0
         )
-<<<<<<< HEAD
 
         # Convert ad segments to milliseconds for audio processing
         ad_segments_ms = [(int(s * 1000), int(e * 1000)) for s, e in ad_segments]
@@ -1119,13 +862,6 @@ class PodcastProcessor:
         )
         if not result or not result.success:
             raise RuntimeError(getattr(result, "error", "Failed to update post"))
-=======
-        self.audio_processor.process_audio(post, processed_audio_path)
-
-        # Update the database with the processed audio path
-        post.processed_audio_path = processed_audio_path
-        self.db_session.commit()
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
 
         # Mark job complete
         self.status_manager.update_job_status(
@@ -1133,23 +869,15 @@ class PodcastProcessor:
         )
 
     def _raise_if_cancelled(
-<<<<<<< HEAD
         self,
         job: ProcessingJob,
         current_step: int,
         cancel_callback: Callable[[], bool] | None,
-=======
-        self, job: ProcessingJob, cancel_callback: Optional[Callable[[], bool]]
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
     ) -> None:
         """Helper to centralize cancellation checking and update job state."""
         if cancel_callback and cancel_callback():
             self.status_manager.update_job_status(
-<<<<<<< HEAD
                 job, "cancelled", current_step, "Cancellation requested"
-=======
-                job, "cancelled", job.current_step, "Cancellation requested"
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
             )
             raise ProcessorException("Cancelled")
 
@@ -1157,13 +885,8 @@ class PodcastProcessor:
         self,
         post: Post,
         job: ProcessingJob,
-<<<<<<< HEAD
         transcript_segments: list[TranscriptSegment],
     ) -> None:
-=======
-        transcript_segments: List[TranscriptSegment],
-    ) -> int | None:
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         """
         Classify ad segments in the transcript.
 
@@ -1171,36 +894,21 @@ class PodcastProcessor:
             post: The Post object being processed
             job: The ProcessingJob for tracking
             transcript_segments: The transcript segments to classify
-<<<<<<< HEAD
-=======
-            
-        Returns:
-            The preset ID that was used, or None if using default prompts
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
+
         """
         self.status_manager.update_job_status(
             job, "running", 3, "Identifying ads", 75.0
         )
-<<<<<<< HEAD
         user_prompt_template = self.get_user_prompt_template(
             DEFAULT_USER_PROMPT_TEMPLATE_PATH
         )
         system_prompt = self.get_system_prompt(DEFAULT_SYSTEM_PROMPT_PATH)
-=======
-        
-        # Prefer per-feed preset when configured, fallback to active preset, then default files
-        system_prompt, user_prompt_template, preset_id = self._get_prompts_from_preset_or_default(
-            post
-        )
-        
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         self.ad_classifier.classify(
             transcript_segments=transcript_segments,
             system_prompt=system_prompt,
             user_prompt_template=user_prompt_template,
             post=post,
         )
-<<<<<<< HEAD
 
     def _simulate_developer_processing(
         self,
@@ -1296,55 +1004,6 @@ class PodcastProcessor:
             post_guid: Cached post GUID to avoid ORM access
             post_title: Cached post title to avoid ORM access
             job_id: Cached job ID to avoid ORM access
-=======
-        
-        return preset_id
-
-    def _get_prompts_from_preset_or_default(
-        self, post: Post
-    ) -> tuple[str, Template, int | None]:
-        """
-        Get prompts from active preset or fall back to default files.
-        
-        Returns:
-            Tuple of (system_prompt, user_prompt_template, preset_id or None)
-        """
-        from app.models import PromptPreset
-        
-        selected_preset = None
-        feed = getattr(post, "feed", None)
-        feed_preset_id = getattr(feed, "default_prompt_preset_id", None)
-        if feed_preset_id is not None:
-            selected_preset = PromptPreset.query.get(feed_preset_id)
-
-        if selected_preset is None:
-            selected_preset = PromptPreset.query.filter_by(is_active=True).first()
-
-        if selected_preset:
-            self.logger.info(
-                f"Using prompt preset: {selected_preset.name} "
-                f"(aggressiveness: {selected_preset.aggressiveness})"
-            )
-            from jinja2 import Template
-            return (
-                selected_preset.system_prompt,
-                Template(selected_preset.user_prompt_template),
-                selected_preset.id,
-            )
-        
-        # Fallback to default files
-        self.logger.info("No active preset found, using default prompt files")
-        user_prompt_template = self.get_user_prompt_template(
-            DEFAULT_USER_PROMPT_TEMPLATE_PATH
-        )
-        system_prompt = self.get_system_prompt(DEFAULT_SYSTEM_PROMPT_PATH)
-        return system_prompt, user_prompt_template, None
-
-    def _handle_download_step(self, post: Post, job: ProcessingJob) -> None:
-        """
-        Handle the download step with progress tracking and robust file checking.
-        This method checks for existing files on disk before downloading.
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         """
         # If we have a path in the database, check if the file actually exists
         if post.unprocessed_audio_path is not None:
@@ -1359,7 +1018,6 @@ class PodcastProcessor:
             self.logger.info(
                 f"Database path {post.unprocessed_audio_path} doesn't exist or is empty, resetting"
             )
-<<<<<<< HEAD
             result = writer_client.update(
                 "Post", post.id, {"unprocessed_audio_path": None}, wait=True
             )
@@ -1369,14 +1027,6 @@ class PodcastProcessor:
         # Compute a unique per-job expected path
         expected_unprocessed_path = get_job_unprocessed_path(
             post_guid, job_id, post_title
-=======
-            post.unprocessed_audio_path = None
-            self.db_session.commit()
-
-        # Compute a unique per-job expected path
-        expected_unprocessed_path = get_job_unprocessed_path(
-            post.guid, job.id, post.title
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         )
 
         if (
@@ -1384,7 +1034,6 @@ class PodcastProcessor:
             and expected_unprocessed_path.stat().st_size > 0
         ):
             # Found a local unprocessed file
-<<<<<<< HEAD
             unprocessed_path_str = str(expected_unprocessed_path.resolve())
             self.logger.info(
                 f"Found existing unprocessed audio for post '{post_title}' at '{unprocessed_path_str}'. "
@@ -1549,130 +1198,6 @@ class PodcastProcessor:
             if not result or not result.success:
                 raise RuntimeError(getattr(result, "error", "Failed to update post"))
 
-=======
-            post.unprocessed_audio_path = str(expected_unprocessed_path.resolve())
-            self.logger.info(
-                f"Found existing unprocessed audio for post '{post.title}' at '{post.unprocessed_audio_path}'. "
-                "Updated the database path."
-            )
-            self.db_session.commit()
-            return
-
-        # Need to download the file
-        self.status_manager.update_job_status(
-            job, "running", 1, "Downloading episode", 25.0
-        )
-        self.logger.info(f"Downloading post: {post.title}")
-        try:
-            download_path = self.downloader.download_episode(
-                post, dest_path=str(expected_unprocessed_path)
-            )
-        except DownloadError as exc:
-            raise ProcessorException(str(exc)) from exc
-        post.unprocessed_audio_path = download_path
-        self.db_session.commit()
-
-    def make_dirs(self, processing_paths: ProcessingPaths) -> None:
-        """Create necessary directories for output files."""
-        if processing_paths.post_processed_audio_path:
-            processing_paths.post_processed_audio_path.parent.mkdir(
-                parents=True, exist_ok=True
-            )
-
-    def get_system_prompt(self, system_prompt_path: str) -> str:
-        """Load the system prompt from a file."""
-        with open(system_prompt_path, "r") as f:
-            return f.read()
-
-    def get_user_prompt_template(self, prompt_template_path: str) -> Template:
-        """Load the user prompt template from a file."""
-        with open(prompt_template_path, "r") as f:
-            return Template(f.read())
-
-    def remove_audio_files_and_reset_db(self, post_id: Optional[int]) -> None:
-        """
-        Removes unprocessed/processed audio for the given post from disk,
-        and resets the DB fields so the next run will re-download the files.
-        """
-        if post_id is None:
-            return
-
-        post = Post.query.get(post_id)
-        if not post:
-            self.logger.warning(
-                f"Could not find Post with ID {post_id} to remove files."
-            )
-            return
-
-        if post.unprocessed_audio_path and os.path.isfile(post.unprocessed_audio_path):
-            try:
-                os.remove(post.unprocessed_audio_path)
-                self.logger.info(
-                    f"Removed unprocessed file: {post.unprocessed_audio_path}"
-                )
-            except OSError as e:
-                self.logger.error(
-                    f"Failed to remove unprocessed file '{post.unprocessed_audio_path}': {e}"
-                )
-
-        if post.processed_audio_path and os.path.isfile(post.processed_audio_path):
-            try:
-                os.remove(post.processed_audio_path)
-                self.logger.info(f"Removed processed file: {post.processed_audio_path}")
-            except OSError as e:
-                self.logger.error(
-                    f"Failed to remove processed file '{post.processed_audio_path}': {e}"
-                )
-
-        post.unprocessed_audio_path = None
-        post.processed_audio_path = None
-        self.db_session.commit()
-
-    def _check_existing_processed_audio(self, post: Post) -> bool:
-        """
-        Check if processed audio already exists, either in database or on disk.
-        Updates the database path if found on disk.
-
-        Returns:
-            True if processed audio exists and is valid, False otherwise
-        """
-        # If we have a path in the database, check if the file actually exists
-        if post.processed_audio_path is not None:
-            if (
-                os.path.exists(post.processed_audio_path)
-                and os.path.getsize(post.processed_audio_path) > 0
-            ):
-                self.logger.info(
-                    f"Processed audio already available at: {post.processed_audio_path}"
-                )
-                return True
-            self.logger.info(
-                f"Database path {post.processed_audio_path} doesn't exist or is empty, resetting"
-            )
-            post.processed_audio_path = None
-            self.db_session.commit()
-
-        # Check if file exists on disk at expected location
-        safe_feed_title = sanitize_title(post.feed.title)
-        safe_post_title = sanitize_title(post.title)
-        expected_processed_path = (
-            get_srv_root() / safe_feed_title / f"{safe_post_title}.mp3"
-        )
-
-        if (
-            expected_processed_path.exists()
-            and expected_processed_path.stat().st_size > 0
-        ):
-            # Found a local processed file
-            post.processed_audio_path = str(expected_processed_path.resolve())
-            self.logger.info(
-                f"Found existing processed audio for post '{post.title}' at '{post.processed_audio_path}'. "
-                "Updated the database path."
-            )
-            self.db_session.commit()
-            return True
-
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         return False
 
 

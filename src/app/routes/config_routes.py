@@ -492,8 +492,12 @@ def _strip_env_overridden_fields(
     if isinstance(whisper, dict):
         whisper = dict(whisper)
         whisper_field_paths = [
-            "whisper.whisper_type", "whisper.api_key", "whisper.base_url",
-            "whisper.model", "whisper.timeout_sec", "whisper.chunksize_mb",
+            "whisper.whisper_type",
+            "whisper.api_key",
+            "whisper.base_url",
+            "whisper.model",
+            "whisper.timeout_sec",
+            "whisper.chunksize_mb",
             "whisper.max_retries",
         ]
         for field_path in whisper_field_paths:

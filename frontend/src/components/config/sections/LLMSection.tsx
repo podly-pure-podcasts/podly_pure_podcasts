@@ -169,9 +169,9 @@ export default function LLMSection() {
           >
             <input
               type="checkbox"
-              checked={!!pending?.llm?.enable_word_level_boundary_refinder}
+              checked={!!pending?.llm?.enable_word_level_boundary_refiner}
               onChange={(e) =>
-                setField(['llm', 'enable_word_level_boundary_refinder'], e.target.checked)
+                setField(['llm', 'enable_word_level_boundary_refiner'], e.target.checked)
               }
             />
           </Field>

@@ -9,6 +9,7 @@ import flask
 from flask import Blueprint, g, jsonify, request, send_file
 from flask.typing import ResponseReturnValue
 
+from app.auth.feed_tokens import authenticate_feed_token
 from app.auth.guards import require_admin
 from app.auth.service import update_user_last_active
 from app.extensions import db
@@ -561,6 +562,7 @@ def api_post_stats(p_guid: str) -> flask.Response:
             "total_segments": len(transcript_segments),
             "total_model_calls": len(model_calls),
             "total_identifications": len(identifications),
+            "boundary_refinement_count": len(refined_windows) if refined_windows else 0,
             "content_segments": content_segments,
             "ad_segments_count": ad_segments,
             "ad_percentage": round(ad_percentage, 1),
@@ -1231,6 +1233,134 @@ def api_download_original_post(p_guid: str) -> flask.Response:
         return flask.make_response(("Error serving file", 500))
 
     increment_download_count(post)
+    return response
+
+
+def _themed_error_html(message: str, code: int) -> tuple[str, int]:
+    """Helper to return a themed HTML error page as expected by tests."""
+    html = f"""
+    <html>
+        <head><title>{code} Error</title></head>
+        <body>
+            <h1>{code}</h1>
+            <p>{message}</p>
+            <p>Podly. Pure podcasts.</p>
+        </body>
+    </html>
+    """
+    return html, code
+
+
+@post_bp.route("/trigger", methods=["GET"])
+def trigger() -> ResponseReturnValue:
+    """Trigger processing for a post using feed token authentication.
+
+    Used by external aggregators like Overcast to trigger a refresh.
+    """
+    guid = request.args.get("guid")
+    feed_token = request.args.get("feed_token")
+    feed_secret = request.args.get("feed_secret")
+
+    if not guid:
+        return _themed_error_html("Missing guid", 400)
+
+    auth_result = authenticate_feed_token(feed_token, feed_secret, request.path)
+    if not auth_result:
+        # Tests expect themed HTML for auth failures on /trigger
+        return _themed_error_html("Invalid or missing feed token", 403)
+
+    user_id = auth_result.user.id
+    billing_user_id = auth_result.user.id  # Default to same user
+
+    get_jobs_manager().start_post_processing(
+        guid,
+        priority="interactive",
+        requested_by_user_id=user_id,
+        billing_user_id=billing_user_id,
+    )
+
+    return flask.redirect(f"/post/{guid}")
+
+
+@post_bp.route("/api/trigger/status", methods=["GET"])
+def api_trigger_status() -> ResponseReturnValue:  # noqa: PLR0912
+    """Get processing status for a post using feed token authentication.
+
+    Used by the frontend to poll status without a full session.
+    """
+    guid = request.args.get("guid")
+    feed_token = request.args.get("feed_token")
+    feed_secret = request.args.get("feed_secret")
+
+    if not guid:
+        response = flask.jsonify({"state": "error", "message": "Missing guid"})
+        response.headers["Cache-Control"] = "no-store"
+        return response, 400
+
+    auth_result = authenticate_feed_token(feed_token, feed_secret, request.path)
+    if not auth_result:
+        response = flask.jsonify({"state": "error", "message": "Invalid token"})
+        response.headers["Cache-Control"] = "no-store"
+        return response, 401
+
+    status_result = get_jobs_manager().get_post_status(guid)
+
+    # Map raw status to user-friendly state string expected by tests
+    raw_status = status_result.get("status")
+    state = "unknown"
+    if raw_status in ("running", "started"):
+        state = "processing"
+    elif raw_status == "pending":
+        state = "queued"
+    elif raw_status in ("completed", "ready"):
+        state = "ready"
+    elif raw_status in ("failed", "error"):
+        state = "error"
+    elif raw_status == "not_started":
+        state = "not_started"
+    elif raw_status == "skipped":
+        state = "ready"
+
+    # Progress clamping (0-100)
+    progress = status_result.get("progress_percentage")
+    if progress is not None:
+        try:
+            progress = max(0.0, min(100.0, float(progress)))
+        except (ValueError, TypeError):
+            progress = 0.0
+    else:
+        # Default for NULL fields in sim tests
+        progress = 0.0
+
+    # Transform to the structure expected by the frontend and tests
+    job_info = {
+        "status": raw_status or "unknown",
+        "current_step": status_result.get("step")
+        if status_result.get("step") is not None
+        else 0,
+        "total_steps": status_result.get("total_steps")
+        if status_result.get("total_steps") is not None
+        else 4,
+        "progress_percentage": int(progress),
+        "step_name": status_result.get("step_name") or "Processing",
+        "message": status_result.get("message") or "Processing",
+        "started_at": status_result.get("started_at"),
+    }
+    if status_result.get("error"):
+        job_info["error"] = status_result.get("error")
+
+    final_result = {
+        "state": state,
+        "processed": (state == "ready"),
+        "job": job_info,
+    }
+
+    if "download_url" in status_result:
+        final_result["download_url"] = status_result["download_url"]
+
+    # Ensure response has no-store cache control as expected by tests
+    response = flask.jsonify(final_result)
+    response.headers["Cache-Control"] = "no-store"
     return response
 
 

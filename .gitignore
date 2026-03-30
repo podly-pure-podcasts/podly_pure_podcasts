@@ -74,3 +74,5 @@ scripts/railway_command.sh
 # Claude local files
 .claude/
 CLAUDE.md
+
+deps/*

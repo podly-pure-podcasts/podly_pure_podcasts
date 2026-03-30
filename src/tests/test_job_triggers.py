@@ -219,12 +219,12 @@ class TestFeedRouteRefresh:
                     )
 
                     with app.test_client() as client:
-                        response = client.get(f"/feed/{feed.id}")
+                        client.get(f"/feed/{feed.id}")
 
                         # start_post_processing should NOT have been called
-                        assert (
-                            not mock_start.called
-                        ), "start_post_processing should not be called on feed GET"
+                        assert not mock_start.called, (
+                            "start_post_processing should not be called on feed GET"
+                        )
 
 
 class TestScheduledRefresh:
@@ -249,7 +249,7 @@ class TestScheduledRefresh:
                 manager._work_event = MagicMock()
                 manager._run_id = None
 
-                with patch.object(manager, "start_post_processing") as mock_start:
+                with patch.object(manager, "start_post_processing"):
                     with patch("app.feeds.fetch_feed") as mock_fetch:
                         mock_fetch.return_value = MagicMock(
                             feed={"title": "Test Feed"},

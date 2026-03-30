@@ -105,7 +105,7 @@ def refine_description_chapters_with_word_refiner(
     log = logger_override or logger
     if not chapters or not transcript_segments:
         return list(chapters)
-    if not getattr(config, "enable_word_level_boundary_refinder", False):
+    if not getattr(config, "enable_word_level_boundary_refiner", False):
         return list(chapters)
 
     all_segments = _segments_for_word_refiner(transcript_segments)

@@ -6,25 +6,27 @@ This script should be run after database migrations to populate the prompt_prese
 import sys
 from pathlib import Path
 
-# Add src to path
+# Add src to path if needed for certain imports
 src_path = Path(__file__).parent.parent
-sys.path.insert(0, str(src_path))
+if str(src_path) not in sys.path:
+    sys.path.insert(0, str(src_path))
 
-from flask import Flask
-from app.extensions import db
-from app.models import PromptPreset
-from prompt_presets import PRESET_DEFINITIONS
+from flask import Flask  # noqa: E402
+
+from app.extensions import db  # noqa: E402
+from app.models import PromptPreset  # noqa: E402
+from prompt_presets import PRESET_DEFINITIONS  # noqa: E402
 
 
 def init_prompt_presets(app: Flask) -> None:
     """Initialize prompt presets in the database."""
     with app.app_context():
         print("Initializing prompt presets...")
-        
+
         for preset_def in PRESET_DEFINITIONS:
             # Check if preset already exists
             existing = PromptPreset.query.filter_by(name=preset_def["name"]).first()
-            
+
             if existing:
                 print(f"  Preset '{preset_def['name']}' already exists, updating...")
                 existing.description = preset_def["description"]
@@ -46,10 +48,10 @@ def init_prompt_presets(app: Flask) -> None:
                     is_default=preset_def["is_default"],
                 )
                 db.session.add(preset)
-        
+
         db.session.commit()
         print("Prompt presets initialized successfully!")
-        
+
         # Display all presets
         presets = PromptPreset.query.all()
         print("\nAvailable presets:")
@@ -64,6 +66,6 @@ if __name__ == "__main__":
     app = Flask(__name__)
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///instance/podly.db"
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-    
+
     db.init_app(app)
     init_prompt_presets(app)

@@ -5,8 +5,10 @@ Android adaptive icons look best when the mark sits inside a clear safe zone
 with a solid background. This keeps the Podly logo readable on busy home
 screens without depending on transparency.
 """
+
 import sys
 from pathlib import Path
+
 from PIL import Image
 
 REPO_ROOT = Path(__file__).parent.parent

@@ -1,10 +1,16 @@
 """Routes for managing prompt presets and viewing processing statistics."""
 
 from flask import Blueprint, current_app, g, jsonify, make_response, request
-from sqlalchemy import func
+from sqlalchemy import func, select
 
 from app.extensions import db
-from app.models import Post, ProcessingStatistics, PromptPreset, User, UserDownload, UserFeedSubscription
+from app.models import (
+    Post,
+    ProcessingStatistics,
+    PromptPreset,
+    User,
+    UserDownload,
+)
 
 preset_bp = Blueprint("preset", __name__, url_prefix="/api/presets")
 
@@ -31,10 +37,15 @@ def _require_admin():
 def list_presets():
     """List all available prompt presets."""
     # Define correct order: conservative -> balanced -> aggressive -> maximum
-    aggressiveness_order = {"conservative": 1, "balanced": 2, "aggressive": 3, "maximum": 4}
+    aggressiveness_order = {
+        "conservative": 1,
+        "balanced": 2,
+        "aggressive": 3,
+        "maximum": 4,
+    }
     presets = PromptPreset.query.all()
     presets.sort(key=lambda p: aggressiveness_order.get(p.aggressiveness, 99))
-    
+
     return jsonify(
         {
             "presets": [
@@ -61,7 +72,7 @@ def list_presets():
 def get_preset(preset_id: int):
     """Get details of a specific preset including prompts."""
     preset = PromptPreset.query.get_or_404(preset_id)
-    
+
     return jsonify(
         {
             "id": preset.id,
@@ -85,24 +96,24 @@ def activate_preset(preset_id: int):
     error_response = _require_admin()
     if error_response:
         return error_response
-    
+
     from app.models import OutputSettings
-    
+
     preset = PromptPreset.query.get_or_404(preset_id)
-    
+
     # Deactivate all presets
     PromptPreset.query.update({"is_active": False})
-    
+
     # Activate the selected preset
     preset.is_active = True
-    
+
     # Also update the output settings min_confidence to match the preset
     output_settings = OutputSettings.query.first()
     if output_settings:
         output_settings.min_confidence = preset.min_confidence
-    
+
     db.session.commit()
-    
+
     return jsonify(
         {
             "message": f"Preset '{preset.name}' activated successfully",
@@ -123,9 +134,9 @@ def create_preset():
     error_response = _require_admin()
     if error_response:
         return error_response
-    
+
     data = request.get_json()
-    
+
     # Validate required fields
     required_fields = [
         "name",
@@ -136,12 +147,14 @@ def create_preset():
     for field in required_fields:
         if field not in data:
             return jsonify({"error": f"Missing required field: {field}"}), 400
-    
+
     # Check if name already exists
     existing = PromptPreset.query.filter_by(name=data["name"]).first()
     if existing:
-        return jsonify({"error": f"Preset with name '{data['name']}' already exists"}), 409
-    
+        return jsonify(
+            {"error": f"Preset with name '{data['name']}' already exists"}
+        ), 409
+
     # Create new preset
     preset = PromptPreset(
         name=data["name"],
@@ -153,10 +166,10 @@ def create_preset():
         is_active=False,  # Don't auto-activate custom presets
         is_default=False,
     )
-    
+
     db.session.add(preset)
     db.session.commit()
-    
+
     return (
         jsonify(
             {
@@ -178,10 +191,10 @@ def update_preset(preset_id: int):
     error_response = _require_admin()
     if error_response:
         return error_response
-    
+
     preset = PromptPreset.query.get_or_404(preset_id)
     data = request.get_json()
-    
+
     # Update fields if provided
     if "name" in data:
         # Check if new name conflicts with existing preset
@@ -189,9 +202,11 @@ def update_preset(preset_id: int):
             PromptPreset.name == data["name"], PromptPreset.id != preset_id
         ).first()
         if existing:
-            return jsonify({"error": f"Preset with name '{data['name']}' already exists"}), 409
+            return jsonify(
+                {"error": f"Preset with name '{data['name']}' already exists"}
+            ), 409
         preset.name = data["name"]
-    
+
     if "description" in data:
         preset.description = data["description"]
     if "aggressiveness" in data:
@@ -202,9 +217,9 @@ def update_preset(preset_id: int):
         preset.user_prompt_template = data["user_prompt_template"]
     if "min_confidence" in data:
         preset.min_confidence = data["min_confidence"]
-    
+
     db.session.commit()
-    
+
     return jsonify(
         {
             "message": "Preset updated successfully",
@@ -223,20 +238,22 @@ def delete_preset(preset_id: int):
     error_response = _require_admin()
     if error_response:
         return error_response
-    
+
     preset = PromptPreset.query.get_or_404(preset_id)
-    
+
     if preset.is_default:
         return jsonify({"error": "Cannot delete default presets"}), 403
-    
+
     if preset.is_active:
         return jsonify(
-            {"error": "Cannot delete active preset. Please activate another preset first."}
+            {
+                "error": "Cannot delete active preset. Please activate another preset first."
+            }
         ), 403
-    
+
     db.session.delete(preset)
     db.session.commit()
-    
+
     return jsonify({"message": f"Preset '{preset.name}' deleted successfully"})
 
 
@@ -280,7 +297,9 @@ def get_summary_statistics():
             func.sum(ProcessingStatistics.total_duration_removed_seconds).label(
                 "total_time_saved_seconds"
             ),
-            func.avg(ProcessingStatistics.percentage_removed).label("avg_percentage_removed"),
+            func.avg(ProcessingStatistics.percentage_removed).label(
+                "avg_percentage_removed"
+            ),
         ).first()
     elif (is_admin and not force_user_scope) or (force_global_scope and is_admin):
         # Admin (default) or explicit global scope: show server-wide stats
@@ -292,7 +311,9 @@ def get_summary_statistics():
             func.sum(ProcessingStatistics.total_duration_removed_seconds).label(
                 "total_time_saved_seconds"
             ),
-            func.avg(ProcessingStatistics.percentage_removed).label("avg_percentage_removed"),
+            func.avg(ProcessingStatistics.percentage_removed).label(
+                "avg_percentage_removed"
+            ),
         ).first()
     else:
         # Regular user: show stats for episodes they've downloaded
@@ -303,16 +324,22 @@ def get_summary_statistics():
             .distinct()
             .subquery()
         )
-        total_stats = db.session.query(
-            func.count(ProcessingStatistics.id).label("total_episodes"),
-            func.sum(ProcessingStatistics.total_ad_segments_removed).label(
-                "total_segments_removed"
-            ),
-            func.sum(ProcessingStatistics.total_duration_removed_seconds).label(
-                "total_time_saved_seconds"
-            ),
-            func.avg(ProcessingStatistics.percentage_removed).label("avg_percentage_removed"),
-        ).filter(ProcessingStatistics.post_id.in_(downloaded_post_ids)).first()
+        total_stats = (
+            db.session.query(
+                func.count(ProcessingStatistics.id).label("total_episodes"),
+                func.sum(ProcessingStatistics.total_ad_segments_removed).label(
+                    "total_segments_removed"
+                ),
+                func.sum(ProcessingStatistics.total_duration_removed_seconds).label(
+                    "total_time_saved_seconds"
+                ),
+                func.avg(ProcessingStatistics.percentage_removed).label(
+                    "avg_percentage_removed"
+                ),
+            )
+            .filter(ProcessingStatistics.post_id.in_(downloaded_post_ids))
+            .first()
+        )
 
     # Convert time saved to hours and minutes
     total_time_saved_seconds = total_stats.total_time_saved_seconds or 0
@@ -325,8 +352,11 @@ def get_summary_statistics():
             "total_ad_segments_removed": int(total_stats.total_segments_removed or 0),
             "total_time_saved_seconds": round(total_time_saved_seconds, 1),
             "total_time_saved_formatted": f"{hours}h {minutes}m",
-            "average_percentage_removed": round(total_stats.avg_percentage_removed or 0, 2),
-            "is_user_specific": current_user is not None and (force_user_scope or not is_admin),
+            "average_percentage_removed": round(
+                total_stats.avg_percentage_removed or 0, 2
+            ),
+            "is_user_specific": current_user is not None
+            and (force_user_scope or not is_admin),
         }
     )
 
@@ -337,21 +367,21 @@ def get_episode_statistics():
     page = request.args.get("page", 1, type=int)
     per_page = request.args.get("per_page", 20, type=int)
     feed_id = request.args.get("feed_id", type=int)
-    
+
     # Build query
     query = (
-        db.session.query(ProcessingStatistics, Post)
+        select(ProcessingStatistics, Post)
         .join(Post, ProcessingStatistics.post_id == Post.id)
         .order_by(ProcessingStatistics.created_at.desc())
     )
-    
+
     # Filter by feed if specified
     if feed_id:
         query = query.filter(Post.feed_id == feed_id)
-    
+
     # Paginate
-    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
-    
+    pagination = db.paginate(query, page=page, per_page=per_page, error_out=False)
+
     episodes = []
     for stat, post in pagination.items:
         episodes.append(
@@ -359,21 +389,29 @@ def get_episode_statistics():
                 "post_id": post.id,
                 "post_title": post.title,
                 "feed_id": post.feed_id,
-                "release_date": post.release_date.isoformat() if post.release_date else None,
+                "release_date": post.release_date.isoformat()
+                if post.release_date
+                else None,
                 "statistics": {
                     "segments_removed": stat.total_ad_segments_removed,
-                    "duration_removed_seconds": round(stat.total_duration_removed_seconds, 1),
+                    "duration_removed_seconds": round(
+                        stat.total_duration_removed_seconds, 1
+                    ),
                     "duration_removed_formatted": _format_duration(
                         stat.total_duration_removed_seconds
                     ),
-                    "original_duration_seconds": round(stat.original_duration_seconds, 1),
-                    "processed_duration_seconds": round(stat.processed_duration_seconds, 1),
+                    "original_duration_seconds": round(
+                        stat.original_duration_seconds, 1
+                    ),
+                    "processed_duration_seconds": round(
+                        stat.processed_duration_seconds, 1
+                    ),
                     "percentage_removed": round(stat.percentage_removed, 2),
                     "processed_at": stat.created_at.isoformat(),
                 },
             }
         )
-    
+
     return jsonify(
         {
             "episodes": episodes,
@@ -394,7 +432,7 @@ def get_episode_statistics_detail(post_id: int):
     """Get detailed statistics for a specific episode."""
     stat = ProcessingStatistics.query.filter_by(post_id=post_id).first_or_404()
     post = Post.query.get_or_404(post_id)
-    
+
     preset = None
     if stat.prompt_preset_id:
         preset_obj = PromptPreset.query.get(stat.prompt_preset_id)
@@ -404,23 +442,29 @@ def get_episode_statistics_detail(post_id: int):
                 "name": preset_obj.name,
                 "aggressiveness": preset_obj.aggressiveness,
             }
-    
+
     return jsonify(
         {
             "post": {
                 "id": post.id,
                 "title": post.title,
                 "feed_id": post.feed_id,
-                "release_date": post.release_date.isoformat() if post.release_date else None,
+                "release_date": post.release_date.isoformat()
+                if post.release_date
+                else None,
             },
             "statistics": {
                 "segments_removed": stat.total_ad_segments_removed,
-                "duration_removed_seconds": round(stat.total_duration_removed_seconds, 1),
+                "duration_removed_seconds": round(
+                    stat.total_duration_removed_seconds, 1
+                ),
                 "duration_removed_formatted": _format_duration(
                     stat.total_duration_removed_seconds
                 ),
                 "original_duration_seconds": round(stat.original_duration_seconds, 1),
-                "original_duration_formatted": _format_duration(stat.original_duration_seconds),
+                "original_duration_formatted": _format_duration(
+                    stat.original_duration_seconds
+                ),
                 "processed_duration_seconds": round(stat.processed_duration_seconds, 1),
                 "processed_duration_formatted": _format_duration(
                     stat.processed_duration_seconds
@@ -438,7 +482,7 @@ def _format_duration(seconds: float) -> str:
     hours = int(seconds // 3600)
     minutes = int((seconds % 3600) // 60)
     secs = int(seconds % 60)
-    
+
     if hours > 0:
         return f"{hours}h {minutes}m {secs}s"
     elif minutes > 0:

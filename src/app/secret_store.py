@@ -1,13 +1,14 @@
 import base64
 import hashlib
 import os
-from typing import Optional
 
 from flask import current_app
 
 
 def _get_secret_material() -> str:
-    secret_any = current_app.config.get("SECRET_KEY") or os.environ.get("PODLY_SECRET_KEY")
+    secret_any = current_app.config.get("SECRET_KEY") or os.environ.get(
+        "PODLY_SECRET_KEY"
+    )
     if not isinstance(secret_any, str) or not secret_any.strip():
         raise RuntimeError("SECRET_KEY is required for secret encryption.")
     return secret_any
@@ -32,12 +33,12 @@ def encrypt_secret(raw_secret: str) -> str:
     return _build_fernet().encrypt(raw_secret.strip().encode("utf-8")).decode("utf-8")
 
 
-def decrypt_secret(ciphertext: str) -> Optional[str]:
+def decrypt_secret(ciphertext: str) -> str | None:
     if not ciphertext or not ciphertext.strip():
         return None
 
     try:
         token = ciphertext.strip().encode("utf-8")
         return _build_fernet().decrypt(token).decode("utf-8")
-    except Exception:
+    except Exception:  # noqa: BLE001
         return None

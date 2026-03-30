@@ -20,7 +20,7 @@ logger = logging.getLogger("global_logger")
 
 costs_bp = Blueprint("costs", __name__)
 
-from app.config_store import read_combined
+from app.config_store import read_combined  # noqa: E402
 
 
 def _compute_cost_per_subscriber(

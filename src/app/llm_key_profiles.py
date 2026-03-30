@@ -1,11 +1,10 @@
 import os
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from app.extensions import db
 from app.models import LLMKeyProfile
 from app.secret_store import decrypt_secret
-
 
 LLM_ENV_KEY_VARS: tuple[str, ...] = (
     "LLM_API_KEY",
@@ -18,7 +17,7 @@ LLM_ENV_KEY_VARS: tuple[str, ...] = (
 )
 
 
-LLM_PROVIDER_CATALOG: Dict[str, Dict[str, Any]] = {
+LLM_PROVIDER_CATALOG: dict[str, dict[str, Any]] = {
     "groq": {
         "label": "Groq",
         "default_model": "groq/openai/gpt-oss-120b",
@@ -83,12 +82,12 @@ LLM_PROVIDER_CATALOG: Dict[str, Dict[str, Any]] = {
 }
 
 
-def mask_secret_preview(value: Any | None) -> Optional[str]:
+def mask_secret_preview(value: Any | None) -> str | None:
     if value is None:
         return None
     try:
         secret = str(value).strip()
-    except Exception:
+    except Exception:  # noqa: BLE001
         return None
     if not secret:
         return None
@@ -158,7 +157,7 @@ def is_llm_key_reference(value: Any | None) -> bool:
     return candidate.startswith("env:") or candidate.startswith("profile:")
 
 
-def parse_llm_profile_ref(value: Any | None) -> Optional[int]:
+def parse_llm_profile_ref(value: Any | None) -> int | None:
     if not isinstance(value, str):
         return None
     candidate = value.strip()
@@ -170,7 +169,7 @@ def parse_llm_profile_ref(value: Any | None) -> Optional[int]:
     return int(raw_id)
 
 
-def parse_llm_env_ref(value: Any | None) -> Optional[str]:
+def parse_llm_env_ref(value: Any | None) -> str | None:
     if not isinstance(value, str):
         return None
     candidate = value.strip()
@@ -183,7 +182,7 @@ def parse_llm_env_ref(value: Any | None) -> Optional[str]:
     return env_norm
 
 
-def resolve_llm_api_key_reference(value: Any | None) -> Optional[str]:
+def resolve_llm_api_key_reference(value: Any | None) -> str | None:
     if not isinstance(value, str):
         return None
 
@@ -202,20 +201,26 @@ def resolve_llm_api_key_reference(value: Any | None) -> Optional[str]:
         if profile is None:
             return None
         decrypted = decrypt_secret(profile.encrypted_api_key)
-        return decrypted.strip() if isinstance(decrypted, str) and decrypted.strip() else None
+        return (
+            decrypted.strip()
+            if isinstance(decrypted, str) and decrypted.strip()
+            else None
+        )
 
     return candidate
 
 
-def list_env_key_options() -> List[Dict[str, Any]]:
-    options: List[Dict[str, Any]] = []
+def list_env_key_options() -> list[dict[str, Any]]:
+    options: list[dict[str, Any]] = []
     for env_var in LLM_ENV_KEY_VARS:
         env_val = os.environ.get(env_var)
         if not isinstance(env_val, str) or not env_val.strip():
             continue
 
         provider = infer_provider_from_env(env_var, env_val)
-        provider_info = LLM_PROVIDER_CATALOG.get(provider, LLM_PROVIDER_CATALOG["custom"])
+        provider_info = LLM_PROVIDER_CATALOG.get(
+            provider, LLM_PROVIDER_CATALOG["custom"]
+        )
         options.append(
             {
                 "ref": f"env:{env_var}",
@@ -231,7 +236,7 @@ def list_env_key_options() -> List[Dict[str, Any]]:
     return options
 
 
-def serialize_saved_key_profile(profile: LLMKeyProfile) -> Dict[str, Any]:
+def serialize_saved_key_profile(profile: LLMKeyProfile) -> dict[str, Any]:
     provider = normalize_provider(profile.provider)
     provider_info = LLM_PROVIDER_CATALOG.get(provider, LLM_PROVIDER_CATALOG["custom"])
     return {
@@ -256,9 +261,9 @@ def serialize_saved_key_profile(profile: LLMKeyProfile) -> Dict[str, Any]:
     }
 
 
-def build_llm_options_payload() -> Dict[str, Any]:
-    providers: List[Dict[str, Any]] = []
-    models: List[Dict[str, Any]] = []
+def build_llm_options_payload() -> dict[str, Any]:
+    providers: list[dict[str, Any]] = []
+    models: list[dict[str, Any]] = []
 
     for provider_id, provider_info in LLM_PROVIDER_CATALOG.items():
         providers.append(
@@ -278,13 +283,15 @@ def build_llm_options_payload() -> Dict[str, Any]:
                 }
             )
 
-    saved_profiles = (
-        LLMKeyProfile.query.order_by(LLMKeyProfile.updated_at.desc(), LLMKeyProfile.id.desc()).all()
-    )
+    saved_profiles = LLMKeyProfile.query.order_by(
+        LLMKeyProfile.updated_at.desc(), LLMKeyProfile.id.desc()
+    ).all()
 
     return {
         "providers": providers,
         "models": models,
         "env_keys": list_env_key_options(),
-        "saved_keys": [serialize_saved_key_profile(profile) for profile in saved_profiles],
+        "saved_keys": [
+            serialize_saved_key_profile(profile) for profile in saved_profiles
+        ],
     }

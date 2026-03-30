@@ -505,7 +505,7 @@ def test_feed_posts_include_podly_description_html(app):
     assert "Podly Post JSON" not in item["podly_description_html"]
 
 
-def test_reprocess_keep_transcript_accepts_local_whisper_model_call(app):
+def test_reprocess_keep_transcript_accepts_local_whisper_model_call(app, monkeypatch):
     app.testing = True
     app.register_blueprint(post_bp)
 
@@ -554,6 +554,9 @@ def test_reprocess_keep_transcript_accepts_local_whisper_model_call(app):
             "app.routes.post_routes.clear_post_processing_data_keep_transcript"
         ) as clear_mock,
     ):
+        monkeypatch.setattr(
+            runtime_config, "whisper", LocalWhisperConfig(model="base.en")
+        )
         mock_mgr.return_value.start_post_processing.return_value = {
             "status": "started",
             "job_id": "job-123",
@@ -569,7 +572,9 @@ def test_reprocess_keep_transcript_accepts_local_whisper_model_call(app):
     clear_mock.assert_called_once()
 
 
-def test_reprocess_keep_transcript_rejects_transcript_for_old_whisper_model(app):
+def test_reprocess_keep_transcript_rejects_transcript_for_old_whisper_model(
+    app, monkeypatch
+):
     app.testing = True
     app.register_blueprint(post_bp)
 

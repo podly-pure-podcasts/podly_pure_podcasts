@@ -21,10 +21,29 @@ logger = logging.getLogger("global_logger")
 
 
 def _scheduler_app_context() -> Any:
+    from flask import current_app, has_app_context
+
+    if has_app_context():
+
+        class _NoOpContext:
+            def __enter__(self) -> None:
+                pass
+
+            def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+                pass
+
+        return _NoOpContext()
+
     scheduler_app = scheduler.app
-    if scheduler_app is None:
-        raise RuntimeError("Scheduler app is not initialized")
-    return scheduler_app.app_context()
+    if scheduler_app is not None:
+        return scheduler_app.app_context()
+
+    # If we are in the main process creation but not in a request,
+    # try to use the current_app if it exists (e.g. CLI)
+    if current_app:
+        return current_app.app_context()
+
+    raise RuntimeError("Scheduler app is not initialized and no app context available")
 
 
 class JobsManager:

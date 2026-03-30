@@ -18,6 +18,9 @@ from app.models import (
     WhisperSettings,
 )
 from shared import defaults as DEFAULTS
+from shared.config import (
+    RemoteWhisperConfig,
+)
 
 
 def _create_default_settings() -> None:
@@ -36,7 +39,7 @@ def _create_default_settings() -> None:
             llm_max_retry_attempts=DEFAULTS.LLM_DEFAULT_MAX_RETRY_ATTEMPTS,
             llm_enable_token_rate_limiting=DEFAULTS.LLM_ENABLE_TOKEN_RATE_LIMITING,
             enable_boundary_refinement=DEFAULTS.ENABLE_BOUNDARY_REFINEMENT,
-            enable_word_level_boundary_refinder=DEFAULTS.ENABLE_WORD_LEVEL_BOUNDARY_REFINDER,
+            enable_word_level_boundary_refiner=DEFAULTS.ENABLE_WORD_LEVEL_BOUNDARY_REFINER,
         )
     )
     db.session.add(
@@ -378,6 +381,7 @@ class TestWhisperRuntimeOverlay:
 
             assert runtime_config.whisper is not None
             assert runtime_config.whisper.whisper_type == "remote"
+            assert isinstance(runtime_config.whisper, RemoteWhisperConfig)
             assert runtime_config.whisper.api_key == "env-remote-key"
             assert runtime_config.whisper.timeout_sec == 120
             assert runtime_config.whisper.chunksize_mb == 48
@@ -398,6 +402,6 @@ class TestWhisperRuntimeOverlay:
 
             assert runtime_config.whisper is not None
             assert runtime_config.whisper.whisper_type == "groq"
-            assert runtime_config.whisper.api_key == "env-groq-key"
-            assert runtime_config.whisper.model == "custom-model"
-            assert runtime_config.whisper.max_retries == 5
+            assert getattr(runtime_config.whisper, "api_key", None) == "env-groq-key"
+            assert getattr(runtime_config.whisper, "model", None) == "custom-model"
+            assert getattr(runtime_config.whisper, "max_retries", None) == 5

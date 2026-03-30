@@ -104,6 +104,39 @@ def setup_scheduler(app: Flask) -> None:
         scheduler.start()
 
 
+def _configure_trigger_cookie_stripping(app: Flask) -> None:
+    """Configure the app to strip session cookies from trigger endpoints.
+
+    This prevents these endpoints from emitting Set-Cookie headers or
+    including 'Cookie' in the Vary header, which is important for caching
+    and performance on endpoints that are often polled.
+    """
+
+    @app.after_request
+    def _strip_trigger_cookies(response: Any) -> Any:
+        try:
+            path = request.path
+        except Exception:  # noqa: BLE001
+            return response
+
+        if path.startswith(("/trigger", "/api/trigger/status")):
+            # Remove any Set-Cookie headers
+            response.headers.pop("Set-Cookie", None)
+
+            # Strip 'Cookie' from Vary header if present
+            vary = response.headers.get("Vary", "")
+            if vary:
+                parts = [
+                    p.strip() for p in vary.split(",") if p.strip().lower() != "cookie"
+                ]
+                if parts:
+                    response.headers["Vary"] = ", ".join(parts)
+                else:
+                    response.headers.pop("Vary", None)
+
+        return response
+
+
 def create_app() -> Flask:
     disable_scheduler = _env_bool("PODLY_DISABLE_SCHEDULER", default=False)
     run_startup = _env_bool("PODLY_RUN_STARTUP", default=True)
@@ -161,6 +194,7 @@ def _create_configured_app(
     _configure_external_loggers()
     _initialize_extensions(app)
     _register_routes_and_middleware(app)
+    _configure_trigger_cookie_stripping(app)
 
     app.config["developer_mode"] = config.developer_mode
 

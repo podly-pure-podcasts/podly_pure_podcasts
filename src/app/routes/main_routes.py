@@ -79,6 +79,37 @@ def landing_status() -> flask.Response:
     )
 
 
+@main_bp.route("/.well-known/assetlinks.json")
+def assetlinks() -> flask.Response:
+    # Try to serve directly from static folder if it exists (for tests/custom files)
+    static_folder = flask.current_app.static_folder
+    if static_folder:
+        file_path = os.path.join(static_folder, ".well-known", "assetlinks.json")
+        if os.path.exists(file_path):
+            return send_from_directory(os.path.dirname(file_path), "assetlinks.json")
+
+    package_name = os.environ.get("PODLY_ANDROID_PACKAGE_NAME")
+    fingerprints_raw = os.environ.get("PODLY_ANDROID_SHA256_CERT_FINGERPRINTS")
+
+    if not package_name or not fingerprints_raw:
+        flask.abort(404)
+
+    fingerprints = [f.strip() for f in fingerprints_raw.split(",") if f.strip()]
+
+    return flask.jsonify(
+        [
+            {
+                "relation": ["delegate_permission/common.handle_all_urls"],
+                "target": {
+                    "namespace": "android_app",
+                    "package_name": package_name,
+                    "sha256_cert_fingerprints": fingerprints,
+                },
+            }
+        ]
+    )
+
+
 @main_bp.route("/<path:path>")
 def catch_all(path: str) -> flask.Response:
     """Serve React app for all frontend routes, or serve static files."""
@@ -92,6 +123,11 @@ def catch_all(path: str) -> flask.Response:
         static_file_path = os.path.join(static_folder, path)
         if os.path.exists(static_file_path) and os.path.isfile(static_file_path):
             return send_from_directory(static_folder, path)
+
+        # If it looks like a direct file request (has an extension), but doesn't exist,
+        # return 404 instead of falling back to the SPA index.html.
+        if "." in os.path.basename(path):
+            flask.abort(404)
 
         # If it's not a static file and index.html exists, serve the React app
         if os.path.exists(os.path.join(static_folder, "index.html")):

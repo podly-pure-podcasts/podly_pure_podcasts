@@ -28,20 +28,20 @@ DECISION RULES:
 This transcript excerpt is broken into segments starting with a timestamp [X] (seconds). Output every segment that is advertisement content.
 
 Example (external sponsor with CTA):
-[53.8] That's all coming after the break.
+[53.8] That's all coming *** after the break ***.
 [59.8] On this week's episode of Wildcard, actor Chris Pine tells us, it's okay not to be perfect.
 [64.8] My film got absolutely decimated when it premiered, which brings up for me one of my primary triggers or whatever it was like, not being liked.
 [73.8] I'm Rachel Martin, Chris Pine on How to Find Joy in Imperfection.
 [77.8] That's on the new podcast, Wildcard.
 [79.8] The Game Where Cards control the conversation.
-[83.8] And welcome back to the show, today we're talking to Professor Hopkins
+[83.8] And welcome *** back to the show ***, today we're talking to Professor Hopkins
 Output: {"ad_segments":[{"segment_offset":59.8,"confidence":0.95},{"segment_offset":64.8,"confidence":0.9},{"segment_offset":73.8,"confidence":0.92},{"segment_offset":77.8,"confidence":0.98},{"segment_offset":79.8,"confidence":0.9}],"content_type":"promotional_external","confidence":0.96}
 
 Example (technical mention, not an ad):
 [4762.7] Our brains are configured differently.
 [4765.6] My brain is configured perfectly for Ruby, perfectly for a dynamically typed language.
 [4831.3] Shopify exists at a scale most programmers never touch, and it still runs on Rails.
-[4933.2] Shopify.com has supported this show.
+[4933.2] *** Shopify.com *** has supported this show.
 Output: {"ad_segments": [{"segment_offset": 4933.2, "confidence": 0.75}], "content_type": "technical_discussion", "confidence": 0.45}
 
 

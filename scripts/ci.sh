@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 
 # Parse command line arguments
@@ -15,13 +16,13 @@ echo "Running 'uv sync --extra dev'"
 echo '============================================================='
 uv sync --extra dev
 echo '============================================================='
-echo "Running 'uv run ruff format .'"
+echo "Running 'uv run ruff format --exclude deps,.venv,.worktrees,.worktrees.bak .'"
 echo '============================================================='
-uv run ruff format .
+uv run ruff format --exclude deps,.venv,.worktrees,.worktrees.bak .
 echo '============================================================='
-echo "Running 'uv run ruff check --fix .'"
+echo "Running 'uv run ruff check --fix --exclude deps,.venv,.worktrees,.worktrees.bak .'"
 echo '============================================================='
-uv run ruff check --fix .
+uv run ruff check --fix --exclude deps,.venv,.worktrees,.worktrees.bak .
 
 # type check
 echo '============================================================='
@@ -31,9 +32,9 @@ uv run ty check
 
 # run tests
 echo '============================================================='
-echo "Running 'uv run pytest --disable-warnings'"
+echo "Running 'uv run pytest --ignore deps --ignore .worktrees --disable-warnings'"
 echo '============================================================='
-uv run pytest --disable-warnings
+uv run pytest --ignore deps --ignore .worktrees --disable-warnings
 
 # Run integration tests only if --int flag is provided
 if [ "$RUN_INTEGRATION" = true ]; then

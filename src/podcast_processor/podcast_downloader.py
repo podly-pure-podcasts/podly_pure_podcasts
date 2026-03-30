@@ -3,14 +3,9 @@ from __future__ import annotations
 import logging
 import os
 import re
-<<<<<<< HEAD
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
-=======
-from pathlib import Path
-from typing import Any, Optional
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
 
 import requests
 import validators
@@ -24,36 +19,18 @@ logger = logging.getLogger(__name__)
 DOWNLOAD_DIR = str(get_in_root())
 
 
-<<<<<<< HEAD
-=======
-class DownloadError(Exception):
-    def __init__(self, message: str, status_code: Optional[int] = None, url: str | None = None):
-        super().__init__(message)
-        self.status_code = status_code
-        self.url = url
-
-
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
 class PodcastDownloader:
     """
     Handles downloading podcast episodes with robust file checking and path management.
     """
 
     def __init__(
-<<<<<<< HEAD
         self, download_dir: str = DOWNLOAD_DIR, logger: logging.Logger | None = None
-=======
-        self, download_dir: str = DOWNLOAD_DIR, logger: Optional[logging.Logger] = None
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
     ):
         self.download_dir = download_dir
         self.logger = logger or logging.getLogger(__name__)
 
-<<<<<<< HEAD
     def download_episode(self, post: Post, dest_path: str) -> str | None:
-=======
-    def download_episode(self, post: Post, dest_path: str) -> Optional[str]:
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         """
         Download a podcast episode if it doesn't already exist.
 
@@ -102,38 +79,10 @@ class PodcastDownloader:
                         file.write(chunk)
                 self.logger.info("Download complete.")
             else:
-<<<<<<< HEAD
                 self.logger.info(
                     f"Failed to download the podcast episode, response: {response.status_code}"
                 )
                 return None
-=======
-                status_code = response.status_code
-                self.logger.info(
-                    "Failed to download the podcast episode, response: %s",
-                    status_code,
-                )
-                parsed_url = None
-                try:
-                    parsed_url = requests.utils.urlparse(audio_link)
-                except Exception:
-                    pass
-
-                host = parsed_url.hostname if parsed_url else None
-                if status_code == 403 and host and "podtrac.com" in host:
-                    raise DownloadError(
-                        "Download blocked by host (HTTP 403). Podtrac often blocks datacenter IPs. "
-                        "Use a proxy/egress IP or a different source.",
-                        status_code=status_code,
-                        url=audio_link,
-                    )
-
-                raise DownloadError(
-                    f"Download failed (HTTP {status_code}).",
-                    status_code=status_code,
-                    url=audio_link,
-                )
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
 
         return download_path
 
@@ -166,7 +115,6 @@ def sanitize_title(title: str) -> str:
 
 def find_audio_link(entry: Any) -> str:
     """Find the audio link in a feed entry."""
-<<<<<<< HEAD
     audio_mime_types: set[str] = {
         "audio/mpeg",
         "audio/mp3",
@@ -225,55 +173,13 @@ def _iter_link_audio_urls(
         href = getattr(link, "href", None)
         if href:
             yield str(href)
-=======
-    # Check for common audio types in order of preference
-    audio_types = [
-        "audio/mpeg",
-        "audio/mp3",
-        "audio/ogg",
-        "audio/x-m4a",
-        "audio/mp4",
-        "audio/aac",
-        "audio/wav",
-        "audio/flac",
-    ]
-    
-    # First pass: look for exact audio type matches
-    for link in entry.links:
-        link_type = getattr(link, "type", "") or ""
-        if link_type in audio_types:
-            href = link.href
-            assert isinstance(href, str)
-            return href
-    
-    # Second pass: look for any audio/* type
-    for link in entry.links:
-        link_type = getattr(link, "type", "") or ""
-        if link_type.startswith("audio/"):
-            href = link.href
-            assert isinstance(href, str)
-            return href
-    
-    # Third pass: look for enclosure with audio file extension
-    for link in entry.links:
-        href = getattr(link, "href", "") or ""
-        if any(href.lower().endswith(ext) for ext in [".mp3", ".ogg", ".m4a", ".mp4", ".aac", ".wav", ".flac"]):
-            assert isinstance(href, str)
-            return href
-
-    return str(entry.id)
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
 
 
 # Backward compatibility - create a default instance
 _default_downloader = PodcastDownloader()
 
 
-<<<<<<< HEAD
 def download_episode(post: Post, dest_path: str) -> str | None:
-=======
-def download_episode(post: Post, dest_path: str) -> Optional[str]:
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
     return _default_downloader.download_episode(post, dest_path)
 
 

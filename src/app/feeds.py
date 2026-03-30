@@ -176,36 +176,75 @@ def is_feed_active_for_user(feed_id: int, user: User) -> bool:
     return False
 
 
-def _should_auto_whitelist_new_posts(feed: Feed, post: Post | None = None) -> bool:
+def _should_auto_whitelist_new_posts(feed: Feed, post: Post | None = None) -> bool:  # noqa: PLR0912
     """Return True when new posts should default to whitelisted for this feed."""
+    from app.auth import is_auth_enabled
+    from app.models import User, UserFeedSubscription
+
+    # 1. Feed-level override
     override = getattr(feed, "auto_whitelist_new_episodes_override", None)
     if override is not None:
         return bool(override)
 
+    # 2. Global setting
     if not getattr(config, "automatically_whitelist_new_episodes", False):
         return False
 
-    from app.auth import is_auth_enabled
-
-    # If auth is disabled, we should auto-whitelist if the global setting is on.
+    # 3. Handle auth-disabled case (including many tests)
     if not is_auth_enabled():
-        return True
+        # Check if any specified subscription preferences exist.
+        sub = (
+            db.session.query(UserFeedSubscription)
+            .filter(UserFeedSubscription.feed_id == feed.id)
+            .first()
+        )
+        if sub is not None:
+            return sub.auto_download_new_episodes
 
+        # If no specified subscriptions, fall back to global behavior for active installations.
+        if db.session.query(User.id).first() is None:
+            return True
+        return True  # Default to True for single-user/no-auth deployments without sub records
+
+    # 4. Handle auth-enabled case: check active subscribers
     memberships = getattr(feed, "user_feeds", None) or []
     if not memberships:
-        # No memberships for this feed. If there are no users in the database at all,
-        # still whitelist. This handles fresh installs where no account exists yet.
+        # No supporters for this feed.
         if db.session.query(User.id).first() is None:
             return True
         return False
 
-    # Check if at least one member has this feed in their "active" list (within allowance)
     for membership in memberships:
         user = membership.user
-        if not user:
+        if not user or not is_feed_active_for_user(feed.id, user):
             continue
 
-        if is_feed_active_for_user(feed.id, user):
+        # Check subscription preference if it exists.
+        sub = (
+            db.session.query(UserFeedSubscription)
+            .filter_by(user_id=user.id, feed_id=feed.id)
+            .first()
+        )
+        # If no subscription record or it's enabled, we whitelist.
+        if sub is None or sub.auto_download_new_episodes:
+            return True
+
+    return False
+
+    # Check if at least one member has this feed in their "active" list (within allowance)
+    # AND has auto-download enabled for it.
+    for membership in memberships:
+        user = membership.user
+        if not user or not is_feed_active_for_user(feed.id, user):
+            continue
+
+        # Check this user's specific setting for this feed
+        sub = (
+            db.session.query(UserFeedSubscription)
+            .filter_by(user_id=user.id, feed_id=feed.id)
+            .first()
+        )
+        if sub and sub.auto_download_new_episodes:
             return True
 
     return False
@@ -258,10 +297,11 @@ def fetch_feed(url: str) -> feedparser.FeedParserDict:
     return feed_data
 
 
-def refresh_feed(feed: Feed) -> None:
+def refresh_feed(feed: Feed) -> list[str]:
     logger.info(f"Refreshing feed with ID: {feed.id}")
     feed_data = fetch_feed(feed.rss_url)
 
+    new_guids = []
     updates = {}
     image_info = feed_data.feed.get("image")
     if image_info and "href" in image_info:
@@ -297,6 +337,8 @@ number_of_episodes_to_whitelist_from_archive_of_new_feed setting: {entry.title}"
                 )
             else:
                 p.whitelisted = _should_auto_whitelist_new_posts(feed, p)
+                if p.whitelisted:
+                    new_guids.append(p.guid)
 
             post_data = {
                 "guid": p.guid,
@@ -335,6 +377,7 @@ number_of_episodes_to_whitelist_from_archive_of_new_feed setting: {entry.title}"
         )
 
     logger.info(f"Feed with ID: {feed.id} refreshed")
+    return new_guids
 
 
 def add_or_refresh_feed(url: str) -> Feed:

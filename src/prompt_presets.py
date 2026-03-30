@@ -2,7 +2,7 @@
 Prompt preset definitions with different aggressiveness levels for ad detection.
 """
 
-from typing import Dict, List
+from typing import Any
 
 # =============================================================================
 # CONSERVATIVE PRESET
@@ -148,7 +148,7 @@ If no ads found: {"ad_segments":[]}
 Output: {"ad_segments":[{"segment_offset":89.2,"confidence":0.85},{"segment_offset":93.1,"confidence":0.80},{"segment_offset":95.4,"confidence":0.92},{"segment_offset":99.8,"confidence":0.90}]}"""
 
 # User prompt template (same for all presets)
-DEFAULT_USER_PROMPT_TEMPLATE = """This is the podcast {{podcast_title}} it is a podcast about {{podcast_topic}}. 
+DEFAULT_USER_PROMPT_TEMPLATE = """This is the podcast {{podcast_title}} it is a podcast about {{podcast_topic}}.
 
 Transcript excerpt follows:
 
@@ -156,7 +156,7 @@ Transcript excerpt follows:
 """
 
 
-PRESET_DEFINITIONS: List[Dict[str, any]] = [
+PRESET_DEFINITIONS: list[dict[str, Any]] = [
     {
         "name": "Conservative",
         "description": "Minimizes false positives. Only flags unmistakable scripted sponsor reads with promo codes or explicit 'brought to you by' language. Best for preserving content.",
@@ -187,7 +187,7 @@ PRESET_DEFINITIONS: List[Dict[str, any]] = [
 ]
 
 
-def get_preset_by_name(name: str) -> Dict[str, any]:
+def get_preset_by_name(name: str) -> dict[str, Any]:
     """Get a preset definition by name."""
     for preset in PRESET_DEFINITIONS:
         if preset["name"].lower() == name.lower():
@@ -195,7 +195,7 @@ def get_preset_by_name(name: str) -> Dict[str, any]:
     raise ValueError(f"Preset '{name}' not found")
 
 
-def get_default_preset() -> Dict[str, any]:
+def get_default_preset() -> dict[str, Any]:
     """Get the default preset definition."""
     for preset in PRESET_DEFINITIONS:
         if preset["is_default"]:

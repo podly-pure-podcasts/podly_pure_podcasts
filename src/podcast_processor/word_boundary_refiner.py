@@ -1,27 +1,18 @@
-<<<<<<< HEAD
 """LLM-based word-boundary refiner.
 
 Note: We intentionally share some call-setup patterns with BoundaryRefiner.
 """
-=======
-from __future__ import annotations
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
 
 import json
 import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
-<<<<<<< HEAD
 from typing import Any, cast
-=======
-from typing import Any, Dict, List, Optional, Tuple
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
 
 import litellm
 from jinja2 import Template
 
-<<<<<<< HEAD
 from podcast_processor.llm_model_call_utils import (
     extract_litellm_content,
     extract_litellm_finish_reason,
@@ -37,22 +28,6 @@ MAX_END_EXTENSION_SECONDS = 15.0
 
 
 @dataclass
-=======
-from app.extensions import db
-from app.models import ModelCall
-from podcast_processor.boundary_refiner import (
-    MAX_END_EXTENSION_SECONDS,
-    MAX_START_EXTENSION_SECONDS,
-    _build_completion_args,
-    _extract_completion_content,
-    _get_or_create_refinement_model_call,
-    _update_refinement_model_call,
-)
-from shared.config import Config, TestWhisperConfig
-
-
-@dataclass(slots=True)
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
 class WordBoundaryRefinement:
     refined_start: float
     refined_end: float
@@ -61,7 +36,6 @@ class WordBoundaryRefinement:
 
 
 class WordBoundaryRefiner:
-<<<<<<< HEAD
     """Refine ad start boundary by finding the first ad word and estimating its time.
 
     This refiner is intentionally heuristic-timed because we only have segment-level
@@ -71,28 +45,11 @@ class WordBoundaryRefiner:
     def __init__(self, config: Config, logger: logging.Logger | None = None):
         self.config = config
         self.logger = logger or logging.getLogger(__name__)
-=======
-    def __init__(
-        self,
-        config: Config,
-        logger: Optional[logging.Logger] = None,
-        model_call_query: Any = None,
-        db_session: Any = None,
-    ) -> None:
-        self.config = config
-        self.logger = logger or logging.getLogger("global_logger")
-        self.model_call_query = model_call_query or ModelCall.query
-        self.db_session = db_session or db.session
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         self.template = self._load_template()
 
     def _load_template(self) -> Template:
         path = (
-<<<<<<< HEAD
             Path(__file__).resolve().parent.parent  # project src root
-=======
-            Path(__file__).resolve().parent.parent
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
             / "word_boundary_refinement_prompt.jinja"
         )
         if path.exists():
@@ -102,13 +59,9 @@ class WordBoundaryRefiner:
 Ad: {{ad_start}}s-{{ad_end}}s
 {% for seg in context_segments %}[seq={{seg.sequence_num}} start={{seg.start_time}} end={{seg.end_time}}] {{seg.text}}
 {% endfor %}
-<<<<<<< HEAD
 Return only one JSON object (no markdown/code fences, no analysis text) with:
 {"refined_start_segment_seq": 0, "refined_start_phrase": "", "refined_end_segment_seq": 0, "refined_end_phrase": "", "start_adjustment_reason": "", "end_adjustment_reason": ""}
 """
-=======
-Return JSON: {"refined_start_segment_seq": 0, "refined_start_phrase": "", "refined_end_segment_seq": 0, "refined_end_phrase": "", "start_adjustment_reason": "", "end_adjustment_reason": ""}"""
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         )
 
     def refine(
@@ -116,19 +69,11 @@ Return JSON: {"refined_start_segment_seq": 0, "refined_start_phrase": "", "refin
         ad_start: float,
         ad_end: float,
         confidence: float,
-<<<<<<< HEAD
         all_segments: list[dict[str, Any]],
         *,
         post_id: int | None = None,
         first_seq_num: int | None = None,
         last_seq_num: int | None = None,
-=======
-        all_segments: List[Dict[str, Any]],
-        *,
-        post_id: Optional[int] = None,
-        first_seq_num: Optional[int] = None,
-        last_seq_num: Optional[int] = None,
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
     ) -> WordBoundaryRefinement:
         context = self._get_context(
             ad_start,
@@ -137,7 +82,6 @@ Return JSON: {"refined_start_segment_seq": 0, "refined_start_phrase": "", "refin
             first_seq_num=first_seq_num,
             last_seq_num=last_seq_num,
         )
-<<<<<<< HEAD
 
         prompt, model_call_id = render_prompt_and_upsert_model_call(
             template=self.template,
@@ -280,150 +224,19 @@ Return JSON: {"refined_start_segment_seq": 0, "refined_start_phrase": "", "refin
             )
             self.logger.warning("Word boundary refine failed: %s", exc)
             return self._fallback(ad_start, ad_end)
-=======
-        if not context:
-            return self._fallback(ad_start, ad_end)
-
-        prompt = self.template.render(
-            ad_start=ad_start,
-            ad_end=ad_end,
-            ad_confidence=confidence,
-            context_segments=context,
-        )
-
-        model_call = _get_or_create_refinement_model_call(
-            config=self.config,
-            db_session=self.db_session,
-            model_call_query=self.model_call_query,
-            model_name_suffix="::word-boundary-refinement",
-            post_id=post_id,
-            first_seq_num=first_seq_num,
-            last_seq_num=last_seq_num,
-            prompt=prompt,
-        )
-
-        if isinstance(self.config.whisper, TestWhisperConfig):
-            fallback = self._fallback(ad_start, ad_end)
-            _update_refinement_model_call(
-                db_session=self.db_session,
-                model_call=model_call,
-                status="success_heuristic",
-                response=None,
-                error_message="test_mode",
-            )
-            return fallback
-
-        try:
-            response = litellm.completion(
-                **_build_completion_args(
-                    config=self.config, prompt=prompt, max_tokens=1536
-                )
-            )
-            content = _extract_completion_content(response)
-            parsed = self._parse_json(content)
-            if parsed is None:
-                fallback = self._fallback(ad_start, ad_end)
-                _update_refinement_model_call(
-                    db_session=self.db_session,
-                    model_call=model_call,
-                    status="success_heuristic",
-                    response=content,
-                    error_message="parse_failed",
-                )
-                return fallback
-
-            refined_start = self._estimate_phrase_time(
-                all_segments=all_segments,
-                context_segments=context,
-                preferred_segment_seq=parsed.get("refined_start_segment_seq"),
-                phrase=parsed.get("refined_start_phrase"),
-                direction="start",
-            )
-            refined_end = self._estimate_phrase_time(
-                all_segments=all_segments,
-                context_segments=context,
-                preferred_segment_seq=parsed.get("refined_end_segment_seq"),
-                phrase=parsed.get("refined_end_phrase"),
-                direction="end",
-            )
-
-            result = WordBoundaryRefinement(
-                refined_start=self._constrain_start(
-                    float(refined_start if refined_start is not None else ad_start),
-                    ad_start,
-                ),
-                refined_end=self._constrain_end(
-                    float(refined_end if refined_end is not None else ad_end),
-                    ad_end,
-                ),
-                start_adjustment_reason=str(
-                    parsed.get("start_adjustment_reason") or "phrase_refinement"
-                ),
-                end_adjustment_reason=str(
-                    parsed.get("end_adjustment_reason") or "phrase_refinement"
-                ),
-            )
-            if result.refined_end <= result.refined_start:
-                result = self._fallback(ad_start, ad_end)
-                _update_refinement_model_call(
-                    db_session=self.db_session,
-                    model_call=model_call,
-                    status="success_heuristic",
-                    response=content,
-                    error_message="invalid_refined_window",
-                )
-                return result
-
-            _update_refinement_model_call(
-                db_session=self.db_session,
-                model_call=model_call,
-                status="success",
-                response=content,
-                error_message=None,
-            )
-            return result
-        except Exception as exc:  # pylint: disable=broad-except
-            self.logger.warning("Word boundary refinement failed: %s", exc)
-            fallback = self._fallback(ad_start, ad_end)
-            _update_refinement_model_call(
-                db_session=self.db_session,
-                model_call=model_call,
-                status="failed_permanent",
-                response=None,
-                error_message=str(exc),
-            )
-            return fallback
-
-    def _parse_json(self, content: str) -> Optional[Dict[str, Any]]:
-        cleaned = re.sub(r"```json|```", "", (content or "").strip())
-        json_candidates = re.findall(r"\{.*?\}", cleaned, re.DOTALL)
-        for candidate in json_candidates:
-            try:
-                loaded = json.loads(candidate)
-            except Exception:
-                continue
-            if isinstance(loaded, dict):
-                return loaded
-        return None
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
 
     def _fallback(self, ad_start: float, ad_end: float) -> WordBoundaryRefinement:
         return WordBoundaryRefinement(
             refined_start=ad_start,
             refined_end=ad_end,
             start_adjustment_reason="heuristic_fallback",
-<<<<<<< HEAD
             end_adjustment_reason="unchanged",
-=======
-            end_adjustment_reason="heuristic_fallback",
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
         )
 
     def _constrain_start(self, estimated_start: float, orig_start: float) -> float:
         return max(estimated_start, orig_start - MAX_START_EXTENSION_SECONDS)
 
     def _constrain_end(self, estimated_end: float, orig_end: float) -> float:
-<<<<<<< HEAD
         # Allow slight forward extension (for late boundary) but cap it.
         return min(estimated_end, orig_end + MAX_END_EXTENSION_SECONDS)
 
@@ -772,15 +585,10 @@ Return JSON: {"refined_start_segment_seq": 0, "refined_start_phrase": "", "refin
             None,
         )
 
-=======
-        return min(estimated_end, orig_end + MAX_END_EXTENSION_SECONDS)
-
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
     def _get_context(
         self,
         ad_start: float,
         ad_end: float,
-<<<<<<< HEAD
         all_segments: list[dict[str, Any]],
         *,
         first_seq_num: int | None,
@@ -888,43 +696,10 @@ Return JSON: {"refined_start_segment_seq": 0, "refined_start_phrase": "", "refin
             direction="end",
         )
         return start_time, end_time
-=======
-        all_segments: List[Dict[str, Any]],
-        *,
-        first_seq_num: Optional[int],
-        last_seq_num: Optional[int],
-    ) -> List[Dict[str, Any]]:
-        if first_seq_num is not None and last_seq_num is not None:
-            selected = [
-                segment
-                for segment in all_segments
-                if first_seq_num - 2
-                <= int(segment.get("sequence_num", -1))
-                <= last_seq_num + 2
-            ]
-            if selected:
-                return selected
-
-        overlapping = [
-            segment
-            for segment in all_segments
-            if float(segment.get("start_time", 0.0)) <= ad_end
-            and float(segment.get("end_time", 0.0)) >= ad_start
-        ]
-        if not overlapping:
-            return []
-
-        first_index = all_segments.index(overlapping[0])
-        last_index = all_segments.index(overlapping[-1])
-        start_index = max(0, first_index - 2)
-        end_index = min(len(all_segments), last_index + 3)
-        return all_segments[start_index:end_index]
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
 
     def _estimate_phrase_time(
         self,
         *,
-<<<<<<< HEAD
         all_segments: list[dict[str, Any]],
         context_segments: list[dict[str, Any]],
         preferred_segment_seq: Any,
@@ -974,65 +749,17 @@ Return JSON: {"refined_start_segment_seq": 0, "refined_start_phrase": "", "refin
             duration = max(0.0, end_time - start_time)
             words = [w.lower() for w in self._split_words(str(seg.get("text", "")))]
             if not words or duration <= 0.0:
-=======
-        all_segments: List[Dict[str, Any]],
-        context_segments: List[Dict[str, Any]],
-        preferred_segment_seq: Any,
-        phrase: Any,
-        direction: str,
-    ) -> Optional[float]:
-        phrase_tokens = [
-            token.lower() for token in self._split_words(str(phrase or ""))
-        ]
-        if not phrase_tokens:
-            return None
-
-        candidates: List[Dict[str, Any]] = []
-        preferred_segment = self._find_segment(all_segments, preferred_segment_seq)
-        if preferred_segment is not None:
-            candidates.append(preferred_segment)
-
-        ordered_context = list(context_segments)
-        try:
-            ordered_context.sort(
-                key=lambda segment: int(segment.get("sequence_num", -1))
-            )
-        except Exception:
-            pass
-        if direction == "end":
-            ordered_context.reverse()
-
-        for segment in ordered_context:
-            if segment not in candidates:
-                candidates.append(segment)
-
-        for segment in candidates:
-            words = [
-                token.lower()
-                for token in self._split_words(str(segment.get("text", "")))
-            ]
-            if not words:
-                continue
-            start_time = float(segment.get("start_time", 0.0))
-            end_time = float(segment.get("end_time", start_time))
-            duration = max(0.0, end_time - start_time)
-            if duration <= 0.0:
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
                 continue
 
             match = self._find_phrase_match(
                 words=words,
                 phrase_tokens=phrase_tokens,
                 direction=direction,
-<<<<<<< HEAD
                 max_words=4,
-=======
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
             )
             if match is None:
                 continue
 
-<<<<<<< HEAD
             match_start_idx, match_end_idx = match
             seconds_per_word = duration / float(len(words))
             if direction == "start":
@@ -1042,22 +769,12 @@ Return JSON: {"refined_start_segment_seq": 0, "refined_start_phrase": "", "refin
             # direction == "end": end boundary at the end of the last matched word.
             estimated = start_time + (float(match_end_idx + 1) * seconds_per_word)
             return min(estimated, end_time)
-=======
-            match_start, match_end = match
-            seconds_per_word = duration / float(len(words))
-            if direction == "start":
-                return min(
-                    start_time + (float(match_start) * seconds_per_word), end_time
-                )
-            return min(start_time + (float(match_end + 1) * seconds_per_word), end_time)
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
 
         return None
 
     def _find_phrase_match(
         self,
         *,
-<<<<<<< HEAD
         words: list[str],
         phrase_tokens: list[str],
         direction: str,
@@ -1071,41 +788,20 @@ Return JSON: {"refined_start_segment_seq": 0, "refined_start_phrase": "", "refin
             for k in range(len(base), 0, -1):
                 target = base[:k]
                 match = self._find_subsequence(words, target, choose="first")
-=======
-        words: List[str],
-        phrase_tokens: List[str],
-        direction: str,
-    ) -> Optional[Tuple[int, int]]:
-        if not words or not phrase_tokens:
-            return None
-
-        max_words = min(4, len(phrase_tokens))
-        if direction == "start":
-            base = phrase_tokens[:max_words]
-            for size in range(len(base), 0, -1):
-                match = self._find_subsequence(words, base[:size], choose="first")
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
                 if match is not None:
                     return match
             return None
 
-<<<<<<< HEAD
         # direction == "end"
         base = phrase_tokens[-max_words:]
         for k in range(len(base), 0, -1):
             target = base[-k:]
             match = self._find_subsequence(words, target, choose="last")
-=======
-        base = phrase_tokens[-max_words:]
-        for size in range(len(base), 0, -1):
-            match = self._find_subsequence(words, base[-size:], choose="last")
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e
             if match is not None:
                 return match
         return None
 
     def _find_subsequence(
-<<<<<<< HEAD
         self, words: list[str], target: list[str], *, choose: str
     ) -> tuple[int, int] | None:
         if not target or len(target) > len(words):
@@ -1256,46 +952,3 @@ Return JSON: {"refined_start_segment_seq": 0, "refined_start_phrase": "", "refin
             logger=self.logger,
             log_prefix="Word boundary refine",
         )
-=======
-        self,
-        words: List[str],
-        target: List[str],
-        *,
-        choose: str,
-    ) -> Optional[Tuple[int, int]]:
-        if not target or len(target) > len(words):
-            return None
-
-        matches: List[Tuple[int, int]] = []
-        target_len = len(target)
-        for index in range(0, len(words) - target_len + 1):
-            if words[index : index + target_len] == target:
-                matches.append((index, index + target_len - 1))
-
-        if not matches:
-            return None
-        return matches[-1] if choose == "last" else matches[0]
-
-    def _find_segment(
-        self, all_segments: List[Dict[str, Any]], segment_seq: Any
-    ) -> Optional[Dict[str, Any]]:
-        try:
-            seq_int = int(segment_seq)
-        except Exception:
-            return None
-
-        for segment in all_segments:
-            if int(segment.get("sequence_num", -1)) == seq_int:
-                return segment
-        return None
-
-    def _split_words(self, text: str) -> List[str]:
-        raw_tokens = [
-            token for token in re.split(r"\s+", (text or "").strip()) if token
-        ]
-        normalized = [self._normalize_token(token) for token in raw_tokens]
-        return [token for token in normalized if token]
-
-    def _normalize_token(self, token: str) -> str:
-        return re.sub(r"(^[^A-Za-z0-9']+)|([^A-Za-z0-9']+$)", "", token)
->>>>>>> 3eb2779c9f2e56f05d9c9c4a67c02f1c83384b8e

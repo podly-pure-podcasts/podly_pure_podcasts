@@ -236,6 +236,26 @@ class ModelCall(db.Model):  # type: ignore[name-defined, misc]
         return f"<ModelCall {self.id} P:{self.post_id} Segs:{self.first_segment_sequence_num}-{self.last_segment_sequence_num} M:{self.model_name} S:{self.status}>"
 
 
+class LLMKeyProfile(db.Model):  # type: ignore[name-defined, misc]
+    __tablename__ = "llm_key_profiles"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.Text, nullable=False)
+    provider = db.Column(db.String(50), nullable=False)
+    encrypted_api_key = db.Column(db.Text, nullable=False)
+    api_key_preview = db.Column(db.Text, nullable=True)
+    default_model = db.Column(db.Text, nullable=True)
+    openai_base_url = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=_utc_now_naive, nullable=False)
+    updated_at = db.Column(
+        db.DateTime, default=_utc_now_naive, onupdate=_utc_now_naive, nullable=False
+    )
+    last_used_at = db.Column(db.DateTime, nullable=True)
+
+    def __repr__(self) -> str:
+        return f"<LLMKeyProfile {self.id} name={self.name} provider={self.provider}>"
+
+
 class Identification(db.Model):  # type: ignore[name-defined, misc]
     __tablename__ = "identification"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -391,10 +411,10 @@ class LLMSettings(db.Model):  # type: ignore[name-defined, misc]
     enable_boundary_refinement = db.Column(
         db.Boolean, nullable=False, default=DEFAULTS.ENABLE_BOUNDARY_REFINEMENT
     )
-    enable_word_level_boundary_refinder = db.Column(
+    enable_word_level_boundary_refiner = db.Column(
         db.Boolean,
         nullable=False,
-        default=DEFAULTS.ENABLE_WORD_LEVEL_BOUNDARY_REFINDER,
+        default=DEFAULTS.ENABLE_WORD_LEVEL_BOUNDARY_REFINER,
     )
     enable_llm_chapter_fallback_tagging = db.Column(
         db.Boolean,
@@ -556,6 +576,25 @@ class DiscordSettings(db.Model):  # type: ignore[name-defined, misc]
     updated_at = db.Column(db.DateTime, nullable=False, default=_utc_now_naive)
 
 
+class EmailSettings(db.Model):  # type: ignore[name-defined, misc]
+    __tablename__ = "email_settings"
+
+    id = db.Column(db.Integer, primary_key=True, default=1)
+    smtp_host = db.Column(db.Text, nullable=True)
+    smtp_port = db.Column(db.Integer, nullable=True)
+    from_email = db.Column(db.Text, nullable=True)
+    smtp_use_ssl = db.Column(db.Boolean, default=False, nullable=False)
+    smtp_use_tls = db.Column(db.Boolean, default=False, nullable=False)
+    smtp_username = db.Column(db.Text, nullable=True)
+    smtp_password = db.Column(db.Text, nullable=True)
+
+    created_at = db.Column(db.DateTime, nullable=False, default=_utc_now_naive)
+    updated_at = db.Column(db.DateTime, nullable=False, default=_utc_now_naive)
+
+    def __repr__(self) -> str:
+        return f"<EmailSettings {self.id} host={self.smtp_host}>"
+
+
 class ChapterFilterSettings(db.Model):  # type: ignore[name-defined, misc]
     __tablename__ = "chapter_filter_settings"
 
@@ -566,3 +605,61 @@ class ChapterFilterSettings(db.Model):  # type: ignore[name-defined, misc]
 
     created_at = db.Column(db.DateTime, nullable=False, default=_utc_now_naive)
     updated_at = db.Column(db.DateTime, nullable=False, default=_utc_now_naive)
+
+
+class PromptPreset(db.Model):  # type: ignore[name-defined, misc]
+    __tablename__ = "prompt_preset"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(255), unique=True, nullable=False)
+    description = db.Column(db.Text)
+    aggressiveness = db.Column(db.String(50), nullable=False)
+    system_prompt = db.Column(db.Text, nullable=False)
+    user_prompt_template = db.Column(db.Text, nullable=False)
+    min_confidence = db.Column(db.Float, nullable=False, default=0.7)
+    is_active = db.Column(db.Boolean, nullable=False, default=False)
+    is_default = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime, default=_utc_now_naive, nullable=False)
+    updated_at = db.Column(
+        db.DateTime, default=_utc_now_naive, onupdate=_utc_now_naive, nullable=False
+    )
+
+
+class ProcessingStatistics(db.Model):  # type: ignore[name-defined, misc]
+    __tablename__ = "processing_statistics"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    post_id = db.Column(
+        db.Integer, db.ForeignKey("post.id"), nullable=False, index=True
+    )
+    original_duration_seconds = db.Column(db.Float, nullable=False)
+    processed_duration_seconds = db.Column(db.Float, nullable=False)
+    total_ad_segments_removed = db.Column(db.Integer, nullable=False)
+    total_duration_removed_seconds = db.Column(db.Float, nullable=False)
+    percentage_removed = db.Column(db.Float, nullable=False)
+    prompt_preset_id = db.Column(db.Integer, db.ForeignKey("prompt_preset.id"))
+    created_at = db.Column(db.DateTime, default=_utc_now_naive, nullable=False)
+
+
+class UserFeedSubscription(db.Model):  # type: ignore[name-defined, misc]
+    __tablename__ = "user_feed_subscription"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=False, index=True
+    )
+    feed_id = db.Column(
+        db.Integer, db.ForeignKey("feed.id"), nullable=False, index=True
+    )
+    auto_download_new_episodes = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, default=_utc_now_naive, nullable=False)
+
+
+class UserDownload(db.Model):  # type: ignore[name-defined, misc]
+    __tablename__ = "user_download"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=False, index=True
+    )
+    post_id = db.Column(
+        db.Integer, db.ForeignKey("post.id"), nullable=False, index=True
+    )
+    downloaded_at = db.Column(db.DateTime, default=_utc_now_naive, nullable=False)
+    is_processed = db.Column(db.Boolean, default=False, nullable=False)

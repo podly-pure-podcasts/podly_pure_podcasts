@@ -6,7 +6,7 @@ making the system more maintainable and easier to configure.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from podcast_processor.llm_concurrency_limiter import (
     ConcurrencyContext,
@@ -34,9 +34,7 @@ class LLMRateLimitingCoordinator:
     - Usage statistics and monitoring
     """
 
-    def __init__(
-        self, config: Config, logger_instance: Optional[logging.Logger] = None
-    ):
+    def __init__(self, config: Config, logger_instance: logging.Logger | None = None):
         """
         Initialize the rate limiting coordinator.
 
@@ -48,12 +46,12 @@ class LLMRateLimitingCoordinator:
         self.logger = logger_instance or logger
 
         # Initialize token rate limiter
-        self.token_limiter: Optional[TokenRateLimiter] = None
+        self.token_limiter: TokenRateLimiter | None = None
         if config.llm_enable_token_rate_limiting:
             self._initialize_token_limiter()
 
         # Initialize concurrency limiter
-        self.concurrency_limiter: Optional[LLMConcurrencyLimiter] = None
+        self.concurrency_limiter: LLMConcurrencyLimiter | None = None
         if getattr(config, "llm_max_concurrent_calls", 3) > 0:
             self._initialize_concurrency_limiter()
 
@@ -81,8 +79,8 @@ class LLMRateLimitingCoordinator:
         )
 
     def validate_per_call_token_limit(
-        self, messages: List[Dict[str, str]], model: str
-    ) -> tuple[bool, Optional[str]]:
+        self, messages: list[dict[str, str]], model: str
+    ) -> tuple[bool, str | None]:
         """
         Validate that messages don't exceed per-call token limit.
 
@@ -109,8 +107,8 @@ class LLMRateLimitingCoordinator:
         return False, error_msg
 
     def prepare_for_api_call(
-        self, messages: List[Dict[str, str]], model: str, call_id: Optional[str] = None
-    ) -> tuple[bool, Optional[str]]:
+        self, messages: list[dict[str, str]], model: str, call_id: str | None = None
+    ) -> tuple[bool, str | None]:
         """
         Prepare for an API call by applying all rate limiting checks.
 
@@ -138,7 +136,7 @@ class LLMRateLimitingCoordinator:
 
     def get_concurrency_context(
         self, timeout: float = 30.0
-    ) -> Optional[ConcurrencyContext]:
+    ) -> ConcurrencyContext | None:
         """
         Get a concurrency context manager for the API call.
 
@@ -149,7 +147,7 @@ class LLMRateLimitingCoordinator:
             return ConcurrencyContext(self.concurrency_limiter, timeout=timeout)
         return None
 
-    def get_usage_statistics(self) -> Dict[str, Any]:
+    def get_usage_statistics(self) -> dict[str, Any]:
         """Get comprehensive usage statistics."""
         stats = {}
 

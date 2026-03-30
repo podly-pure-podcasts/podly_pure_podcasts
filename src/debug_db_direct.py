@@ -57,7 +57,7 @@ for row in cursor.fetchall():
     # Check if trigger_source column exists
     try:
         print(f"  Trigger Source: {row['trigger_source']}")
-    except:
+    except (KeyError, IndexError, sqlite3.Error):
         pass
     print()
 
@@ -79,7 +79,7 @@ for row in cursor.fetchall():
     print(f"  Created: {row['created_at']}")
     try:
         print(f"  Trigger Source: {row['trigger_source']}")
-    except:
+    except (KeyError, IndexError, sqlite3.Error):
         pass
     print()
 

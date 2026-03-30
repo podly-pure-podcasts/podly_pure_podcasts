@@ -40,7 +40,9 @@ def _parse_int(val: Any, *, env_name: str = "") -> int | None:
     except (ValueError, TypeError) as exc:
         logger.warning(
             "Environment variable %s has non-integer value %r; ignoring override: %s",
-            env_name, val, exc,
+            env_name,
+            val,
+            exc,
         )
         return None
 
@@ -56,7 +58,8 @@ def _parse_bool(val: Any, *, env_name: str = "") -> bool | None:
     logger.warning(
         "Environment variable %s has unrecognized boolean value %r; ignoring override. "
         "Valid values: true/false, yes/no, 1/0, on/off",
-        env_name, val,
+        env_name,
+        val,
     )
     return None
 
@@ -102,7 +105,7 @@ def ensure_defaults() -> None:
             "llm_max_retry_attempts": DEFAULTS.LLM_DEFAULT_MAX_RETRY_ATTEMPTS,
             "llm_enable_token_rate_limiting": DEFAULTS.LLM_ENABLE_TOKEN_RATE_LIMITING,
             "enable_boundary_refinement": DEFAULTS.ENABLE_BOUNDARY_REFINEMENT,
-            "enable_word_level_boundary_refinder": DEFAULTS.ENABLE_WORD_LEVEL_BOUNDARY_REFINDER,
+            "enable_word_level_boundary_refiner": DEFAULTS.ENABLE_WORD_LEVEL_BOUNDARY_REFINER,
             "enable_llm_chapter_fallback_tagging": DEFAULTS.ENABLE_LLM_CHAPTER_FALLBACK_TAGGING,
         },
     )
@@ -205,7 +208,7 @@ def read_combined() -> dict[str, Any]:
             "llm_enable_token_rate_limiting": llm.llm_enable_token_rate_limiting,
             "llm_max_input_tokens_per_minute": llm.llm_max_input_tokens_per_minute,
             "enable_boundary_refinement": llm.enable_boundary_refinement,
-            "enable_word_level_boundary_refinder": llm.enable_word_level_boundary_refinder,
+            "enable_word_level_boundary_refiner": llm.enable_word_level_boundary_refiner,
             "enable_llm_chapter_fallback_tagging": llm.enable_llm_chapter_fallback_tagging,
         },
         "whisper": whisper_payload,
@@ -246,7 +249,7 @@ def _update_section_llm(data: dict[str, Any]) -> None:
         "llm_enable_token_rate_limiting",
         "llm_max_input_tokens_per_minute",
         "enable_boundary_refinement",
-        "enable_word_level_boundary_refinder",
+        "enable_word_level_boundary_refiner",
         "enable_llm_chapter_fallback_tagging",
     ]:
         if key in data:
@@ -517,10 +520,10 @@ def to_pydantic_config() -> PydanticConfig:
                 DEFAULTS.ENABLE_BOUNDARY_REFINEMENT,
             )
         ),
-        enable_word_level_boundary_refinder=bool(
+        enable_word_level_boundary_refiner=bool(
             data["llm"].get(
-                "enable_word_level_boundary_refinder",
-                DEFAULTS.ENABLE_WORD_LEVEL_BOUNDARY_REFINDER,
+                "enable_word_level_boundary_refiner",
+                DEFAULTS.ENABLE_WORD_LEVEL_BOUNDARY_REFINER,
             )
         ),
         enable_llm_chapter_fallback_tagging=bool(
@@ -619,31 +622,48 @@ def _apply_top_level_env_overrides(cfg: PydanticConfig) -> None:
     if env_openai_base_url:
         cfg.openai_base_url = env_openai_base_url
 
-    env_openai_timeout = _parse_int(os.environ.get("OPENAI_TIMEOUT"), env_name="OPENAI_TIMEOUT")
+    env_openai_timeout = _parse_int(
+        os.environ.get("OPENAI_TIMEOUT"), env_name="OPENAI_TIMEOUT"
+    )
     if env_openai_timeout is not None:
         cfg.openai_timeout = env_openai_timeout
 
-    env_openai_max_tokens = _parse_int(os.environ.get("OPENAI_MAX_TOKENS"), env_name="OPENAI_MAX_TOKENS")
+    env_openai_max_tokens = _parse_int(
+        os.environ.get("OPENAI_MAX_TOKENS"), env_name="OPENAI_MAX_TOKENS"
+    )
     if env_openai_max_tokens is not None:
         cfg.openai_max_tokens = env_openai_max_tokens
 
-    env_llm_max_concurrent = _parse_int(os.environ.get("LLM_MAX_CONCURRENT_CALLS"), env_name="LLM_MAX_CONCURRENT_CALLS")
+    env_llm_max_concurrent = _parse_int(
+        os.environ.get("LLM_MAX_CONCURRENT_CALLS"), env_name="LLM_MAX_CONCURRENT_CALLS"
+    )
     if env_llm_max_concurrent is not None:
         cfg.llm_max_concurrent_calls = env_llm_max_concurrent
 
-    env_llm_max_retries = _parse_int(os.environ.get("LLM_MAX_RETRY_ATTEMPTS"), env_name="LLM_MAX_RETRY_ATTEMPTS")
+    env_llm_max_retries = _parse_int(
+        os.environ.get("LLM_MAX_RETRY_ATTEMPTS"), env_name="LLM_MAX_RETRY_ATTEMPTS"
+    )
     if env_llm_max_retries is not None:
         cfg.llm_max_retry_attempts = env_llm_max_retries
 
-    env_llm_enable_token_rl = _parse_bool(os.environ.get("LLM_ENABLE_TOKEN_RATE_LIMITING"), env_name="LLM_ENABLE_TOKEN_RATE_LIMITING")
+    env_llm_enable_token_rl = _parse_bool(
+        os.environ.get("LLM_ENABLE_TOKEN_RATE_LIMITING"),
+        env_name="LLM_ENABLE_TOKEN_RATE_LIMITING",
+    )
     if env_llm_enable_token_rl is not None:
         cfg.llm_enable_token_rate_limiting = env_llm_enable_token_rl
 
-    env_llm_max_input_per_call = _parse_int(os.environ.get("LLM_MAX_INPUT_TOKENS_PER_CALL"), env_name="LLM_MAX_INPUT_TOKENS_PER_CALL")
+    env_llm_max_input_per_call = _parse_int(
+        os.environ.get("LLM_MAX_INPUT_TOKENS_PER_CALL"),
+        env_name="LLM_MAX_INPUT_TOKENS_PER_CALL",
+    )
     if env_llm_max_input_per_call is not None:
         cfg.llm_max_input_tokens_per_call = env_llm_max_input_per_call
 
-    env_llm_max_input_per_min = _parse_int(os.environ.get("LLM_MAX_INPUT_TOKENS_PER_MINUTE"), env_name="LLM_MAX_INPUT_TOKENS_PER_MINUTE")
+    env_llm_max_input_per_min = _parse_int(
+        os.environ.get("LLM_MAX_INPUT_TOKENS_PER_MINUTE"),
+        env_name="LLM_MAX_INPUT_TOKENS_PER_MINUTE",
+    )
     if env_llm_max_input_per_min is not None:
         cfg.llm_max_input_tokens_per_minute = env_llm_max_input_per_min
 
@@ -654,19 +674,29 @@ def _apply_remote_whisper_runtime_overrides(whisper: RemoteWhisperConfig) -> Non
     Falls back to OPENAI_API_KEY and OPENAI_BASE_URL when whisper-specific
     env vars are not set.
     """
-    remote_key = os.environ.get("WHISPER_REMOTE_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    remote_key = os.environ.get("WHISPER_REMOTE_API_KEY") or os.environ.get(
+        "OPENAI_API_KEY"
+    )
     if remote_key:
         whisper.api_key = remote_key
-    remote_base = os.environ.get("WHISPER_REMOTE_BASE_URL") or os.environ.get("OPENAI_BASE_URL")
+    remote_base = os.environ.get("WHISPER_REMOTE_BASE_URL") or os.environ.get(
+        "OPENAI_BASE_URL"
+    )
     if remote_base:
         whisper.base_url = remote_base
     remote_model = os.environ.get("WHISPER_REMOTE_MODEL")
     if remote_model:
         whisper.model = remote_model
-    remote_timeout = _parse_int(os.environ.get("WHISPER_REMOTE_TIMEOUT_SEC"), env_name="WHISPER_REMOTE_TIMEOUT_SEC")
+    remote_timeout = _parse_int(
+        os.environ.get("WHISPER_REMOTE_TIMEOUT_SEC"),
+        env_name="WHISPER_REMOTE_TIMEOUT_SEC",
+    )
     if remote_timeout is not None:
         whisper.timeout_sec = remote_timeout
-    remote_chunksize = _parse_int(os.environ.get("WHISPER_REMOTE_CHUNKSIZE_MB"), env_name="WHISPER_REMOTE_CHUNKSIZE_MB")
+    remote_chunksize = _parse_int(
+        os.environ.get("WHISPER_REMOTE_CHUNKSIZE_MB"),
+        env_name="WHISPER_REMOTE_CHUNKSIZE_MB",
+    )
     if remote_chunksize is not None:
         whisper.chunksize_mb = remote_chunksize
 
@@ -679,10 +709,14 @@ def _apply_groq_whisper_runtime_overrides(whisper: GroqWhisperConfig) -> None:
     groq_key = os.environ.get("GROQ_API_KEY")
     if groq_key:
         whisper.api_key = groq_key
-    groq_model = os.environ.get("GROQ_WHISPER_MODEL") or os.environ.get("WHISPER_GROQ_MODEL")
+    groq_model = os.environ.get("GROQ_WHISPER_MODEL") or os.environ.get(
+        "WHISPER_GROQ_MODEL"
+    )
     if groq_model:
         whisper.model = groq_model
-    groq_max_retries = _parse_int(os.environ.get("GROQ_MAX_RETRIES"), env_name="GROQ_MAX_RETRIES")
+    groq_max_retries = _parse_int(
+        os.environ.get("GROQ_MAX_RETRIES"), env_name="GROQ_MAX_RETRIES"
+    )
     if groq_max_retries is not None:
         whisper.max_retries = groq_max_retries
 
@@ -776,11 +810,25 @@ def _configure_remote_whisper(cfg: PydanticConfig) -> None:
     existing_lang_any = getattr(cfg.whisper, "language", "en")
     lang: str = existing_lang_any if isinstance(existing_lang_any, str) else "en"
 
-    parsed_timeout = _parse_int(os.environ.get("WHISPER_REMOTE_TIMEOUT_SEC"), env_name="WHISPER_REMOTE_TIMEOUT_SEC")
-    timeout_sec: int = parsed_timeout if parsed_timeout is not None else int(getattr(cfg.whisper, "timeout_sec", 600))
+    parsed_timeout = _parse_int(
+        os.environ.get("WHISPER_REMOTE_TIMEOUT_SEC"),
+        env_name="WHISPER_REMOTE_TIMEOUT_SEC",
+    )
+    timeout_sec: int = (
+        parsed_timeout
+        if parsed_timeout is not None
+        else int(getattr(cfg.whisper, "timeout_sec", 600))
+    )
 
-    parsed_chunksize = _parse_int(os.environ.get("WHISPER_REMOTE_CHUNKSIZE_MB"), env_name="WHISPER_REMOTE_CHUNKSIZE_MB")
-    chunksize_mb: int = parsed_chunksize if parsed_chunksize is not None else int(getattr(cfg.whisper, "chunksize_mb", 24))
+    parsed_chunksize = _parse_int(
+        os.environ.get("WHISPER_REMOTE_CHUNKSIZE_MB"),
+        env_name="WHISPER_REMOTE_CHUNKSIZE_MB",
+    )
+    chunksize_mb: int = (
+        parsed_chunksize
+        if parsed_chunksize is not None
+        else int(getattr(cfg.whisper, "chunksize_mb", 24))
+    )
 
     cfg.whisper = RemoteWhisperConfig(
         model=rem_model,
@@ -819,8 +867,14 @@ def _configure_groq_whisper(cfg: PydanticConfig) -> None:
     existing_lang_any = getattr(cfg.whisper, "language", "en")
     groq_lang: str = existing_lang_any if isinstance(existing_lang_any, str) else "en"
 
-    parsed_max_retries = _parse_int(os.environ.get("GROQ_MAX_RETRIES"), env_name="GROQ_MAX_RETRIES")
-    max_retries: int = parsed_max_retries if parsed_max_retries is not None else int(getattr(cfg.whisper, "max_retries", 3))
+    parsed_max_retries = _parse_int(
+        os.environ.get("GROQ_MAX_RETRIES"), env_name="GROQ_MAX_RETRIES"
+    )
+    max_retries: int = (
+        parsed_max_retries
+        if parsed_max_retries is not None
+        else int(getattr(cfg.whisper, "max_retries", 3))
+    )
 
     cfg.whisper = GroqWhisperConfig(
         api_key=groq_api_key,

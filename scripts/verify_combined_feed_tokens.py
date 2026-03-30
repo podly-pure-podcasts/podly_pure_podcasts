@@ -23,7 +23,6 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Optional, Tuple, List, Dict
 
 # Default internal port - Waitress serves on 5001 in production
 INTERNAL_PORT = os.environ.get("FLASK_PORT", "5001")
@@ -40,12 +39,12 @@ def print_schema():
     print("=" * 60)
     print("A) feed_access_token Schema")
     print("=" * 60)
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
     result = cursor.execute("PRAGMA table_info(feed_access_token)").fetchall()
     conn.close()
-    
+
     columns = [row[1] for row in result]
     print(f"Columns: {columns}")
     print()
@@ -53,93 +52,107 @@ def print_schema():
     print("-" * 50)
     for row in result:
         print(f"{row[0]:<4} {row[1]:<15} {row[2]:<12} {row[3]:<8} {row[5]:<4}")
-    
+
     print("\nKey columns:")
     print("  - token_id: URL parameter 'feed_token'")
     print("  - token_secret: URL parameter 'feed_secret'")
     print("  - feed_id: NULL for combined tokens, integer for feed-scoped tokens")
-    
+
     # Check if 'revoked' column exists
-    if 'revoked' in columns:
+    if "revoked" in columns:
         print("  - revoked: Boolean flag for revoked tokens")
     else:
-        print("  - NOTE: 'revoked' column not found - queries will not filter by revoked status")
-    
+        print(
+            "  - NOTE: 'revoked' column not found - queries will not filter by revoked status"
+        )
+
     return columns
 
 
-def verify_token_bounds(columns: List[str]):
+def verify_token_bounds(columns: list[str]):
     """Verify token creation is bounded (no DB bloat)."""
     print("\n" + "=" * 60)
     print("B) Token Creation Bounds Check")
     print("=" * 60)
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Build WHERE clause based on available columns
-    revoked_filter = "AND revoked = 0" if 'revoked' in columns else ""
-    
+    revoked_filter = "AND revoked = 0" if "revoked" in columns else ""
+
     # Count combined tokens (feed_id IS NULL)
-    cursor.execute(f"SELECT COUNT(*) FROM feed_access_token WHERE feed_id IS NULL {revoked_filter}")
+    cursor.execute(
+        f"SELECT COUNT(*) FROM feed_access_token WHERE feed_id IS NULL {revoked_filter}"
+    )
     combined_count = cursor.fetchone()[0]
-    
+
     # Count feed-scoped tokens (feed_id IS NOT NULL)
-    cursor.execute(f"SELECT COUNT(*) FROM feed_access_token WHERE feed_id IS NOT NULL {revoked_filter}")
+    cursor.execute(
+        f"SELECT COUNT(*) FROM feed_access_token WHERE feed_id IS NOT NULL {revoked_filter}"
+    )
     feed_scoped_count = cursor.fetchone()[0]
-    
+
     # Count unique (user_id, feed_id) pairs using printf for safety
     cursor.execute(f"""
-        SELECT COUNT(DISTINCT printf('%d-%d', user_id, feed_id)) 
-        FROM feed_access_token 
+        SELECT COUNT(DISTINCT printf('%d-%d', user_id, feed_id))
+        FROM feed_access_token
         WHERE feed_id IS NOT NULL {revoked_filter}
     """)
     unique_feed_scoped = cursor.fetchone()[0]
-    
+
     # Count total subscriptions
     cursor.execute("SELECT COUNT(*) FROM user_feed_subscription")
     total_subscriptions = cursor.fetchone()[0]
-    
+
     conn.close()
-    
+
     print(f"Combined tokens (feed_id=NULL): {combined_count}")
     print(f"Feed-scoped tokens (feed_id!=NULL): {feed_scoped_count}")
     print(f"Unique (user_id, feed_id) pairs: {unique_feed_scoped}")
     print(f"Total subscriptions: {total_subscriptions}")
-    
+
     if feed_scoped_count == unique_feed_scoped:
         print("\n[PASS] Token creation is bounded - one token per (user_id, feed_id)")
     else:
-        print(f"\n[INFO] Found {feed_scoped_count - unique_feed_scoped} extra tokens (may be from token rotation)")
-    
+        print(
+            f"\n[INFO] Found {feed_scoped_count - unique_feed_scoped} extra tokens (may be from token rotation)"
+        )
+
     if feed_scoped_count <= total_subscriptions * 2:  # Allow some slack for rotation
-        print(f"[PASS] Feed-scoped tokens ({feed_scoped_count}) reasonable vs subscriptions ({total_subscriptions})")
+        print(
+            f"[PASS] Feed-scoped tokens ({feed_scoped_count}) reasonable vs subscriptions ({total_subscriptions})"
+        )
     else:
-        print(f"[WARN] Many more feed-scoped tokens than subscriptions - possible bloat")
+        print("[WARN] Many more feed-scoped tokens than subscriptions - possible bloat")
 
 
-def get_combined_token(columns: List[str]) -> Optional[Tuple[str, str]]:
+def get_combined_token(columns: list[str]) -> tuple[str, str] | None:
     """Get a combined token (feed_id=NULL) from DB."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    revoked_filter = "AND revoked = 0" if 'revoked' in columns else ""
-    cursor.execute(f"SELECT token_id, token_secret FROM feed_access_token WHERE feed_id IS NULL {revoked_filter} LIMIT 1")
+    revoked_filter = "AND revoked = 0" if "revoked" in columns else ""
+    cursor.execute(
+        f"SELECT token_id, token_secret FROM feed_access_token WHERE feed_id IS NULL {revoked_filter} LIMIT 1"
+    )
     row = cursor.fetchone()
     conn.close()
     return (row[0], row[1]) if row else None
 
 
-def lookup_token_feed_id(token_id: str) -> Optional[int]:
+def lookup_token_feed_id(token_id: str) -> int | None:
     """Look up feed_id for a token."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT feed_id FROM feed_access_token WHERE token_id = ?", (token_id,))
+    cursor.execute(
+        "SELECT feed_id FROM feed_access_token WHERE token_id = ?", (token_id,)
+    )
     row = cursor.fetchone()
     conn.close()
     return row[0] if row else None
 
 
-def lookup_post_feed_id(guid: str) -> Optional[int]:
+def lookup_post_feed_id(guid: str) -> int | None:
     """Look up feed_id for a post by GUID."""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -149,9 +162,9 @@ def lookup_post_feed_id(guid: str) -> Optional[int]:
     return row[0] if row else None
 
 
-def fetch_combined_feed(base_url: str, token_id: str, token_secret: str) -> Optional[str]:
+def fetch_combined_feed(base_url: str, token_id: str, token_secret: str) -> str | None:
     """Fetch combined feed XML from server.
-    
+
     Args:
         base_url: Base URL to fetch from (e.g., 'https://your-domain.com')
         token_id: Combined token ID
@@ -163,15 +176,15 @@ def fetch_combined_feed(base_url: str, token_id: str, token_secret: str) -> Opti
         req.add_header("User-Agent", "Podly-Verification/1.0")
         with urllib.request.urlopen(req, timeout=30) as response:
             return response.read().decode("utf-8", "ignore")
-    except Exception as e:
+    except (urllib.error.URLError, ConnectionError, TimeoutError) as e:
         print(f"[ERROR] Failed to fetch combined feed: {e}")
         print(f"  URL: {url}")
         return None
 
 
-def extract_enclosure_urls(xml_content: str) -> List[str]:
+def extract_enclosure_urls(xml_content: str) -> list[str]:
     """Extract enclosure URLs from RSS XML.
-    
+
     Applies html.unescape() to convert &amp; to & in URLs.
     """
     # Use regex to avoid XML parsing issues with namespaces
@@ -181,7 +194,7 @@ def extract_enclosure_urls(xml_content: str) -> List[str]:
     return [html.unescape(url) for url in raw_urls]
 
 
-def extract_guid_from_url(url: str) -> Optional[str]:
+def extract_guid_from_url(url: str) -> str | None:
     """Extract post GUID from enclosure URL."""
     match = re.search(r"/api/posts/([^/]+)/download", url)
     if match:
@@ -189,23 +202,25 @@ def extract_guid_from_url(url: str) -> Optional[str]:
     return None
 
 
-def count_jobs_for_guid(guid: str, trigger_source: Optional[str] = None) -> int:
+def count_jobs_for_guid(guid: str, trigger_source: str | None = None) -> int:
     """Count processing jobs for a specific GUID."""
     conn = get_db_connection()
     cursor = conn.cursor()
     if trigger_source:
         cursor.execute(
             "SELECT COUNT(*) FROM processing_job WHERE post_guid = ? AND trigger_source = ?",
-            (guid, trigger_source)
+            (guid, trigger_source),
         )
     else:
-        cursor.execute("SELECT COUNT(*) FROM processing_job WHERE post_guid = ?", (guid,))
+        cursor.execute(
+            "SELECT COUNT(*) FROM processing_job WHERE post_guid = ?", (guid,)
+        )
     count = cursor.fetchone()[0]
     conn.close()
     return count
 
 
-def http_get(url: str, host_header: str = "") -> Tuple[int, str]:
+def http_get(url: str, host_header: str = "") -> tuple[int, str]:
     """Make HTTP GET request and return (status_code, body)."""
     try:
         req = urllib.request.Request(url)
@@ -216,112 +231,135 @@ def http_get(url: str, host_header: str = "") -> Tuple[int, str]:
             return response.status, response.read().decode("utf-8", "ignore")
     except urllib.error.HTTPError as e:
         return e.code, e.read().decode("utf-8", "ignore") if e.fp else ""
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         return 0, str(e)
 
 
-def verify_enclosure_tokens(columns: List[str], base_url: str) -> Tuple[bool, Optional[str], Optional[str], Optional[str], Optional[str]]:
+def _verify_single_enclosure(
+    url: str,
+    combined_token_id: str,
+) -> tuple[bool, int | None, str | None, str | None, str | None]:
+    """Helper to verify a single enclosure URL."""
+    parsed = urllib.parse.urlparse(url)
+    params = urllib.parse.parse_qs(parsed.query)
+
+    enclosure_token = params.get("feed_token", [None])[0]
+    if not enclosure_token:
+        print(f"[WARN] No feed_token in URL: {url[:60]}...")
+        return False, None, None, None, parsed.netloc
+
+    guid = extract_guid_from_url(url)
+
+    # Check 1: Enclosure token differs from combined token
+    if enclosure_token == combined_token_id:
+        print(f"[FAIL] Enclosure uses combined token! {enclosure_token[:8]}...")
+        return False, None, None, enclosure_token, parsed.netloc
+
+    # Check 2: Enclosure token is feed-scoped (feed_id != NULL)
+    token_feed_id = lookup_token_feed_id(enclosure_token)
+    if token_feed_id is None:
+        print(
+            f"[FAIL] Enclosure token {enclosure_token[:8]}... has feed_id=NULL (should be feed-scoped)"
+        )
+        return False, None, None, enclosure_token, parsed.netloc
+
+    # Check 3: Token's feed_id matches post's feed_id
+    if guid:
+        post_feed_id = lookup_post_feed_id(guid)
+        if post_feed_id and token_feed_id != post_feed_id:
+            print(
+                f"[FAIL] Token feed_id={token_feed_id} != post feed_id={post_feed_id}"
+            )
+            return False, token_feed_id, guid, enclosure_token, parsed.netloc
+
+    # Check 4: URL uses public domain (not localhost/127.0.0.1)
+    if "localhost" in parsed.netloc or "127.0.0.1" in parsed.netloc:
+        print(f"[FAIL] Enclosure URL uses localhost: {parsed.netloc}")
+        return False, token_feed_id, guid, enclosure_token, parsed.netloc
+
+    return True, token_feed_id, guid, enclosure_token, parsed.netloc
+
+
+def verify_enclosure_tokens(
+    columns: list[str], base_url: str
+) -> tuple[bool, str | None, str | None, str | None, str | None]:
     """
     Main verification: fetch combined feed and verify enclosure tokens are feed-scoped.
-    
+
     Returns:
         (success, sample_enclosure_url, sample_guid, combined_token_id, combined_secret)
     """
     print("\n" + "=" * 60)
     print("C) Enclosure Token Verification (Automated)")
     print("=" * 60)
-    
+
     # Get combined token
     combined = get_combined_token(columns)
     if not combined:
         print("[SKIP] No combined token found in database")
         return False, None, None, None, None
-    
+
     combined_token_id, combined_secret = combined
     print(f"Combined token: {combined_token_id[:8]}...")
     print(f"Combined secret: {combined_secret[:8]}...")
-    
+
     # Fetch combined feed from public URL
     print(f"Fetching combined feed from {base_url}...")
     xml_content = fetch_combined_feed(base_url, combined_token_id, combined_secret)
     if not xml_content:
         return False, None, None, None, None
-    
+
     print(f"Feed fetched: {len(xml_content)} bytes")
-    
+
     # Extract enclosure URLs
     enclosure_urls = extract_enclosure_urls(xml_content)
     if not enclosure_urls:
         print("[WARN] No enclosure URLs found in feed")
         return False, None, None, None, None
-    
+
     print(f"Found {len(enclosure_urls)} enclosure URLs")
-    
+
     # Verify first 10 enclosures
     checked = 0
     passed = 0
     sample_url = None
     sample_guid = None
-    
+
     for url in enclosure_urls[:10]:
-        # Extract feed_token from URL
-        parsed = urllib.parse.urlparse(url)
-        params = urllib.parse.parse_qs(parsed.query)
-        
-        enclosure_token = params.get("feed_token", [None])[0]
-        if not enclosure_token:
-            print(f"[WARN] No feed_token in URL: {url[:60]}...")
-            continue
-        
         checked += 1
-        guid = extract_guid_from_url(url)
-        
-        # Check 1: Enclosure token differs from combined token
-        if enclosure_token == combined_token_id:
-            print(f"[FAIL] Enclosure uses combined token! {enclosure_token[:8]}...")
+        ok, token_feed_id, guid, enclosure_token, host = _verify_single_enclosure(
+            url, combined_token_id
+        )
+
+        if not ok:
             continue
-        
-        # Check 2: Enclosure token is feed-scoped (feed_id != NULL)
-        token_feed_id = lookup_token_feed_id(enclosure_token)
-        if token_feed_id is None:
-            print(f"[FAIL] Enclosure token {enclosure_token[:8]}... has feed_id=NULL (should be feed-scoped)")
-            continue
-        
-        # Check 3: Token's feed_id matches post's feed_id
-        if guid:
-            post_feed_id = lookup_post_feed_id(guid)
-            if post_feed_id and token_feed_id != post_feed_id:
-                print(f"[FAIL] Token feed_id={token_feed_id} != post feed_id={post_feed_id}")
-                continue
-        
-        # Check 4: URL uses public domain (not localhost/127.0.0.1)
-        if "localhost" in parsed.netloc or "127.0.0.1" in parsed.netloc:
-            print(f"[FAIL] Enclosure URL uses localhost: {parsed.netloc}")
-            continue
-        
+
         # Check 5: URL uses HTTPS scheme
+        parsed = urllib.parse.urlparse(url)
         if parsed.scheme != "https":
             print(f"[WARN] Enclosure URL uses {parsed.scheme} instead of https")
-        
-        print(f"[PASS] Token {enclosure_token[:8]}... -> feed_id={token_feed_id}, scheme={parsed.scheme}, host={parsed.netloc}")
+
+        print(
+            f"[PASS] Token {enclosure_token[:8]}... -> feed_id={token_feed_id}, scheme={parsed.scheme}, host={host}"
+        )
         passed += 1
-        
+
         if sample_url is None:
             sample_url = url
             sample_guid = guid
-    
+
     print(f"\nResult: {passed}/{checked} enclosures use correct feed-scoped tokens")
-    
+
     if sample_url:
-        print(f"\nSample enclosure URL for end-to-end testing:")
+        print("\nSample enclosure URL for end-to-end testing:")
         print(f"  URL: {sample_url}")
         print(f"  GUID: {sample_guid}")
-    
+
     success = passed == checked and checked > 0
     return success, sample_url, sample_guid, combined_token_id, combined_secret
 
 
-def http_get_with_range(url: str, range_header: str) -> Tuple[int, str]:
+def http_get_with_range(url: str, range_header: str) -> tuple[int, str]:
     """Make HTTP GET request with Range header and return (status_code, body)."""
     try:
         req = urllib.request.Request(url)
@@ -331,165 +369,173 @@ def http_get_with_range(url: str, range_header: str) -> Tuple[int, str]:
             return response.status, response.read().decode("utf-8", "ignore")
     except urllib.error.HTTPError as e:
         return e.code, e.read().decode("utf-8", "ignore") if e.fp else ""
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         return 0, str(e)
 
 
-def test_end_to_end_job_creation(base_url: str, enclosure_url: str, guid: str, 
-                                  combined_token_id: str, combined_secret: str) -> bool:
-    """
-    End-to-end test that proves:
-    1. Probe requests (HEAD, small Range) do NOT create jobs
-    2. Full GET with feed-scoped token creates a job (returns 503)
-    3. Combined token does NOT create a job (returns 503 or 204)
-    
-    This is the deterministic test that proves Podcast Addict will trigger processing.
-    Uses public URLs (via Caddy) for all requests.
-    
-    Expected responses:
-    - Probe (HEAD/small Range): 204 No Content, no job
-    - Feed-scoped full GET: 503 Service Unavailable + Retry-After, job created
-    - Combined token: 503 Service Unavailable, no job created
-    - Already processed: 200 OK with audio
-    """
-    print("\n" + "=" * 60)
-    print("F) End-to-End Job Creation Test")
-    print("=" * 60)
-    
-    print(f"Testing GUID: {guid}")
-    print(f"Base URL: {base_url}")
-    
-    # Count existing jobs for this GUID
-    initial_job_count = count_jobs_for_guid(guid)
-    print(f"Initial job count for GUID: {initial_job_count}")
-    
-    # --- Step 1: Probe request (small Range) - should NOT trigger job ---
+def _test_step_probe(enclosure_url: str, initial_job_count: int, guid: str) -> bool:
+    """Step 1: Probe request should NOT trigger job."""
     print("\nStep 1: Probe request (Range: bytes=0-1023) - should NOT trigger...")
     status_probe, body_probe = http_get_with_range(enclosure_url, "bytes=0-1023")
     print(f"  Response: {status_probe}")
-    print(f"  Body: {body_probe[:50]}..." if len(body_probe) > 50 else f"  Body: {body_probe}")
-    
+    print(
+        f"  Body: {body_probe[:50]}..."
+        if len(body_probe) > 50
+        else f"  Body: {body_probe}"
+    )
+
     post_probe_count = count_jobs_for_guid(guid)
     print(f"  Job count after probe: {post_probe_count}")
-    
-    probe_triggered = post_probe_count > initial_job_count
-    if probe_triggered:
+
+    if post_probe_count > initial_job_count:
         print("  [FAIL] Probe request triggered job creation!")
-        probe_ok = False
-    elif status_probe == 204:
+        return False
+    if status_probe == 204:
         print("  [PASS] Probe returned 204, no job created")
-        probe_ok = True
-    elif status_probe == 200:
+        return True
+    if status_probe == 200:
         print("  [INFO] Episode already processed (200)")
-        probe_ok = True
-    else:
-        print(f"  [WARN] Unexpected probe response: {status_probe}")
-        probe_ok = status_probe in (204, 206)  # 206 Partial Content is also acceptable
-    
-    # --- Step 2: Full GET with feed-scoped token - should trigger job ---
+        return True
+
+    print(f"  [WARN] Unexpected probe response: {status_probe}")
+    return status_probe in (204, 206)
+
+
+def _test_step_full_get(enclosure_url: str, post_probe_count: int, guid: str) -> bool:
+    """Step 2: Full GET should trigger job."""
     print("\nStep 2: Full GET (feed-scoped token) - should trigger job...")
-    print(f"  URL: {enclosure_url[:80]}...")
-    
     status, body = http_get(enclosure_url)
     print(f"  Response: {status}")
     print(f"  Body: {body[:100]}..." if len(body) > 100 else f"  Body: {body}")
-    
+
     post_enclosure_count = count_jobs_for_guid(guid)
     print(f"  Job count after full GET: {post_enclosure_count}")
-    
-    enclosure_triggered = post_enclosure_count > post_probe_count
+
     if status == 200:
         print("  [INFO] Episode already processed - skipping job creation check")
-        enclosure_ok = True
-    elif status == 503 and enclosure_triggered:
-        print("  [PASS] Feed-scoped token triggered job creation (503 + job)")
-        enclosure_ok = True
-    elif status == 503 and not enclosure_triggered:
-        # Could be cooldown or existing job
-        print("  [INFO] 503 but no new job - may be cooldown or existing job")
-        enclosure_ok = True  # Not a failure
-    else:
-        print(f"  [WARN] Unexpected response: {status} (expected 503 or 200)")
-        enclosure_ok = False
-    
-    # --- Step 3: Combined token request - should NOT trigger job ---
+        return True
+    if status == 503:
+        if post_enclosure_count > post_probe_count:
+            print("  [PASS] Feed-scoped token triggered job creation (503 + job)")
+        else:
+            print("  [INFO] 503 but no new job - may be cooldown or existing job")
+        return True
+
+    print(f"  [WARN] Unexpected response: {status} (expected 503 or 200)")
+    return False
+
+
+def _test_step_combined(
+    base_url: str,
+    guid: str,
+    combined_token_id: str,
+    combined_secret: str,
+    post_enclosure_count: int,
+) -> bool:
+    """Step 3: Combined token should NOT trigger job."""
     print("\nStep 3: Full GET (combined token) - should NOT trigger...")
     combined_url = f"{base_url}/api/posts/{guid}/download?feed_token={combined_token_id}&feed_secret={combined_secret}"
     print(f"  URL: {combined_url[:80]}...")
-    
+
     status2, body2 = http_get(combined_url)
     print(f"  Response: {status2}")
     print(f"  Body: {body2[:100]}..." if len(body2) > 100 else f"  Body: {body2}")
-    
+
     post_combined_count = count_jobs_for_guid(guid)
     print(f"  Job count after combined token request: {post_combined_count}")
-    
-    combined_triggered = post_combined_count > post_enclosure_count
-    if combined_triggered:
+
+    if post_combined_count > post_enclosure_count:
         print("  [FAIL] Combined token triggered job creation (should be read-only!)")
-        combined_ok = False
-    elif status2 in (503, 204):
+        return False
+    if status2 in (503, 204, 200):
         print(f"  [PASS] Combined token returned {status2}, no job created")
-        combined_ok = True
-    elif status2 == 200:
-        print("  [INFO] Episode already processed (200)")
-        combined_ok = True
-    else:
-        print(f"  [WARN] Unexpected response: {status2}")
-        combined_ok = False
-    
-    # Summary
-    print("\nEnd-to-end test result:")
+        return True
+
+    print(f"  [WARN] Unexpected response: {status2}")
+    return False
+
+
+def test_end_to_end_job_creation(
+    base_url: str,
+    enclosure_url: str,
+    guid: str,
+    combined_token_id: str,
+    combined_secret: str,
+) -> bool:
+    """End-to-end test for job creation logic."""
+    print("\n" + "=" * 60)
+    print("F) End-to-End Job Creation Test")
+    print("=" * 60)
+
+    print(f"Testing GUID: {guid}")
+    print(f"Base URL: {base_url}")
+
+    initial_job_count = count_jobs_for_guid(guid)
+
+    probe_ok = _test_step_probe(enclosure_url, initial_job_count, guid)
+    post_probe_count = count_jobs_for_guid(guid)
+
+    enclosure_ok = _test_step_full_get(enclosure_url, post_probe_count, guid)
+    post_enclosure_count = count_jobs_for_guid(guid)
+
+    combined_ok = _test_step_combined(
+        base_url, guid, combined_token_id, combined_secret, post_enclosure_count
+    )
+
     all_ok = probe_ok and enclosure_ok and combined_ok
+    print("\nEnd-to-end test result:")
     if all_ok:
         print("  [PASS] Probes don't trigger, feed-scoped can trigger, combined cannot")
-        return True
     else:
         print("  [FAIL] See details above")
-        return False
+    return all_ok
 
 
-def list_sample_tokens(columns: List[str]):
+def list_sample_tokens(columns: list[str]):
     """List sample tokens for manual verification."""
     print("\n" + "=" * 60)
     print("D) Sample Tokens for Manual Verification")
     print("=" * 60)
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    revoked_filter = "AND revoked = 0" if 'revoked' in columns else ""
-    
+    revoked_filter = "AND revoked = 0" if "revoked" in columns else ""
+
     # Combined token
-    cursor.execute(f"SELECT token_id, token_secret, user_id FROM feed_access_token WHERE feed_id IS NULL {revoked_filter} LIMIT 1")
+    cursor.execute(
+        f"SELECT token_id, token_secret, user_id FROM feed_access_token WHERE feed_id IS NULL {revoked_filter} LIMIT 1"
+    )
     combined = cursor.fetchone()
     if combined:
-        print(f"\nCombined token (should NOT trigger processing):")
+        print("\nCombined token (should NOT trigger processing):")
         print(f"  token_id: {combined[0]}")
         print(f"  token_secret: {combined[1]}")
-        print(f"  feed_id: NULL")
+        print("  feed_id: NULL")
         print(f"  user_id: {combined[2]}")
-    
+
     # Feed-scoped token
-    cursor.execute(f"SELECT token_id, token_secret, user_id, feed_id FROM feed_access_token WHERE feed_id IS NOT NULL {revoked_filter} LIMIT 1")
+    cursor.execute(
+        f"SELECT token_id, token_secret, user_id, feed_id FROM feed_access_token WHERE feed_id IS NOT NULL {revoked_filter} LIMIT 1"
+    )
     feed_scoped = cursor.fetchone()
     if feed_scoped:
-        print(f"\nFeed-scoped token (CAN trigger processing):")
+        print("\nFeed-scoped token (CAN trigger processing):")
         print(f"  token_id: {feed_scoped[0]}")
         print(f"  token_secret: {feed_scoped[1]}")
         print(f"  feed_id: {feed_scoped[3]}")
         print(f"  user_id: {feed_scoped[2]}")
-    
+
     conn.close()
 
 
-def get_unprocessed_episode(columns: List[str]) -> Optional[Tuple[str, int, str]]:
+def get_unprocessed_episode(columns: list[str]) -> tuple[str, int, str] | None:
     """Get an unprocessed episode for testing."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT p.guid, p.feed_id, p.title 
+        SELECT p.guid, p.feed_id, p.title
         FROM post p
-        WHERE p.whitelisted = 1 
+        WHERE p.whitelisted = 1
         AND (p.processed_audio_path IS NULL OR p.processed_audio_path = '')
         LIMIT 1
     """)
@@ -498,17 +544,20 @@ def get_unprocessed_episode(columns: List[str]) -> Optional[Tuple[str, int, str]
     return row if row else None
 
 
-def check_job_created(guid: str) -> Optional[Tuple[str, str, str]]:
+def check_job_created(guid: str) -> tuple[str, str, str] | None:
     """Check if a processing job was created for a GUID."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("""
-        SELECT trigger_source, status, created_at 
-        FROM processing_job 
+    cursor.execute(
+        """
+        SELECT trigger_source, status, created_at
+        FROM processing_job
         WHERE post_guid = ?
         ORDER BY created_at DESC
         LIMIT 1
-    """, (guid,))
+    """,
+        (guid,),
+    )
     row = cursor.fetchone()
     conn.close()
     return row if row else None
@@ -519,7 +568,7 @@ def print_manual_commands(base_url: str):
     print("\n" + "=" * 60)
     print("E) Manual Verification Commands")
     print("=" * 60)
-    
+
     print(f"""
 # Base URL: {base_url}
 
@@ -548,69 +597,90 @@ conn.close()
 
 def main():
     import argparse
-    
-    parser = argparse.ArgumentParser(description="Verify combined feed token implementation")
-    parser.add_argument("--host", default="localhost:5001", help="Public hostname (default: localhost:5001)")
-    parser.add_argument("--base-url", default=None, help="Base URL for requests (default: https://{host})")
-    parser.add_argument("--skip-fetch", action="store_true", help="Skip fetching combined feed (schema/bounds only)")
-    parser.add_argument("--skip-e2e", action="store_true", help="Skip end-to-end job creation test")
+
+    parser = argparse.ArgumentParser(
+        description="Verify combined feed token implementation"
+    )
+    parser.add_argument(
+        "--host",
+        default="localhost:5001",
+        help="Public hostname (default: localhost:5001)",
+    )
+    parser.add_argument(
+        "--base-url",
+        default=None,
+        help="Base URL for requests (default: https://{host})",
+    )
+    parser.add_argument(
+        "--skip-fetch",
+        action="store_true",
+        help="Skip fetching combined feed (schema/bounds only)",
+    )
+    parser.add_argument(
+        "--skip-e2e", action="store_true", help="Skip end-to-end job creation test"
+    )
     args = parser.parse_args()
-    
+
     # Determine base URL
     base_url = args.base_url if args.base_url else f"https://{args.host}"
-    
+
     print("=" * 60)
     print("Combined Feed Token Verification")
     print("=" * 60)
     print(f"DB Path: {DB_PATH}")
     print(f"Base URL: {base_url}")
     print()
-    
+
     # A) Print schema and get column list
     columns = print_schema()
-    
+
     # B) Verify token bounds
     verify_token_bounds(columns)
-    
+
     # C) Verify enclosure tokens (the critical test)
     enclosure_ok = False
     sample_url = None
     sample_guid = None
     combined_token_id = None
     combined_secret = None
-    
+
     if not args.skip_fetch:
-        enclosure_ok, sample_url, sample_guid, combined_token_id, combined_secret = verify_enclosure_tokens(
-            columns, base_url
+        enclosure_ok, sample_url, sample_guid, combined_token_id, combined_secret = (
+            verify_enclosure_tokens(columns, base_url)
         )
     else:
         print("\n[SKIP] Enclosure verification (--skip-fetch)")
-    
+
     # D) List sample tokens
     list_sample_tokens(columns)
-    
+
     # E) Print manual commands
     print_manual_commands(base_url)
-    
+
     # F) End-to-end job creation test
     e2e_ok = None
-    if not args.skip_e2e and sample_url and sample_guid and combined_token_id and combined_secret:
+    if (
+        not args.skip_e2e
+        and sample_url
+        and sample_guid
+        and combined_token_id
+        and combined_secret
+    ):
         e2e_ok = test_end_to_end_job_creation(
-            base_url, sample_url, sample_guid,
-            combined_token_id, combined_secret
+            base_url, sample_url, sample_guid, combined_token_id, combined_secret
         )
     elif args.skip_e2e:
         print("\n[SKIP] End-to-end test (--skip-e2e)")
     elif not sample_url:
         print("\n[SKIP] End-to-end test (no sample URL from enclosure verification)")
-    
+
     # Summary
     print("\n" + "=" * 60)
     print("SUMMARY")
     print("=" * 60)
-    
+
     all_pass = True
-    
+
     if enclosure_ok is True:
         print("[PASS] All enclosure tokens are feed-scoped and use public domain")
     elif enclosure_ok is False:
@@ -618,7 +688,7 @@ def main():
         all_pass = False
     else:
         print("[SKIP] Enclosure verification was skipped")
-    
+
     if e2e_ok is True:
         print("[PASS] End-to-end: feed-scoped triggers, combined does not")
     elif e2e_ok is False:
@@ -626,10 +696,12 @@ def main():
         all_pass = False
     else:
         print("[SKIP] End-to-end test was skipped")
-    
+
     if all_pass:
-        print("\n*** Podcast Addict should now trigger processing from unified feed ***")
-    
+        print(
+            "\n*** Podcast Addict should now trigger processing from unified feed ***"
+        )
+
     return 0 if all_pass else 1
 
 

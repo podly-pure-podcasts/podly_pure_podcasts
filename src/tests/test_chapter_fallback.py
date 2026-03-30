@@ -112,7 +112,7 @@ def test_generate_chapters_from_transcript_splits_windows_and_titles() -> None:
 
 def test_refine_description_chapters_with_word_refiner_adjusts_starts() -> None:
     config = create_standard_test_config()
-    config.enable_word_level_boundary_refinder = True
+    config.enable_word_level_boundary_refiner = True
 
     chapters = [
         Chapter("desc0", "First story", 5_000, 310_000),

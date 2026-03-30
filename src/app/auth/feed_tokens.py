@@ -65,9 +65,9 @@ def create_feed_access_token(user: User, feed: Feed | None) -> tuple[str, str]:
 
 
 def authenticate_feed_token(
-    token_id: str, secret: str, path: str
+    token_id: str | None, secret: str | None, path: str
 ) -> FeedTokenAuthResult | None:
-    if not token_id:
+    if not token_id or not secret:
         return None
 
     token = FeedAccessToken.query.filter_by(token_id=token_id, revoked=False).first()
@@ -148,5 +148,13 @@ def _resolve_feed_id(path: str) -> int | None:
         guid = guid.split(".", 1)[0]
         post = Post.query.filter_by(guid=guid).first()
         return post.feed_id if post else None
+
+    if path.startswith(("/trigger", "/api/trigger/status")):
+        from flask import request
+
+        guid = request.args.get("guid")
+        if guid:
+            post = Post.query.filter_by(guid=guid).first()
+            return post.feed_id if post else None
 
     return None

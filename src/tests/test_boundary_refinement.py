@@ -25,13 +25,7 @@ def _mock_completion_response(content: str) -> MagicMock:
 
 
 def test_audio_processor_prefers_refined_boundaries() -> None:
-    processor = AudioProcessor(
-        config=create_standard_test_config(enable_boundary_refinement=True),
-        identification_query=MagicMock(),
-        transcript_segment_query=MagicMock(),
-        model_call_query=MagicMock(),
-        db_session=MagicMock(),
-    )
+    db_session = MagicMock()
     post = Post(
         id=1,
         guid="episode-guid",
@@ -40,6 +34,15 @@ def test_audio_processor_prefers_refined_boundaries() -> None:
             {"refined_start": 12.5, "refined_end": 18.75},
             {"refined_start": 42.0, "refined_end": 48.0},
         ],
+    )
+    db_session.get.return_value = post
+
+    processor = AudioProcessor(
+        config=create_standard_test_config(enable_boundary_refinement=True),
+        identification_query=MagicMock(),
+        transcript_segment_query=MagicMock(),
+        model_call_query=MagicMock(),
+        db_session=db_session,
     )
 
     segments = processor.get_ad_segments(post)
@@ -74,21 +77,23 @@ def test_ad_classifier_persists_refined_boundaries(app) -> None:
                 post_id=post.id,
                 sequence_num=1,
                 start_time=5.0,
-                end_time=10.0,
+                # Duration 10s
+                end_time=15.0,
                 text="This episode is brought to you by Acme Cloud Hosting.",
             ),
             TranscriptSegment(
                 post_id=post.id,
                 sequence_num=2,
-                start_time=10.0,
-                end_time=15.0,
+                start_time=15.0,
+                # Duration 10s
+                end_time=25.0,
                 text="Visit Acme dot com and use code podly today.",
             ),
             TranscriptSegment(
                 post_id=post.id,
                 sequence_num=3,
-                start_time=15.0,
-                end_time=20.0,
+                start_time=25.0,
+                end_time=30.0,
                 text="Now back to the interview.",
             ),
         ]
@@ -159,18 +164,22 @@ def test_ad_classifier_persists_refined_boundaries(app) -> None:
 
         refined = post.refined_ad_boundaries[0]
         assert refined["orig_start"] == 5.0
-        assert refined["orig_end"] == 15.0
+        assert refined["orig_end"] == 25.0
         assert refined["refined_start"] == 5.0
         assert refined["refined_end"] > 13.0
         assert refined["refined_by"] == "word"
 
-        refinement_calls = ModelCall.query.filter_by(
-            model_name="groq/openai/gpt-oss-120b::boundary-refinement"
-        ).all()
+        refinement_calls = (
+            db.session.query(ModelCall)
+            .filter_by(model_name="groq/openai/gpt-oss-120b::boundary-refinement")
+            .all()
+        )
         assert len(refinement_calls) == 1
-        word_calls = ModelCall.query.filter_by(
-            model_name="groq/openai/gpt-oss-120b::word-boundary-refinement"
-        ).all()
+        word_calls = (
+            db.session.query(ModelCall)
+            .filter_by(model_name="groq/openai/gpt-oss-120b::word-boundary-refinement")
+            .all()
+        )
         assert len(word_calls) == 1
 
 

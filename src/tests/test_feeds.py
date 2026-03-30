@@ -196,7 +196,9 @@ def test_should_auto_whitelist_new_posts_requires_members(
     assert _should_auto_whitelist_new_posts(mock_feed) is False
 
 
-def test_should_auto_whitelist_new_posts_true_with_members(monkeypatch, mock_feed):
+def test_should_auto_whitelist_new_posts_true_with_members(
+    monkeypatch, mock_feed, mock_db_session
+):
     mock_feed.user_feeds = [mock.MagicMock()]
     monkeypatch.setattr(
         "app.feeds.config",
@@ -220,7 +222,9 @@ def test_should_auto_whitelist_requires_members(
     assert _should_auto_whitelist_new_posts(mock_feed, mock_post) is False
 
 
-def test_should_auto_whitelist_with_members(monkeypatch, mock_feed, mock_post):
+def test_should_auto_whitelist_with_members(
+    monkeypatch, mock_feed, mock_post, mock_db_session
+):
     monkeypatch.setattr(
         "app.feeds.config",
         SimpleNamespace(automatically_whitelist_new_episodes=True),
@@ -231,12 +235,18 @@ def test_should_auto_whitelist_with_members(monkeypatch, mock_feed, mock_post):
     assert _should_auto_whitelist_new_posts(mock_feed, mock_post) is True
 
 
-def test_should_auto_whitelist_true_when_auth_disabled(monkeypatch, mock_feed):
+def test_should_auto_whitelist_true_when_auth_disabled(
+    monkeypatch, mock_feed, mock_db_session
+):
     monkeypatch.setattr(
         "app.feeds.config",
         SimpleNamespace(automatically_whitelist_new_episodes=True),
     )
     monkeypatch.setattr("app.auth.is_auth_enabled", lambda: False)
+    # Mock no specific subscription records to test fallback
+    mock_db_session.query().filter().first.return_value = None
+    # Mock no users found either for global behavior
+    mock_db_session.query().first.return_value = None
     assert _should_auto_whitelist_new_posts(mock_feed) is True
 
 

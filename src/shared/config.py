@@ -101,8 +101,8 @@ class Config(BaseModel):
         default=DEFAULTS.ENABLE_BOUNDARY_REFINEMENT,
         description="Enable LLM-based ad boundary refinement for improved precision (consumes additional LLM tokens)",
     )
-    enable_word_level_boundary_refinder: bool = Field(
-        default=DEFAULTS.ENABLE_WORD_LEVEL_BOUNDARY_REFINDER,
+    enable_word_level_boundary_refiner: bool = Field(
+        default=DEFAULTS.ENABLE_WORD_LEVEL_BOUNDARY_REFINER,
         description="Enable word-level (heuristic-timed) ad boundary refinement",
     )
     enable_llm_chapter_fallback_tagging: bool = Field(

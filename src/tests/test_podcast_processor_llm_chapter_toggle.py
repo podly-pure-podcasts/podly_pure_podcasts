@@ -62,7 +62,7 @@ def test_llm_chapter_fallback_tagging_disabled_skips_resolver_and_writer() -> No
 def test_llm_description_chapters_skip_word_refiner_and_write_unmodified() -> None:
     config = create_standard_test_config()
     config.enable_llm_chapter_fallback_tagging = True
-    config.enable_word_level_boundary_refinder = True
+    config.enable_word_level_boundary_refiner = True
 
     transcription_manager = MagicMock()
     transcript_segments = [

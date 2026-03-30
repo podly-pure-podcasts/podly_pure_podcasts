@@ -6,3 +6,4 @@ Project-specific rules:
 - All database writes must go through the `writer` service. Do not use `db.session.commit()` directly in application code. Use `writer_client.action()` instead.
 - If you change behavior, including bug fixes, add or update test coverage for it.
 - For frontend work, use `npm` in `frontend/` and keep `package-lock.json` authoritative; do not switch package managers.
+- never use /tmp/ - always use ./tmp/ instead
