@@ -1,16 +1,23 @@
-"""Groq round-robin fan-out proxy.
+"""Provider-agnostic key-rotating reverse proxy.
 
-Speaks the OpenAI-compatible Groq API. Rotates Authorization across N keys.
-On 429 from upstream, marks that key as cooling-down (using the upstream's
-retry-after hint) and retries the request with the next non-cooled key.
-If ALL keys are cooling, blocks until the soonest one is free again, up to
-MAX_WAIT_SEC. This lets long episodes complete by pacing through the
-rolling-hour limits across N independent Groq accounts.
+Speaks any OpenAI-compatible upstream (Groq, OpenRouter, OpenAI, ...). Rotates
+Authorization across N keys round-robin. On 429 from upstream, marks the
+chosen key as cooling-down (using the upstream's retry-after hint) and retries
+the request with the next non-cooled key. If ALL keys are cooling, blocks
+until the soonest one is free again, up to MAX_WAIT_SEC. This lets long jobs
+complete by pacing through rolling-window limits across N independent accounts.
+
+Environment:
+- UPSTREAM_BASE_URL   default https://api.groq.com  (also accepts legacy GROQ_UPSTREAM)
+- API_KEYS            comma-separated bearer tokens (also accepts legacy GROQ_KEYS)
+- UPSTREAM_TIMEOUT_SEC default 600
+- MAX_WAIT_SEC        default 3300
 """
 from __future__ import annotations
 
 import asyncio
 import itertools
+import json
 import logging
 import os
 import re
@@ -20,15 +27,26 @@ from contextlib import asynccontextmanager
 import httpx
 from fastapi import FastAPI, Request, Response
 
-GROQ_BASE = os.environ.get("GROQ_UPSTREAM", "https://api.groq.com").rstrip("/")
-KEYS = [k.strip() for k in os.environ.get("GROQ_KEYS", "").split(",") if k.strip()]
+UPSTREAM_BASE_URL = os.environ.get(
+    "UPSTREAM_BASE_URL", os.environ.get("GROQ_UPSTREAM", "https://api.groq.com")
+).rstrip("/")
+KEYS = [
+    k.strip()
+    for k in os.environ.get("API_KEYS", os.environ.get("GROQ_KEYS", "")).split(",")
+    if k.strip()
+]
 TIMEOUT = float(os.environ.get("UPSTREAM_TIMEOUT_SEC", "600"))
-MAX_WAIT_SEC = float(os.environ.get("MAX_WAIT_SEC", "3300"))  # cap how long we hold a single request
+MAX_WAIT_SEC = float(os.environ.get("MAX_WAIT_SEC", "3300"))
+INJECT_REASONING_EXCLUDE = os.environ.get("INJECT_REASONING_EXCLUDE", "").lower() in {
+    "1", "true", "yes",
+}
 
 if not KEYS:
-    raise SystemExit("GROQ_KEYS env var required (comma-separated list of gsk_... keys)")
+    raise SystemExit(
+        "API_KEYS env var required (comma-separated bearer tokens)"
+    )
 
-log = logging.getLogger("groq-fanout")
+log = logging.getLogger("key-fanout")
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
@@ -40,7 +58,7 @@ _lock = asyncio.Lock()
 
 
 def _parse_retry_after(value: str) -> float:
-    """Groq sometimes returns retry-after as plain seconds, sometimes as '11m47s'."""
+    """Upstreams sometimes return retry-after as plain seconds, sometimes as '11m47s'."""
     if not value:
         return 30.0
     try:
@@ -68,12 +86,15 @@ async def _pick_key(deadline: float) -> tuple[int, str] | None:
             soonest = min(cooldowns.values())
         wait = soonest - time.time()
         if wait <= 0:
-            continue  # state changed, retry
+            continue
         if time.time() + wait > deadline:
             log.warning("all keys cooling, deadline would be exceeded — giving up")
             return None
         sleep_for = min(wait + 0.5, 30.0)
-        log.warning("all keys cooling — sleeping %.0fs (soonest free in %.0fs)", sleep_for, wait)
+        log.warning(
+            "all keys cooling — sleeping %.0fs (soonest free in %.0fs)",
+            sleep_for, wait,
+        )
         await asyncio.sleep(sleep_for)
 
 
@@ -85,8 +106,8 @@ async def _set_cooldown(key: str, retry_after_sec: float) -> None:
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     log.info(
-        "groq-fanout up | keys=%d | upstream=%s | max_wait=%.0fs",
-        len(KEYS), GROQ_BASE, MAX_WAIT_SEC,
+        "key-fanout up | keys=%d | upstream=%s | max_wait=%.0fs",
+        len(KEYS), UPSTREAM_BASE_URL, MAX_WAIT_SEC,
     )
     yield
 
@@ -114,6 +135,7 @@ async def healthz() -> dict:
     now = time.time()
     return {
         "keys": len(KEYS),
+        "upstream": UPSTREAM_BASE_URL,
         "cooldowns_sec": {
             f"key_{i}": max(0.0, cooldowns[KEYS[i]] - now) for i in range(len(KEYS))
         },
@@ -121,14 +143,32 @@ async def healthz() -> dict:
 
 
 @app.api_route(
-    "/openai/v1/{path:path}",
+    "/{path:path}",
     methods=["POST", "GET", "PUT", "DELETE", "PATCH"],
 )
 async def proxy(path: str, request: Request) -> Response:
     body = await request.body()
     in_headers = {k: v for k, v in request.headers.items() if k.lower() not in _HOP_BY_HOP}
 
-    upstream_url = f"{GROQ_BASE}/openai/v1/{path}"
+    if (
+        INJECT_REASONING_EXCLUDE
+        and request.method == "POST"
+        and "application/json" in request.headers.get("content-type", "").lower()
+        and path.endswith("chat/completions")
+        and body
+    ):
+        try:
+            obj = json.loads(body)
+            if isinstance(obj, dict):
+                reasoning = obj.setdefault("reasoning", {})
+                if isinstance(reasoning, dict) and "exclude" not in reasoning:
+                    reasoning["exclude"] = True
+                    body = json.dumps(obj).encode()
+                    log.info("injected reasoning.exclude=true (path=%s)", path)
+        except Exception as exc:
+            log.warning("body mutation skipped: %s", exc)
+
+    upstream_url = f"{UPSTREAM_BASE_URL}/{path}"
     deadline = time.time() + MAX_WAIT_SEC
     last_response: httpx.Response | None = None
     attempt = 0
@@ -138,8 +178,6 @@ async def proxy(path: str, request: Request) -> Response:
             attempt += 1
             picked = await _pick_key(deadline)
             if picked is None:
-                # All keys cooling and deadline would be exceeded — return last 429
-                # or synthesize one if we never made an attempt.
                 if last_response is not None:
                     break
                 return Response(
@@ -152,7 +190,7 @@ async def proxy(path: str, request: Request) -> Response:
             req_headers = dict(in_headers)
             req_headers["Authorization"] = f"Bearer {key}"
             log.info(
-                "→ key#%d %s /openai/v1/%s (attempt %d, body=%dB)",
+                "→ key#%d %s /%s (attempt %d, body=%dB)",
                 idx, request.method, path, attempt, len(body),
             )
             r = await client.request(
@@ -167,15 +205,20 @@ async def proxy(path: str, request: Request) -> Response:
                 log.info("← key#%d HTTP %d", idx, r.status_code)
                 break
             retry_after = _parse_retry_after(r.headers.get("retry-after", ""))
-            # If Groq's body has a more accurate hint, prefer it.
             try:
                 err_msg = r.json().get("error", {}).get("message", "")
                 m = re.search(r"try again in (\d+(?:\.\d+)?)([dhms])", err_msg.lower())
                 if m:
-                    retry_after = max(retry_after, float(m.group(1)) * {"d": 86400, "h": 3600, "m": 60, "s": 1}[m.group(2)])
+                    retry_after = max(
+                        retry_after,
+                        float(m.group(1)) * {"d": 86400, "h": 3600, "m": 60, "s": 1}[m.group(2)],
+                    )
                 m2 = re.search(r"try again in (\d+)m(\d+)s", err_msg.lower())
                 if m2:
-                    retry_after = max(retry_after, float(m2.group(1)) * 60 + float(m2.group(2)))
+                    retry_after = max(
+                        retry_after,
+                        float(m2.group(1)) * 60 + float(m2.group(2)),
+                    )
             except Exception:
                 pass
             log.warning("← key#%d HTTP 429, cooling for %.0fs", idx, retry_after)

@@ -61,3 +61,5 @@ frontend-build.log
 .claude-notes/
 CLAUDE_NOTES.md
 .env.fanout
+.env.groq-fanout
+.env.openrouter-fanout

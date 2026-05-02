@@ -1,15 +1,34 @@
+x-fanout: &fanout
+  image: key-fanout:local
+  restart: unless-stopped
+  expose:
+    - "5050"
+  networks:
+    - bin_private
+
 services:
   groq-fanout:
-    build: ./groq_fanout
-    image: groq-fanout:local
+    <<: *fanout
+    build: ./key_fanout
     container_name: groq-fanout
-    restart: unless-stopped
+    environment:
+      - UPSTREAM_BASE_URL=https://api.groq.com
+      - MAX_WAIT_SEC=3300
+      - UPSTREAM_TIMEOUT_SEC=600
     env_file:
-      - ./.env.fanout
-    expose:
-      - "5050"
-    networks:
-      - bin_private
+      - ./.env.groq-fanout
+
+  openrouter-fanout:
+    <<: *fanout
+    depends_on: [groq-fanout]
+    container_name: openrouter-fanout
+    environment:
+      - UPSTREAM_BASE_URL=https://openrouter.ai
+      - MAX_WAIT_SEC=3300
+      - UPSTREAM_TIMEOUT_SEC=600
+      - INJECT_REASONING_EXCLUDE=true
+    env_file:
+      - ./.env.openrouter-fanout
 
 networks:
   bin_private:
