@@ -30,8 +30,7 @@ def test_clip_segment_with_fade() -> None:
         expected_duration = (
             TEST_FILE_DURATION
             - (ad_end_offset_ms - ad_start_offset_ms)
-            + 2 * fade_len_ms
-            + 56  # not sure where this fudge comes from
+            + 56  # mp3 frame-alignment fudge
         )
         actual_duration = get_audio_duration_ms(temp_file.name)
         assert actual_duration is not None, "Failed to get audio duration"
@@ -56,8 +55,7 @@ def test_clip_segment_with_fade_beginning() -> None:
         expected_duration = (
             TEST_FILE_DURATION
             - (ad_end_offset_ms - ad_start_offset_ms)
-            + 2 * fade_len_ms
-            + 56  # not sure where this fudge comes from
+            + 56  # mp3 frame-alignment fudge
         )
         actual_duration = get_audio_duration_ms(temp_file.name)
         assert actual_duration is not None, "Failed to get audio duration"
@@ -85,8 +83,7 @@ def test_clip_segment_with_fade_end() -> None:
         expected_duration = (
             TEST_FILE_DURATION
             - (ad_end_offset_ms - ad_start_offset_ms)
-            + 2 * fade_len_ms
-            + 56  # not sure where this fudge comes from
+            + 56  # mp3 frame-alignment fudge
         )
         actual_duration = get_audio_duration_ms(temp_file.name)
         assert actual_duration is not None, "Failed to get audio duration"

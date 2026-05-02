@@ -65,36 +65,42 @@ def _clip_segments_complex(
     out_path: str,
     audio_duration_ms: int,
 ) -> None:
-    """Original complex approach with fades."""
+    """Filter-graph approach: drop ad spans entirely and apply fades to the
+    surrounding content (fade-out at the tail of content before an ad,
+    fade-in at the head of content after an ad). The ad audio itself is
+    never kept.
+    """
 
-    trimmed_list = []
-
+    keep_segments: List[Tuple[int, int, bool, bool]] = []
     last_end = 0
     for start_ms, end_ms in ad_segments_ms:
-        trimmed_list.extend(
-            [
-                ffmpeg.input(in_path).filter(
-                    "atrim", start=last_end / 1000.0, end=start_ms / 1000.0
-                ),
-                ffmpeg.input(in_path)
-                .filter(
-                    "atrim", start=start_ms / 1000.0, end=(start_ms + fade_ms) / 1000.0
-                )
-                .filter("afade", t="out", ss=0, d=fade_ms / 1000.0),
-                ffmpeg.input(in_path)
-                .filter("atrim", start=(end_ms - fade_ms) / 1000.0, end=end_ms / 1000.0)
-                .filter("afade", t="in", ss=0, d=fade_ms / 1000.0),
-            ]
-        )
-
+        if start_ms > last_end:
+            keep_segments.append((last_end, start_ms, last_end > 0, True))
         last_end = end_ms
 
-    if last_end != audio_duration_ms:
-        trimmed_list.append(
-            ffmpeg.input(in_path).filter(
-                "atrim", start=last_end / 1000.0, end=audio_duration_ms / 1000.0
-            )
+    if last_end < audio_duration_ms:
+        keep_segments.append((last_end, audio_duration_ms, last_end > 0, False))
+
+    if not keep_segments:
+        raise ValueError("No audio segments to keep after ad removal")
+
+    fade_sec = fade_ms / 1000.0
+    trimmed_list = []
+    for start_ms, end_ms, fade_in, fade_out in keep_segments:
+        seg_dur_sec = (end_ms - start_ms) / 1000.0
+        eff_fade = min(fade_sec, seg_dur_sec / 2.0)
+        chain = (
+            ffmpeg.input(in_path)
+            .filter("atrim", start=start_ms / 1000.0, end=end_ms / 1000.0)
+            .filter("asetpts", "PTS-STARTPTS")
         )
+        if fade_in and eff_fade > 0:
+            chain = chain.filter("afade", t="in", st=0, d=eff_fade)
+        if fade_out and eff_fade > 0:
+            chain = chain.filter(
+                "afade", t="out", st=seg_dur_sec - eff_fade, d=eff_fade
+            )
+        trimmed_list.append(chain)
 
     logger.info(
         "[FFMPEG_CONCAT] Starting audio concatenation: %s -> %s (%d segments)",
