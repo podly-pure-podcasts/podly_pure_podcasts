@@ -1,0 +1,16 @@
+services:
+  groq-fanout:
+    build: ./groq_fanout
+    image: groq-fanout:local
+    container_name: groq-fanout
+    restart: unless-stopped
+    env_file:
+      - ./.env.fanout
+    expose:
+      - "5050"
+    networks:
+      - bin_private
+
+networks:
+  bin_private:
+    external: true

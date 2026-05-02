@@ -60,3 +60,4 @@ frontend-build.log
 # Claude Code local notes (not committed)
 .claude-notes/
 CLAUDE_NOTES.md
+.env.fanout
