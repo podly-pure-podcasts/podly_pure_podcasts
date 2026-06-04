@@ -15,6 +15,7 @@ from werkzeug.http import http_date
 from app.extensions import db
 from app.feeds import generate_feed_xml
 from app.models import Feed, Post
+from app.routes import feed_routes
 from app.routes.feed_routes import feed_bp
 from app.writer.actions.feeds import refresh_feed_action
 
@@ -145,16 +146,22 @@ def _register_feed_routes(app) -> None:
         app.register_blueprint(feed_bp)
 
 
+def _reset_kickoff_state() -> None:
+    with feed_routes._BACKGROUND_REFRESH_LOCK:
+        feed_routes._BACKGROUND_REFRESH_LAST_KICKOFF.clear()
+
+
 def test_get_feed_emits_etag_and_last_modified_headers(app):
     app.testing = True
     _register_feed_routes(app)
+    _reset_kickoff_state()
 
     with app.app_context():
         feed_id = _make_feed_with_post()
 
     client = app.test_client()
     with (
-        mock.patch("app.routes.feed_routes.refresh_feed"),
+        mock.patch("app.routes.feed_routes._spawn_async_refresh"),
         mock.patch("app.routes.feed_routes.generate_feed_xml", return_value=b"<rss/>"),
     ):
         resp = client.get(f"/feed/{feed_id}")
@@ -167,13 +174,14 @@ def test_get_feed_emits_etag_and_last_modified_headers(app):
 def test_get_feed_returns_304_when_etag_matches(app):
     app.testing = True
     _register_feed_routes(app)
+    _reset_kickoff_state()
 
     with app.app_context():
         feed_id = _make_feed_with_post()
 
     client = app.test_client()
     with (
-        mock.patch("app.routes.feed_routes.refresh_feed") as mock_refresh,
+        mock.patch("app.routes.feed_routes._spawn_async_refresh") as mock_spawn,
         mock.patch("app.routes.feed_routes.generate_feed_xml", return_value=b"<rss/>"),
     ):
         first = client.get(f"/feed/{feed_id}")
@@ -186,14 +194,15 @@ def test_get_feed_returns_304_when_etag_matches(app):
     assert second.get_data(as_text=True) == ""
     # ETag header is required on a 304 per RFC 9110
     assert second.headers.get("ETag") == etag
-    # the second call must NOT have triggered a refresh — that's the entire point.
-    assert mock_refresh.call_count == 1  # only the first call refreshed
+    # the second call must NOT have kicked off a refresh — that's the entire point.
+    assert mock_spawn.call_count == 1  # only the first call scheduled refresh
 
 
 def test_get_feed_skips_refresh_and_xml_when_etag_matches(app):
     """The 304 path is the latency win: refresh and XML build must be skipped."""
     app.testing = True
     _register_feed_routes(app)
+    _reset_kickoff_state()
 
     with app.app_context():
         feed_id = _make_feed_with_post()
@@ -206,7 +215,7 @@ def test_get_feed_skips_refresh_and_xml_when_etag_matches(app):
     client = app.test_client()
     # First, get the canonical ETag the route would produce.
     with (
-        mock.patch("app.routes.feed_routes.refresh_feed"),
+        mock.patch("app.routes.feed_routes._spawn_async_refresh"),
         mock.patch("app.routes.feed_routes.generate_feed_xml", return_value=b"<rss/>"),
     ):
         bootstrap = client.get(f"/feed/{feed_id}")
@@ -215,26 +224,27 @@ def test_get_feed_skips_refresh_and_xml_when_etag_matches(app):
     # Now make a fresh request with If-None-Match. Both refresh and XML should
     # be untouched — that's the latency win.
     with (
-        mock.patch("app.routes.feed_routes.refresh_feed") as mock_refresh,
+        mock.patch("app.routes.feed_routes._spawn_async_refresh") as mock_spawn,
         mock.patch("app.routes.feed_routes.generate_feed_xml") as mock_gen,
     ):
         resp = client.get(f"/feed/{feed_id}", headers={"If-None-Match": etag})
 
     assert resp.status_code == 304
-    mock_refresh.assert_not_called()
+    mock_spawn.assert_not_called()
     mock_gen.assert_not_called()
 
 
 def test_get_feed_returns_200_when_etag_does_not_match(app):
     app.testing = True
     _register_feed_routes(app)
+    _reset_kickoff_state()
 
     with app.app_context():
         feed_id = _make_feed_with_post()
 
     client = app.test_client()
     with (
-        mock.patch("app.routes.feed_routes.refresh_feed"),
+        mock.patch("app.routes.feed_routes._spawn_async_refresh"),
         mock.patch("app.routes.feed_routes.generate_feed_xml", return_value=b"<rss/>"),
     ):
         resp = client.get(
@@ -248,6 +258,7 @@ def test_get_feed_returns_200_when_etag_does_not_match(app):
 def test_get_feed_returns_304_when_if_modified_since_recent(app):
     app.testing = True
     _register_feed_routes(app)
+    _reset_kickoff_state()
 
     with app.app_context():
         feed_id = _make_feed_with_post()
@@ -259,7 +270,7 @@ def test_get_feed_returns_304_when_if_modified_since_recent(app):
     # Client claims it last fetched 1 hour AFTER our last_changed_at — so 304.
     later = dt.datetime(2026, 1, 1, 1, 0, 0, tzinfo=dt.UTC)
     with (
-        mock.patch("app.routes.feed_routes.refresh_feed") as mock_refresh,
+        mock.patch("app.routes.feed_routes._spawn_async_refresh") as mock_spawn,
         mock.patch("app.routes.feed_routes.generate_feed_xml") as mock_gen,
     ):
         resp = client.get(
@@ -267,13 +278,14 @@ def test_get_feed_returns_304_when_if_modified_since_recent(app):
         )
 
     assert resp.status_code == 304
-    mock_refresh.assert_not_called()
+    mock_spawn.assert_not_called()
     mock_gen.assert_not_called()
 
 
 def test_get_feed_etag_changes_when_last_changed_at_changes(app):
     app.testing = True
     _register_feed_routes(app)
+    _reset_kickoff_state()
 
     with app.app_context():
         feed_id = _make_feed_with_post()
@@ -288,7 +300,7 @@ def test_get_feed_etag_changes_when_last_changed_at_changes(app):
 
     client = app.test_client()
     with (
-        mock.patch("app.routes.feed_routes.refresh_feed"),
+        mock.patch("app.routes.feed_routes._spawn_async_refresh"),
         mock.patch("app.routes.feed_routes.generate_feed_xml", return_value=b"<rss/>"),
     ):
         first = client.get(f"/feed/{feed_id}")
@@ -301,7 +313,7 @@ def test_get_feed_etag_changes_when_last_changed_at_changes(app):
     db.session.expire_all()
 
     with (
-        mock.patch("app.routes.feed_routes.refresh_feed"),
+        mock.patch("app.routes.feed_routes._spawn_async_refresh"),
         mock.patch("app.routes.feed_routes.generate_feed_xml", return_value=b"<rss/>"),
     ):
         second = client.get(f"/feed/{feed_id}")
