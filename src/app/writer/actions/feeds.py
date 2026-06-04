@@ -20,6 +20,30 @@ from app.models import (
 )
 
 
+def _apply_existing_post_updates(
+    feed: Feed, existing_post_updates: list[dict[str, Any]]
+) -> int:
+    updated_posts_count = 0
+    for post_update in existing_post_updates:
+        post_id = post_update.get("post_id")
+        if not post_id:
+            continue
+        post = db.session.get(Post, int(post_id))
+        if not post or post.feed_id != feed.id:
+            continue
+
+        updated = False
+        for field_name in ("guid", "title", "description", "image_url", "duration"):
+            if field_name not in post_update:
+                continue
+            setattr(post, field_name, post_update[field_name])
+            updated = True
+
+        if updated:
+            updated_posts_count += 1
+    return updated_posts_count
+
+
 def refresh_feed_action(params: dict[str, Any]) -> dict[str, Any]:
     feed_id = params.get("feed_id")
     updates = params.get("updates", {})
@@ -29,6 +53,8 @@ def refresh_feed_action(params: dict[str, Any]) -> dict[str, Any]:
     feed = db.session.get(Feed, feed_id)
     if not feed:
         raise ValueError(f"Feed {feed_id} not found")
+
+    feed_changed = bool(updates) or bool(new_posts_data)
 
     for k, v in updates.items():
         setattr(feed, k, v)
@@ -60,24 +86,10 @@ def refresh_feed_action(params: dict[str, Any]) -> dict[str, Any]:
             )
             db.session.add(job)
 
-    updated_posts_count = 0
-    for post_update in existing_post_updates:
-        post_id = post_update.get("post_id")
-        if not post_id:
-            continue
-        post = db.session.get(Post, int(post_id))
-        if not post or post.feed_id != feed.id:
-            continue
+    updated_posts_count = _apply_existing_post_updates(feed, existing_post_updates)
 
-        updated = False
-        for field_name in ("guid", "title", "description", "image_url", "duration"):
-            if field_name not in post_update:
-                continue
-            setattr(post, field_name, post_update[field_name])
-            updated = True
-
-        if updated:
-            updated_posts_count += 1
+    if feed_changed or updated_posts_count > 0:
+        feed.last_changed_at = datetime.now(UTC).replace(tzinfo=None)
 
     recalculate_run_counts(db.session)
 

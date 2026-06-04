@@ -48,6 +48,11 @@ class Feed(db.Model):  # type: ignore[name-defined, misc]
     # Per-feed override for LLM chapter fallback tagging, null = use global config
     enable_llm_chapter_fallback_tagging = db.Column(db.Boolean, nullable=True)
     auto_whitelist_new_episodes_override = db.Column(db.Boolean, nullable=True)
+    # Bumped by `refresh_feed_action` whenever something actually changes
+    # (new posts, post field updates, channel-level updates). Used as the
+    # `lastBuildDate` and as the input to the response ETag, so unchanged
+    # feeds can short-circuit reader polls with a 304.
+    last_changed_at = db.Column(db.DateTime, nullable=False, default=_utc_now_naive)
 
     posts = db.relationship(
         "Post", backref="feed", lazy=True, order_by="Post.release_date.desc()"

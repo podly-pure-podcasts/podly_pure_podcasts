@@ -1238,9 +1238,7 @@ def test_get_guid_falls_back_to_url_hash_when_id_missing(mock_find_audio_link):
     mock_find_audio_link.return_value = "https://cdn.example.com/audio.mp3"
     entry = SimpleNamespace()  # no id, no guid
 
-    expected = str(
-        uuid.uuid5(uuid.NAMESPACE_URL, "https://cdn.example.com/audio.mp3")
-    )
+    expected = str(uuid.uuid5(uuid.NAMESPACE_URL, "https://cdn.example.com/audio.mp3"))
     assert get_guid(entry) == expected
 
 
@@ -1250,9 +1248,7 @@ def test_get_guid_falls_back_to_url_hash_when_id_empty(mock_find_audio_link):
     mock_find_audio_link.return_value = "https://cdn.example.com/audio.mp3"
     entry = SimpleNamespace(id="", guid=None)
 
-    expected = str(
-        uuid.uuid5(uuid.NAMESPACE_URL, "https://cdn.example.com/audio.mp3")
-    )
+    expected = str(uuid.uuid5(uuid.NAMESPACE_URL, "https://cdn.example.com/audio.mp3"))
     assert get_guid(entry) == expected
 
 
@@ -1262,9 +1258,7 @@ def test_get_guid_falls_back_to_url_hash_when_id_whitespace_only(mock_find_audio
     mock_find_audio_link.return_value = "https://cdn.example.com/audio.mp3"
     entry = SimpleNamespace(id="   \n  ", guid=None)
 
-    expected = str(
-        uuid.uuid5(uuid.NAMESPACE_URL, "https://cdn.example.com/audio.mp3")
-    )
+    expected = str(uuid.uuid5(uuid.NAMESPACE_URL, "https://cdn.example.com/audio.mp3"))
     assert get_guid(entry) == expected
 
 

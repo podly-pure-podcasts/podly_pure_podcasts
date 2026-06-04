@@ -651,6 +651,44 @@ def feed_item(post: Post, prepend_feed_title: bool = False) -> PyRSS2Gen.RSSItem
     return item
 
 
+def _feed_last_changed_at_aware(feed: Feed) -> datetime.datetime:
+    """Return `feed.last_changed_at` as an aware UTC datetime.
+
+    `last_changed_at` is stored naive (UTC) to match other timestamps in
+    the schema; HTTP date / RFC 2822 formatters require an aware value.
+    Falls back to `now()` for legacy rows that may pre-date the column.
+    """
+    raw = getattr(feed, "last_changed_at", None)
+    if raw is None:
+        return datetime.datetime.now(datetime.UTC)
+    if raw.tzinfo is None:
+        return raw.replace(tzinfo=datetime.UTC)
+    return raw.astimezone(datetime.UTC)
+
+
+def get_aggregate_feed_last_changed_at(user: User | None) -> datetime.datetime:
+    """Return the max `last_changed_at` across feeds in this user's aggregate.
+
+    Used as the aggregate feed's `lastBuildDate` and for ETag freshness.
+    Falls back to `now()` when there are no feeds (or the configured user
+    has no subscriptions yet).
+    """
+    if not current_app.config.get("REQUIRE_AUTH") or user is None:
+        latest = db.session.query(db.func.max(Feed.last_changed_at)).scalar()
+    else:
+        latest = (
+            db.session.query(db.func.max(Feed.last_changed_at))
+            .join(UserFeed, UserFeed.feed_id == Feed.id)
+            .filter(UserFeed.user_id == user.id)
+            .scalar()
+        )
+    if latest is None:
+        return datetime.datetime.now(datetime.UTC)
+    if latest.tzinfo is None:
+        return latest.replace(tzinfo=datetime.UTC)
+    return latest.astimezone(datetime.UTC)
+
+
 def generate_feed_xml(feed: Feed) -> Any:
     logger.info(f"Generating XML for feed with ID: {feed.id}")
 
@@ -674,7 +712,7 @@ def generate_feed_xml(feed: Feed) -> Any:
     base_url = _get_base_url()
     link = _append_feed_token_params(f"{base_url}/feed/{feed.id}")
 
-    last_build_date = format_datetime(datetime.datetime.now(datetime.UTC))
+    last_build_date = format_datetime(_feed_last_changed_at_aware(feed))
 
     rss_feed = PyRSS2Gen.RSS2(
         title="[podly] " + feed.title,
@@ -704,7 +742,7 @@ def generate_aggregate_feed_xml(user: User | None) -> Any:
     base_url = _get_base_url()
     link = _append_feed_token_params(f"{base_url}/feed/user/{user_id}")
 
-    last_build_date = format_datetime(datetime.datetime.now(datetime.UTC))
+    last_build_date = format_datetime(get_aggregate_feed_last_changed_at(user))
 
     if current_app.config.get("REQUIRE_AUTH") and user:
         feed_title = f"Podly Podcasts - {user.username}"
