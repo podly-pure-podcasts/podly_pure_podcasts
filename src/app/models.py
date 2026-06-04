@@ -90,10 +90,8 @@ class FeedAccessToken(db.Model):  # type: ignore[name-defined, misc]
 class Post(db.Model):  # type: ignore[name-defined, misc]
     feed_id = db.Column(db.Integer, db.ForeignKey("feed.id"), nullable=False)
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    guid = db.Column(db.Text, unique=True, nullable=False)
-    download_url = db.Column(
-        db.Text, unique=True, nullable=False
-    )  # remote download URL, not podly url
+    guid = db.Column(db.Text, nullable=False)
+    download_url = db.Column(db.Text, nullable=False)
     title = db.Column(db.Text, nullable=False)
     unprocessed_audio_path = db.Column(db.Text)
     processed_audio_path = db.Column(db.Text)
@@ -117,6 +115,13 @@ class Post(db.Model):  # type: ignore[name-defined, misc]
         backref="post",
         lazy="dynamic",
         order_by="TranscriptSegment.sequence_num",
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint("feed_id", "guid", name="uq_post_feed_id_guid"),
+        db.UniqueConstraint(
+            "feed_id", "download_url", name="uq_post_feed_id_download_url"
+        ),
     )
 
     def audio_len_bytes(self) -> int:

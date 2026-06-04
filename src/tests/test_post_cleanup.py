@@ -457,6 +457,54 @@ def test_cleanup_preserves_most_recent_across_multiple_feeds(app, tmp_path) -> N
         assert f2_old.processed_audio_path is None
 
 
+def test_cleanup_tiebreaker_equal_timestamps(app, tmp_path) -> None:
+    """When two posts have identical timestamps, the higher post.id wins."""
+    with app.app_context():
+        feed = _create_feed()
+
+        first_post = _create_post(feed, "first", "https://example.com/first.mp3")
+        second_post = _create_post(feed, "second", "https://example.com/second.mp3")
+        assert second_post.id > first_post.id
+
+        same_time = _utc_now() - timedelta(days=10)
+
+        for idx, post in enumerate([first_post, second_post]):
+            processed = tmp_path / f"tiebreak_{idx}.mp3"
+            processed.write_text("audio")
+            post.processed_audio_path = str(processed)
+
+        for post in [first_post, second_post]:
+            db.session.add(
+                ProcessingJob(
+                    id=f"job-{post.guid}",
+                    post_guid=post.guid,
+                    status="completed",
+                    current_step=4,
+                    total_steps=4,
+                    progress_percentage=100.0,
+                    created_at=same_time,
+                    started_at=same_time,
+                    completed_at=same_time,
+                )
+            )
+
+        db.session.commit()
+
+        count, _ = count_cleanup_candidates(retention_days=5)
+        assert count == 1
+
+        removed = cleanup_processed_posts(retention_days=5)
+        assert removed == 1
+
+        preserved = Post.query.filter_by(guid="second").first()
+        assert preserved is not None
+        assert preserved.processed_audio_path is not None
+
+        cleaned = Post.query.filter_by(guid="first").first()
+        assert cleaned is not None
+        assert cleaned.processed_audio_path is None
+
+
 def test_cleanup_with_single_old_post_per_feed(app, tmp_path) -> None:
     """Test that a feed with only one post keeps it, even if very old."""
     with app.app_context():

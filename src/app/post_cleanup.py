@@ -39,24 +39,24 @@ def _get_most_recent_posts_per_feed(post_guids: Sequence[str]) -> set[str]:
     latest_completed = _load_latest_completed_map(post_guids)
 
     # Group by feed and find most recent per feed
-    feed_posts: dict[int, tuple[str, datetime | None]] = {}
+    feed_posts: dict[int, tuple[str, datetime | None, int]] = {}
 
     for post in posts:
         timestamp = _get_post_timestamp(post, latest_completed)
 
         if post.feed_id not in feed_posts:
-            feed_posts[post.feed_id] = (post.guid, timestamp)
+            feed_posts[post.feed_id] = (post.guid, timestamp, post.id)
         else:
-            _, current_timestamp = feed_posts[post.feed_id]
-            # Keep the post with the latest timestamp
+            _, current_timestamp, current_id = feed_posts[post.feed_id]
             if timestamp and current_timestamp:
-                if timestamp > current_timestamp:
-                    feed_posts[post.feed_id] = (post.guid, timestamp)
-            elif timestamp:  # Only new post has timestamp
-                feed_posts[post.feed_id] = (post.guid, timestamp)
-            # If neither has timestamp, keep current
+                if timestamp > current_timestamp or (
+                    timestamp == current_timestamp and post.id > current_id
+                ):
+                    feed_posts[post.feed_id] = (post.guid, timestamp, post.id)
+            elif timestamp:
+                feed_posts[post.feed_id] = (post.guid, timestamp, post.id)
 
-    return {guid for guid, _ in feed_posts.values()}
+    return {guid for guid, _, _ in feed_posts.values()}
 
 
 def _get_post_timestamp(
