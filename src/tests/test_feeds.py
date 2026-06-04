@@ -418,6 +418,55 @@ def test_refresh_feed_updates_existing_post_description(
     mock_db_session.expire_all.assert_called_once()
 
 
+@mock.patch("app.feeds.writer_client")
+@mock.patch("app.feeds._should_auto_whitelist_new_posts")
+@mock.patch("app.feeds.fetch_feed")
+def test_refresh_feed_repairs_legacy_uuid5_guid_via_url_match(
+    mock_fetch_feed,
+    mock_should_auto_whitelist,
+    mock_writer_client,
+    mock_feed,
+    mock_feed_data,
+    mock_db_session,
+):
+    """When an existing post's stored guid is the legacy uuid5(NAMESPACE_URL,
+    download_url) pattern but the upstream entry's audio URL matches that
+    download_url, refresh_feed must repair the existing post by updating
+    its guid to the real upstream value rather than treating the upstream
+    entry as a brand-new post (which would orphan the existing row).
+    """
+    audio_url = "https://example.com/episode1.mp3"
+    legacy_guid = str(uuid.uuid5(uuid.NAMESPACE_URL, audio_url))
+    upstream_guid = mock_feed_data.entries[0].id  # "https://example.com/episode1"
+    assert legacy_guid != upstream_guid  # sanity
+
+    existing_post = MockPost(
+        id=42,
+        guid=legacy_guid,
+        download_url=audio_url,
+        title="Episode 1",
+        description="Episode 1 description",
+        image_url=mock_feed.image_url,
+        duration=3600,
+    )
+    existing_post.processed_audio_path = "/tmp/processed.mp3"
+
+    mock_feed_data.entries = mock_feed_data.entries[:1]
+    mock_feed.posts = [existing_post]
+
+    mock_fetch_feed.return_value = mock_feed_data
+    mock_should_auto_whitelist.return_value = True
+
+    refresh_feed(mock_feed)
+
+    payload = mock_writer_client.action.call_args.args[1]
+    assert payload["new_posts"] == [], "must not duplicate the existing post"
+    updates = payload["existing_post_updates"]
+    assert len(updates) == 1
+    assert updates[0]["post_id"] == 42
+    assert updates[0]["guid"] == upstream_guid
+
+
 def test_refresh_feed_action_updates_existing_post_duration(app):
     with app.app_context():
         feed = Feed(title="Test Feed", rss_url="https://example.com/feed.xml")
@@ -1151,48 +1200,79 @@ def test_make_post_prefers_html_content_over_plain_description(
     assert mock_post_class.call_args.kwargs["description"] == "<p>Rich description</p>"
 
 
-@mock.patch("app.feeds.uuid.UUID")
+def test_get_guid_returns_url_id_verbatim():
+    """A URL-form upstream <guid> must be returned unchanged.
+
+    This is the dominant case in real feeds; hashing the enclosure URL
+    instead breaks subscriber libraries the moment a CDN path rotates.
+    """
+    entry = SimpleNamespace(id="https://show.example.com/episodes/123", guid=None)
+
+    assert get_guid(entry) == "https://show.example.com/episodes/123"
+
+
+def test_get_guid_returns_tag_uri_verbatim():
+    """A `tag:` URI upstream <guid> must be returned unchanged."""
+    entry = SimpleNamespace(id="tag:libsyn.com,2024:42", guid=None)
+
+    assert get_guid(entry) == "tag:libsyn.com,2024:42"
+
+
+def test_get_guid_returns_uuid_verbatim():
+    """A UUID upstream <guid> stays unchanged (regression check)."""
+    entry = SimpleNamespace(id="550e8400-e29b-41d4-a716-446655440000", guid=None)
+
+    assert get_guid(entry) == "550e8400-e29b-41d4-a716-446655440000"
+
+
+def test_get_guid_strips_whitespace_around_id():
+    """Surrounding whitespace on the upstream id is stripped."""
+    entry = SimpleNamespace(id="  https://show.example.com/ep/1  ", guid=None)
+
+    assert get_guid(entry) == "https://show.example.com/ep/1"
+
+
 @mock.patch("app.feeds.find_audio_link")
-@mock.patch("app.feeds.uuid.uuid5")
-def test_get_guid_uses_id_if_valid_uuid(mock_uuid5, mock_find_audio_link, mock_uuid):
-    """Test that get_guid returns the entry.id if it's a valid UUID."""
-    entry = mock.MagicMock()
-    entry.id = "550e8400-e29b-41d4-a716-446655440000"
+def test_get_guid_falls_back_to_url_hash_when_id_missing(mock_find_audio_link):
+    """No upstream id at all -> hash the enclosure URL."""
+    mock_find_audio_link.return_value = "https://cdn.example.com/audio.mp3"
+    entry = SimpleNamespace()  # no id, no guid
 
-    # uuid.UUID doesn't raise an error, so entry.id is a valid UUID
-    result = get_guid(entry)
-
-    assert result == entry.id
-    mock_uuid.assert_called_once_with(entry.id)
-    mock_find_audio_link.assert_not_called()
-    mock_uuid5.assert_not_called()
-
-
-@mock.patch("app.feeds.uuid.UUID")
-@mock.patch("app.feeds.find_audio_link")
-@mock.patch("app.feeds.uuid.uuid5")
-def test_get_guid_generates_uuid_if_invalid_id(
-    mock_uuid5, mock_find_audio_link, mock_uuid
-):
-    """Test that get_guid generates a UUID if entry.id is not a valid UUID."""
-    entry = mock.MagicMock()
-    entry.id = "not-a-uuid"
-
-    # uuid.UUID raises ValueError, so entry.id is not a valid UUID
-    mock_uuid.side_effect = ValueError
-    mock_find_audio_link.return_value = "https://example.com/audio.mp3"
-    mock_uuid5_instance = mock.MagicMock()
-    mock_uuid5_instance.__str__.return_value = "550e8400-e29b-41d4-a716-446655440000"
-    mock_uuid5.return_value = mock_uuid5_instance
-
-    result = get_guid(entry)
-
-    assert result == "550e8400-e29b-41d4-a716-446655440000"
-    mock_uuid.assert_called_once_with(entry.id)
-    mock_find_audio_link.assert_called_once_with(entry)
-    mock_uuid5.assert_called_once_with(
-        uuid.NAMESPACE_URL, "https://example.com/audio.mp3"
+    expected = str(
+        uuid.uuid5(uuid.NAMESPACE_URL, "https://cdn.example.com/audio.mp3")
     )
+    assert get_guid(entry) == expected
+
+
+@mock.patch("app.feeds.find_audio_link")
+def test_get_guid_falls_back_to_url_hash_when_id_empty(mock_find_audio_link):
+    """Empty-string upstream id -> hash the enclosure URL."""
+    mock_find_audio_link.return_value = "https://cdn.example.com/audio.mp3"
+    entry = SimpleNamespace(id="", guid=None)
+
+    expected = str(
+        uuid.uuid5(uuid.NAMESPACE_URL, "https://cdn.example.com/audio.mp3")
+    )
+    assert get_guid(entry) == expected
+
+
+@mock.patch("app.feeds.find_audio_link")
+def test_get_guid_falls_back_to_url_hash_when_id_whitespace_only(mock_find_audio_link):
+    """Whitespace-only upstream id -> hash the enclosure URL."""
+    mock_find_audio_link.return_value = "https://cdn.example.com/audio.mp3"
+    entry = SimpleNamespace(id="   \n  ", guid=None)
+
+    expected = str(
+        uuid.uuid5(uuid.NAMESPACE_URL, "https://cdn.example.com/audio.mp3")
+    )
+    assert get_guid(entry) == expected
+
+
+def test_get_guid_uses_guid_attribute_when_id_missing():
+    """If `entry.id` is missing but `entry.guid` is set, prefer `entry.guid`."""
+    entry = SimpleNamespace(id=None, guid="https://show.example.com/episodes/7")
+
+    assert get_guid(entry) == "https://show.example.com/episodes/7"
 
 
 def test_get_duration_with_valid_duration():

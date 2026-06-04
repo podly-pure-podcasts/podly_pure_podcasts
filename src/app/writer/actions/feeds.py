@@ -70,7 +70,7 @@ def refresh_feed_action(params: dict[str, Any]) -> dict[str, Any]:
             continue
 
         updated = False
-        for field_name in ("title", "description", "image_url", "duration"):
+        for field_name in ("guid", "title", "description", "image_url", "duration"):
             if field_name not in post_update:
                 continue
             setattr(post, field_name, post_update[field_name])
