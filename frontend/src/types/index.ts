@@ -14,6 +14,7 @@ export interface Feed {
   chapter_filter_strings?: string | null;
   enable_llm_chapter_fallback_tagging?: boolean | null;
   auto_whitelist_new_episodes_override?: boolean | null;
+  custom_llm_ad_prompt?: string | null;
 }
 
 export interface FeedSettingsUpdate {
@@ -21,6 +22,7 @@ export interface FeedSettingsUpdate {
   chapter_filter_strings?: string | null;
   enable_llm_chapter_fallback_tagging?: boolean | null;
   auto_whitelist_new_episodes_override?: boolean | null;
+  custom_llm_ad_prompt?: string | null;
 }
 
 export interface Episode {

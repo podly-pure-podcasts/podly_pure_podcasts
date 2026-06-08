@@ -48,6 +48,9 @@ class Feed(db.Model):  # type: ignore[name-defined, misc]
     # Per-feed override for LLM chapter fallback tagging, null = use global config
     enable_llm_chapter_fallback_tagging = db.Column(db.Boolean, nullable=True)
     auto_whitelist_new_episodes_override = db.Column(db.Boolean, nullable=True)
+    # Per-feed custom prompt appended to the base LLM ad detection system prompt,
+    # null = no custom instructions (use base prompt only)
+    custom_llm_ad_prompt = db.Column(db.Text, nullable=True)
 
     posts = db.relationship(
         "Post", backref="feed", lazy=True, order_by="Post.release_date.desc()"

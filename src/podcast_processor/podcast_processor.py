@@ -902,6 +902,12 @@ class PodcastProcessor:
             DEFAULT_USER_PROMPT_TEMPLATE_PATH
         )
         system_prompt = self.get_system_prompt(DEFAULT_SYSTEM_PROMPT_PATH)
+
+        # Append per-feed custom prompt if set
+        custom_prompt = getattr(post.feed, "custom_llm_ad_prompt", None)
+        if custom_prompt:
+            system_prompt = system_prompt + "\n\n" + custom_prompt
+
         self.ad_classifier.classify(
             transcript_segments=transcript_segments,
             system_prompt=system_prompt,

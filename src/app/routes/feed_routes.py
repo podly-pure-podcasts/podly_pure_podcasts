@@ -148,6 +148,18 @@ def _build_feed_settings_updates(
     if auto_whitelist_override is not _MISSING:
         updates["auto_whitelist_new_episodes_override"] = auto_whitelist_override
 
+    if "custom_llm_ad_prompt" in payload:
+        custom_prompt = payload["custom_llm_ad_prompt"]
+        if custom_prompt is not None and not isinstance(custom_prompt, str):
+            return (
+                None,
+                (
+                    jsonify({"error": "custom_llm_ad_prompt must be a string or null"}),
+                    400,
+                ),
+            )
+        updates["custom_llm_ad_prompt"] = custom_prompt
+
     resolved_strategy = updates.get(
         "ad_detection_strategy",
         getattr(feed, "ad_detection_strategy", "llm"),
@@ -953,5 +965,6 @@ def _serialize_feed(
         "enable_llm_chapter_fallback_tagging": getattr(
             feed, "enable_llm_chapter_fallback_tagging", None
         ),
+        "custom_llm_ad_prompt": getattr(feed, "custom_llm_ad_prompt", None),
     }
     return feed_payload
