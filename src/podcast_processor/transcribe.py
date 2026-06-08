@@ -93,15 +93,26 @@ class LocalWhisperTranscriber(Transcriber):
                 "whisper library is required for LocalWhisperTranscriber"
             ) from e
 
-        self.logger.info("Using local whisper")
+        # Determine device: use CUDA GPU if available, otherwise CPU
+        try:
+            import torch
+
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        except ImportError:
+            device = "cpu"
+
+        self.logger.info(f"Using local whisper (device={device})")
         models = whisper.available_models()
         self.logger.info(f"Available models: {models}")
 
-        model = whisper.load_model(name=self.whisper_model)
+        model = whisper.load_model(name=self.whisper_model, device=device)
+
+        # Use fp16 on GPU for speed, fall back to fp32 on CPU
+        use_fp16 = device == "cuda"
 
         self.logger.info("Beginning transcription")
         start = time.time()
-        result = model.transcribe(audio_file_path, fp16=False, language="English")
+        result = model.transcribe(audio_file_path, fp16=use_fp16, language="English")
         end = time.time()
         elapsed = end - start
         self.logger.info(f"Transcription completed in {elapsed}")

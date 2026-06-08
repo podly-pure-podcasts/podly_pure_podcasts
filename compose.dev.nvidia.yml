@@ -5,6 +5,12 @@ services:
       service: podly
     env_file:
       - ./.env.local
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - USE_GPU=true
+        - USE_GPU_NVIDIA=true
     environment:
       - PUID=${PUID:-1000}
       - PGID=${PGID:-1000}

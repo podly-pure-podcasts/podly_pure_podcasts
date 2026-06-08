@@ -115,3 +115,76 @@ def test_offset() -> None:
             end=45.800999999999995,
         )
     ]
+
+
+def test_local_transcriber_uses_gpu_when_available(
+    mocker: Any,
+) -> None:
+    """LocalWhisperTranscriber should pass device=cuda when torch.cuda.is_available()."""
+    from podcast_processor.transcribe import (
+        LocalWhisperTranscriber,
+    )
+
+    logger = logging.getLogger("global_logger")
+    transcriber = LocalWhisperTranscriber(logger, "base.en")
+
+    # Mock torch to report CUDA available
+    mock_torch = MagicMock()
+    mock_torch.cuda.is_available.return_value = True
+
+    # Mock whisper.load_model and model.transcribe
+    mock_model = MagicMock()
+    mock_model.transcribe.return_value = {"segments": []}
+    mock_whisper = MagicMock()
+    mock_whisper.load_model.return_value = mock_model
+    mock_whisper.available_models.return_value = ["base.en"]
+
+    # Patch in sys.modules so the in-method "import torch"/"import whisper" resolve
+    mocker.patch.dict("sys.modules", {"torch": mock_torch, "whisper": mock_whisper})
+    # Also patch on the module object itself (create=True for in-method imports)
+    mocker.patch("podcast_processor.transcribe.torch", mock_torch, create=True)
+    mocker.patch("podcast_processor.transcribe.whisper", mock_whisper, create=True)
+
+    transcriber.transcribe("dummy.mp3")
+
+    # Verify load_model was called with device="cuda"
+    mock_whisper.load_model.assert_called_once_with(name="base.en", device="cuda")
+    # Verify transcribe was called with fp16=True (GPU path)
+    mock_model.transcribe.assert_called_once()
+    call_kwargs = mock_model.transcribe.call_args[1]
+    assert call_kwargs["fp16"] is True
+
+
+def test_local_transcriber_uses_cpu_when_no_gpu(
+    mocker: Any,
+) -> None:
+    """LocalWhisperTranscriber should fall back to cpu when CUDA is not available."""
+    from podcast_processor.transcribe import (
+        LocalWhisperTranscriber,
+    )
+
+    logger = logging.getLogger("global_logger")
+    transcriber = LocalWhisperTranscriber(logger, "base.en")
+
+    # Mock torch to report no CUDA
+    mock_torch = MagicMock()
+    mock_torch.cuda.is_available.return_value = False
+
+    # Mock whisper
+    mock_model = MagicMock()
+    mock_model.transcribe.return_value = {"segments": []}
+    mock_whisper = MagicMock()
+    mock_whisper.load_model.return_value = mock_model
+    mock_whisper.available_models.return_value = ["base.en"]
+
+    mocker.patch.dict("sys.modules", {"torch": mock_torch, "whisper": mock_whisper})
+    mocker.patch("podcast_processor.transcribe.torch", mock_torch, create=True)
+    mocker.patch("podcast_processor.transcribe.whisper", mock_whisper, create=True)
+
+    transcriber.transcribe("dummy.mp3")
+
+    # Verify load_model was called with device="cpu"
+    mock_whisper.load_model.assert_called_once_with(name="base.en", device="cpu")
+    # Verify transcribe was called with fp16=False (CPU path)
+    call_kwargs = mock_model.transcribe.call_args[1]
+    assert call_kwargs["fp16"] is False

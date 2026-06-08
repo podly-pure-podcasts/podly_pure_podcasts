@@ -5,6 +5,12 @@ services:
       service: podly
     env_file:
       - ./.env.local
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - USE_GPU=true
+        - USE_GPU_AMD=true
     devices:
       - /dev/kfd
       - /dev/dri

@@ -98,7 +98,7 @@ def test_call_model(test_config: Config, app: Flask) -> None:
         mock_response.choices = [mock_choice]
 
         # Patch the litellm.completion function for this test
-        with patch("litellm.completion", return_value=mock_response):
+        with patch("litellm.completion", return_value=mock_response) as mocked:
             # Call the method
             response = classifier._call_model(
                 model_call_obj=dummy_model_call,
@@ -111,6 +111,10 @@ def test_call_model(test_config: Config, app: Flask) -> None:
             assert refreshed is not None
             assert refreshed.status == "success"
             assert refreshed.response == "test response"
+
+            # Verify response_format uses "text" (not deprecated "json_object")
+            call_kwargs = mocked.call_args[1]
+            assert call_kwargs["response_format"] == {"type": "text"}
 
 
 def test_call_model_retry_on_internal_error(test_config: Config, app: Flask) -> None:

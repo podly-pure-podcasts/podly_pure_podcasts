@@ -656,7 +656,11 @@ class AdClassifier:
             # For older models and non-OpenAI models, use max_tokens
             completion_args["max_tokens"] = self.config.openai_max_tokens
 
-        completion_args["response_format"] = {"type": "json_object"}
+        # Use "text" instead of deprecated "json_object" — newer OpenAI-compatible
+        # backends (LM Studio, vLLM, etc.) only accept "json_schema" or "text".
+        # The system prompt already instructs JSON output, and clean_and_parse_model_output
+        # handles JSON extraction/repair from text responses.
+        completion_args["response_format"] = {"type": "text"}
 
         return completion_args
 
