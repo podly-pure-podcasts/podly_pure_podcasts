@@ -206,8 +206,30 @@ class OpenAIWhisperTranscriber(Transcriber):
 
             self.logger.debug("Got transcription")
 
-            segments = transcription.segments
-            assert segments is not None
+            # OpenAI client returns a Transcription object for OpenAI endpoints,
+            # but for compatible endpoints (e.g. whisperx) the .segments attribute
+            # may be a raw dict like {"segments": [...], "word_segments": [...]}.
+            raw = transcription.segments
+            if isinstance(raw, dict):
+                raw_segments = raw.get("segments", [])
+                segments = [
+                    TranscriptionSegment(
+                        id=i,
+                        start=s.get("start", 0.0),
+                        end=s.get("end", 0.0),
+                        text=s.get("text", ""),
+                        tokens=s.get("tokens") or [],
+                        temperature=s.get("temperature", 0.0) or 0.0,
+                        avg_logprob=s.get("avg_logprob") or 0.0,
+                        compression_ratio=s.get("compression_ratio") or 0.0,
+                        no_speech_prob=s.get("no_speech_prob") or 0.0,
+                        seek=s.get("seek", 0) or 0,
+                    )
+                    for i, s in enumerate(raw_segments)
+                ]
+            else:
+                segments = raw
+                assert segments is not None
 
             self.logger.debug(f"Got {len(segments)} segments")
 
