@@ -5,6 +5,7 @@ from podcast_processor.audio import (
     clip_segments_with_fade,
     get_audio_duration_ms,
     split_audio,
+    trim_file,
 )
 
 TEST_FILE_DURATION = 66_048
@@ -129,3 +130,28 @@ def test_split_audio() -> None:
             assert abs(filesize - split.stat().st_size) <= 500, (
                 f"filesize <> 500 bytes for {split}. found {split.stat().st_size}, expected {filesize}"
             )
+
+
+AAC_TEST_FILE_PATH = "src/tests/data/count_0_99_aac.mp3"
+
+
+def test_trim_file_aac_input_remuxed() -> None:
+    """trim_file must handle AAC-in-M4A files (mislabeled .mp3) by remuxing.
+
+    Some podcast feeds deliver AAC audio inside an M4A container but with a .mp3
+    filename.  Stream-copying (acodec=copy) fails because ffmpeg cannot mux AAC
+    into an MP3 container.  trim_file detects the codec and uses the correct
+    container extension, then renames back to the requested path.
+    """
+    with tempfile.NamedTemporaryFile(delete=True, suffix=".mp3") as temp_file:
+        trim_file(
+            Path(AAC_TEST_FILE_PATH),
+            Path(temp_file.name),
+            start_ms=0,
+            end_ms=10_000,  # trim first 10 seconds
+        )
+        actual_duration = get_audio_duration_ms(temp_file.name)
+        assert actual_duration is not None, "Failed to get audio duration"
+        assert 9_500 <= actual_duration <= 10_500, (
+            f"Duration out of range: expected ~10000ms, got {actual_duration}ms"
+        )

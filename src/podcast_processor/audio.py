@@ -220,26 +220,57 @@ def _clip_segments_simple(
     logger.info("[FFMPEG_SIMPLE] Completed simple audio concatenation: %s", out_path)
 
 
-def trim_file(in_path: Path, out_path: Path, start_ms: int, end_ms: int) -> None:
+def _input_codec_info(in_path: str) -> tuple[str, str]:
+    """Return (codec_name, container_extension) for the first audio stream.
+
+    Examples: ("mp3", ".mp3"), ("aac", ".m4a"), ("opus", ".opus").
+    Falls back to ("unknown", ".mp3") if probing fails.
+    """
+    EXT_MAP = {"mp3": ".mp3", "aac": ".m4a", "opus": ".opus", "flac": ".flac"}
+    try:
+        probe = ffmpeg.probe(in_path)
+        for stream in probe.get("streams", []):
+            if stream.get("codec_type") == "audio":
+                codec = stream.get("codec_name", "unknown")
+                return (codec, EXT_MAP.get(codec, ".mp3"))
+    except ffmpeg.Error:
+        pass
+    return ("unknown", ".mp3")
+
+
+def trim_file(in_path: Path, out_path: Path, start_ms: int, end_ms: int) -> Path:
+    """Trim *in_path* and write to *out_path*, remuxing (no re-encode).
+
+    If the input codec cannot be muxed into the output container implied by
+    *out_path* extension (e.g. AAC -> .mp3), the file is written with the
+    correct extension and renamed.  Returns the actual output path.
+    """
     duration_ms = end_ms - start_ms
 
     if duration_ms <= 0:
-        return
+        return out_path
 
     start_sec = max(start_ms, 0) / 1000.0
     duration_sec = duration_ms / 1000.0
 
+    codec, ext = _input_codec_info(str(in_path))
+    needs_rename = ext != out_path.suffix
+
+    # If codec/container mismatch, use the correct extension
+    actual_out = out_path.with_suffix(ext) if needs_rename else out_path
+
     logger.debug(
-        "[FFMPEG_TRIM] Trimming %s -> %s (start=%.2fs, duration=%.2fs)",
+        "[FFMPEG_TRIM] Trimming %s -> %s (start=%.2fs, duration=%.2fs, codec=%s, copy)",
         in_path,
-        out_path,
+        actual_out,
         start_sec,
         duration_sec,
+        codec,
     )
     (
         ffmpeg.input(str(in_path))
         .output(
-            str(out_path),
+            str(actual_out),
             ss=start_sec,
             t=duration_sec,
             acodec="copy",
@@ -248,6 +279,13 @@ def trim_file(in_path: Path, out_path: Path, start_ms: int, end_ms: int) -> None
         .overwrite_output()
         .run()
     )
+
+    # Rename to requested path if we used a different extension
+    if needs_rename and actual_out != out_path:
+        actual_out.rename(out_path)
+        return out_path
+
+    return actual_out
 
 
 def split_audio(
