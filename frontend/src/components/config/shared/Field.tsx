@@ -14,17 +14,17 @@ export default function Field({
   label,
   children,
   envMeta,
-  labelWidth = 'w-60',
+  labelWidth = 'w-full sm:w-60',
   hint,
 }: FieldProps) {
   return (
-    <label className="flex items-start justify-between gap-3">
+    <label className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
       <div className={labelWidth}>
         <span className="block text-sm text-gray-700">{label}</span>
         {hint ? <span className="block text-xs text-gray-500">{hint}</span> : null}
         <EnvVarHint meta={envMeta} />
       </div>
-      <div className="flex-1">{children}</div>
+      <div className="w-full sm:flex-1">{children}</div>
     </label>
   );
 }

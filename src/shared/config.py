@@ -39,7 +39,7 @@ class OutputConfig(BaseModel):
         self.min_ad_segement_separation_seconds = value
 
 
-WhisperConfigTypes = Literal["remote", "local", "test", "groq"]
+WhisperConfigTypes = Literal["remote", "local", "test", "groq", "google"]
 
 
 class TestWhisperConfig(BaseModel):
@@ -62,6 +62,15 @@ class GroqWhisperConfig(BaseModel):
     language: str = DEFAULTS.WHISPER_GROQ_LANGUAGE
     model: str = DEFAULTS.WHISPER_GROQ_MODEL
     max_retries: int = DEFAULTS.WHISPER_GROQ_MAX_RETRIES
+
+
+class GoogleWhisperConfig(BaseModel):
+    whisper_type: Literal["google"] = "google"
+    api_key: str
+    language: str = DEFAULTS.WHISPER_GOOGLE_LANGUAGE
+    model: str = DEFAULTS.WHISPER_GOOGLE_MODEL
+    timeout_sec: int = DEFAULTS.WHISPER_GOOGLE_TIMEOUT_SEC
+    chunksize_mb: int = DEFAULTS.WHISPER_GOOGLE_CHUNKSIZE_MB
 
 
 class LocalWhisperConfig(BaseModel):
@@ -136,6 +145,7 @@ class Config(BaseModel):
         | RemoteWhisperConfig
         | TestWhisperConfig
         | GroqWhisperConfig
+        | GoogleWhisperConfig
         | None
     ) = Field(
         default=None,

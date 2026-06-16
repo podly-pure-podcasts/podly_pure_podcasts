@@ -6,6 +6,7 @@ from app.models import ModelCall, Post, TranscriptSegment
 from app.writer.client import writer_client
 from shared.config import (
     Config,
+    GoogleWhisperConfig,
     GroqWhisperConfig,
     LocalWhisperConfig,
     RemoteWhisperConfig,
@@ -13,6 +14,7 @@ from shared.config import (
 )
 
 from .transcribe import (
+    GoogleGeminiAudioTranscriber,
     GroqWhisperTranscriber,
     LocalWhisperTranscriber,
     OpenAIWhisperTranscriber,
@@ -57,6 +59,8 @@ class TranscriptionManager:
             return LocalWhisperTranscriber(self.logger, self.config.whisper.model)
         if isinstance(self.config.whisper, GroqWhisperConfig):
             return GroqWhisperTranscriber(self.logger, self.config.whisper)
+        if isinstance(self.config.whisper, GoogleWhisperConfig):
+            return GoogleGeminiAudioTranscriber(self.logger, self.config.whisper)
         raise ValueError(f"unhandled whisper config {self.config.whisper}")
 
     def _check_existing_transcription(

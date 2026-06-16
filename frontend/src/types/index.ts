@@ -141,6 +141,15 @@ export type WhisperConfig =
     language: string;
     max_retries: number;
   }
+  | {
+    whisper_type: 'google';
+    api_key?: string | null;
+    api_key_preview?: string | null;
+    model: string;
+    language: string;
+    timeout_sec: number;
+    chunksize_mb: number;
+  }
   | { whisper_type: 'test' };
 
 export interface ProcessingConfigUI {

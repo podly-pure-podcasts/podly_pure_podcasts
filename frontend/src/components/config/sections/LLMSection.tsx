@@ -6,15 +6,8 @@ import { Section, Field, SaveButton, TestButton, EnvVarHint } from '../shared';
 import type { LLMConfig } from '../../../types';
 
 const LLM_MODEL_ALIASES: string[] = [
-  'openai/gpt-4',
-  'openai/gpt-4o',
-  'anthropic/claude-3.5-sonnet',
-  'anthropic/claude-3.5-haiku',
-  'gemini/gemini-3-flash-preview',
-  'gemini/gemini-2.0-flash',
-  'gemini/gemini-1.5-pro',
-  'gemini/gemini-1.5-flash',
-  'groq/openai/gpt-oss-120b',
+  'gemini/gemini-2.5-flash-lite',
+  'gemini/gemini-3.1-flash-lite',
 ];
 
 export default function LLMSection() {
@@ -101,15 +94,18 @@ export default function LLMSection() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <Field label="Model" envMeta={getEnvHint('llm.llm_model')}>
             <div className="relative">
-              <input
-                list="llm-model-datalist"
+              <select
                 className={inputClass(modelReadOnly)}
-                type="text"
                 value={pending?.llm?.llm_model ?? ''}
                 onChange={(e) => setField(['llm', 'llm_model'], e.target.value)}
-                placeholder="e.g. groq/openai/gpt-oss-120b"
                 disabled={modelReadOnly}
-              />
+              >
+                {LLM_MODEL_ALIASES.map((m) => (
+                  <option key={m} value={m}>
+                    {m.replace('gemini/', '')}
+                  </option>
+                ))}
+              </select>
             </div>
           </Field>
           <Field label="OpenAI Timeout (sec)" envMeta={getEnvHint('llm.openai_timeout')}>
@@ -226,12 +222,6 @@ export default function LLMSection() {
       <SaveButton onSave={handleSave} isPending={isSaving} />
 
       {/* Datalist for model suggestions */}
-      <datalist id="llm-model-datalist">
-        {LLM_MODEL_ALIASES.map((m) => (
-          <option key={m} value={m} />
-        ))}
-      </datalist>
-
       <style>{`.input{width:100%;padding:0.5rem;border:1px solid #e5e7eb;border-radius:0.375rem;font-size:0.875rem}`}</style>
     </div>
   );
@@ -246,20 +236,13 @@ function BaseUrlInfoBox() {
         automatically routes provider-prefixed models to their respective APIs.
       </p>
       <div className="space-y-1">
-        <p className="font-medium">✅ Base URL is IGNORED for:</p>
+        <p className="font-medium">✅ Base URL is IGNORED for provider-prefixed models such as:</p>
         <ul className="list-disc pl-5 space-y-0.5">
           <li>
-            <code className="bg-white px-1 rounded">groq/openai/gpt-oss-120b</code> → Groq API
+            <code className="bg-white px-1 rounded">gemini/gemini-2.5-flash-lite</code> → Google API
           </li>
           <li>
-            <code className="bg-white px-1 rounded">anthropic/claude-3.5-sonnet</code> → Anthropic
-            API
-          </li>
-          <li>
-            <code className="bg-white px-1 rounded">gemini/gemini-3-flash-preview</code> → Google API
-          </li>
-          <li>
-            <code className="bg-white px-1 rounded">gemini/gemini-2.0-flash</code> → Google API
+            <code className="bg-white px-1 rounded">gemini/gemini-3.1-flash-lite</code> → Google API
           </li>
         </ul>
       </div>
@@ -273,7 +256,7 @@ function BaseUrlInfoBox() {
           <li>LiteLLM proxy servers or local LLMs</li>
         </ul>
       </div>
-      <p className="italic text-gray-600">For the default Groq setup, you don't need to set this.</p>
+      <p className="italic text-gray-600">For Gemini model names, you usually do not need to set this.</p>
     </div>
   );
 }

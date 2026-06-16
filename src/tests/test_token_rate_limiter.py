@@ -270,11 +270,11 @@ class TestGlobalRateLimiter:
         import podcast_processor.token_rate_limiter as trl_module
 
         trl_module._RATE_LIMITER = None
-        limiter = configure_rate_limiter_for_model("gemini/gemini-3-flash-preview")
+        limiter = configure_rate_limiter_for_model("gemini/gemini-3.1-flash-lite")
         assert limiter.tokens_per_minute == 60000
 
         trl_module._RATE_LIMITER = None
-        limiter = configure_rate_limiter_for_model("gemini/gemini-2.5-flash")
+        limiter = configure_rate_limiter_for_model("gemini/gemini-2.5-flash-lite")
         assert limiter.tokens_per_minute == 60000
 
     def test_configure_rate_limiter_for_model_unknown(self) -> None:

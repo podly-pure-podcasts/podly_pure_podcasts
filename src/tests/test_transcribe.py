@@ -115,3 +115,63 @@ def test_offset() -> None:
             end=45.800999999999995,
         )
     ]
+
+
+def test_google_gemini_audio_transcriber_parses_segments(mocker: Any) -> None:
+    from podcast_processor.transcribe import GoogleGeminiAudioTranscriber
+    from shared.config import GoogleWhisperConfig
+
+    mock_response = MagicMock()
+    mock_response.json.return_value = {
+        "candidates": [
+            {
+                "content": {
+                    "parts": [
+                        {
+                            "text": (
+                                '{"segments":[{"start":0.5,"end":2.0,'
+                                '"text":"Svensk testtext."}]}'
+                            )
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+    mock_response.raise_for_status = MagicMock()
+    post_mock = mocker.patch(
+        "podcast_processor.transcribe.requests.post", return_value=mock_response
+    )
+    mocker.patch("builtins.open", mocker.mock_open(read_data=b"test audio data"))
+
+    transcriber = GoogleGeminiAudioTranscriber(
+        logging.getLogger("test"),
+        GoogleWhisperConfig(api_key="gemini-key"),
+    )
+
+    segments = transcriber.get_segments_for_chunk("clip.mp3")
+
+    assert segments[0].text == "Svensk testtext."
+    assert segments[0].start == 0.5
+    post_mock.assert_called_once()
+    _, kwargs = post_mock.call_args
+    assert kwargs["params"]["key"] == "gemini-key"
+    assert kwargs["json"]["contents"][0]["parts"][1]["inline_data"]["mime_type"] == (
+        "audio/mpeg"
+    )
+
+
+def test_google_gemini_audio_transcriber_offsets_segments() -> None:
+    from podcast_processor.transcribe import (
+        GeminiTranscriptionSegment,
+        GoogleGeminiAudioTranscriber,
+    )
+
+    segments = [
+        GeminiTranscriptionSegment(start=1.0, end=3.0, text="hej"),
+    ]
+
+    shifted = GoogleGeminiAudioTranscriber.add_offset_to_segments(segments, 2500)
+
+    assert shifted[0].start == 3.5
+    assert shifted[0].end == 5.5

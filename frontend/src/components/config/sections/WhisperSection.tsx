@@ -28,12 +28,18 @@ export default function WhisperSection() {
   const whisperMaxRetriesReadOnly = isFieldReadOnly('whisper.max_retries');
 
   const whisperApiKeyPreview =
-    pending?.whisper?.whisper_type === 'remote' || pending?.whisper?.whisper_type === 'groq'
+    pending?.whisper?.whisper_type === 'remote' ||
+    pending?.whisper?.whisper_type === 'groq' ||
+    pending?.whisper?.whisper_type === 'google'
       ? (pending.whisper as { api_key_preview?: string }).api_key_preview
       : undefined;
 
   const whisperApiKeyPlaceholder = useMemo(() => {
-    if (pending?.whisper?.whisper_type === 'remote' || pending?.whisper?.whisper_type === 'groq') {
+    if (
+      pending?.whisper?.whisper_type === 'remote' ||
+      pending?.whisper?.whisper_type === 'groq' ||
+      pending?.whisper?.whisper_type === 'google'
+    ) {
       if (whisperApiKeyPreview) {
         return whisperApiKeyPreview;
       }
@@ -69,7 +75,7 @@ export default function WhisperSection() {
     });
   };
 
-  const whisperType = pending?.whisper?.whisper_type ?? (localWhisperAvailable === false ? 'remote' : 'local');
+  const whisperType = pending?.whisper?.whisper_type ?? 'google';
 
   return (
     <div className="space-y-6">
@@ -78,9 +84,12 @@ export default function WhisperSection() {
           <select
             className={inputClass(whisperTypeReadOnly)}
             value={whisperType}
-            onChange={(e) => handleWhisperTypeChange(e.target.value as 'local' | 'remote' | 'groq')}
+            onChange={(e) =>
+              handleWhisperTypeChange(e.target.value as 'local' | 'remote' | 'groq' | 'google')
+            }
             disabled={whisperTypeReadOnly}
           >
+            <option value="google">google</option>
             {localWhisperAvailable !== false && <option value="local">local</option>}
             <option value="remote">remote</option>
             <option value="groq">groq</option>
@@ -213,6 +222,56 @@ export default function WhisperSection() {
                 value={(pending?.whisper as { max_retries?: number })?.max_retries ?? 3}
                 onChange={(e) => setField(['whisper', 'max_retries'], Number(e.target.value))}
                 disabled={whisperMaxRetriesReadOnly}
+              />
+            </Field>
+          </div>
+        )}
+
+        {/* Google Gemini Audio Options */}
+        {pending?.whisper?.whisper_type === 'google' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Field
+              label="Gemini API Key"
+              envMeta={getEnvHint('whisper.api_key', { env_var: 'GEMINI_API_KEY' })}
+            >
+              <input
+                className={inputClass(whisperApiKeyReadOnly)}
+                type="text"
+                placeholder={whisperApiKeyPlaceholder || 'AIza...'}
+                value={getWhisperApiKey(pending?.whisper)}
+                onChange={(e) => setField(['whisper', 'api_key'], e.target.value)}
+                disabled={whisperApiKeyReadOnly}
+              />
+            </Field>
+            <Field
+              label="Model"
+              envMeta={getEnvHint('whisper.model', { env_var: 'WHISPER_GOOGLE_MODEL' })}
+            >
+              <select
+                className={inputClass(whisperModelReadOnly)}
+                value={(pending?.whisper as { model?: string })?.model || 'gemini-2.5-flash-lite'}
+                onChange={(e) => setField(['whisper', 'model'], e.target.value)}
+                disabled={whisperModelReadOnly}
+              >
+                <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite</option>
+                <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite</option>
+              </select>
+            </Field>
+            <Field label="Language">
+              <input
+                className="input"
+                type="text"
+                value={(pending?.whisper as { language?: string })?.language || 'sv-SE'}
+                onChange={(e) => setField(['whisper', 'language'], e.target.value)}
+              />
+            </Field>
+            <Field label="Chunk Size (MB)" envMeta={getEnvHint('whisper.chunksize_mb')}>
+              <input
+                className={inputClass(whisperChunksizeReadOnly)}
+                type="number"
+                value={(pending?.whisper as { chunksize_mb?: number })?.chunksize_mb ?? 6}
+                onChange={(e) => setField(['whisper', 'chunksize_mb'], Number(e.target.value))}
+                disabled={whisperChunksizeReadOnly}
               />
             </Field>
           </div>

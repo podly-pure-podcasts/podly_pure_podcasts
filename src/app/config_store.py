@@ -19,6 +19,7 @@ from app.runtime_config import config as runtime_config
 from shared import defaults as DEFAULTS
 from shared.config import Config as PydanticConfig
 from shared.config import (
+    GoogleWhisperConfig,
     GroqWhisperConfig,
     LocalWhisperConfig,
     RemoteWhisperConfig,
@@ -192,6 +193,18 @@ def read_combined() -> dict[str, Any]:
                 "max_retries": whisper.groq_max_retries,
             }
         )
+    elif whisper.whisper_type == "google":
+        whisper_payload.update(
+            {
+                "model": whisper.remote_model or DEFAULTS.WHISPER_GOOGLE_MODEL,
+                "api_key": whisper.remote_api_key,
+                "language": whisper.remote_language or DEFAULTS.WHISPER_GOOGLE_LANGUAGE,
+                "timeout_sec": whisper.remote_timeout_sec
+                or DEFAULTS.WHISPER_GOOGLE_TIMEOUT_SEC,
+                "chunksize_mb": whisper.remote_chunksize_mb
+                or DEFAULTS.WHISPER_GOOGLE_CHUNKSIZE_MB,
+            }
+        )
     elif whisper.whisper_type == "test":
         whisper_payload.update({})
 
@@ -265,6 +278,18 @@ def _update_section_llm(data: dict[str, Any]) -> None:
     )
 
 
+def _copy_mapped_fields(
+    row: WhisperSettings, data: dict[str, Any], field_map: list[tuple[str, str]]
+) -> None:
+    for src, dst in field_map:
+        if src not in data:
+            continue
+        new_val = data[src]
+        if src == "api_key" and _is_empty(new_val):
+            continue
+        setattr(row, dst, new_val)
+
+
 def _update_section_whisper(data: dict[str, Any]) -> None:
     row = WhisperSettings.query.get(1)
     assert row is not None
@@ -272,6 +297,7 @@ def _update_section_whisper(data: dict[str, Any]) -> None:
         "local",
         "remote",
         "groq",
+        "google",
         "test",
     }:
         row.whisper_type = data["whisper_type"]
@@ -279,33 +305,41 @@ def _update_section_whisper(data: dict[str, Any]) -> None:
         if "model" in data:
             row.local_model = data["model"]
     elif row.whisper_type == "remote":
-        for key_map in [
-            ("model", "remote_model"),
-            ("api_key", "remote_api_key"),
-            ("base_url", "remote_base_url"),
-            ("language", "remote_language"),
-            ("timeout_sec", "remote_timeout_sec"),
-            ("chunksize_mb", "remote_chunksize_mb"),
-        ]:
-            src, dst = key_map
-            if src in data:
-                new_val = data[src]
-                if src == "api_key" and _is_empty(new_val):
-                    continue
-                setattr(row, dst, new_val)
+        _copy_mapped_fields(
+            row,
+            data,
+            [
+                ("model", "remote_model"),
+                ("api_key", "remote_api_key"),
+                ("base_url", "remote_base_url"),
+                ("language", "remote_language"),
+                ("timeout_sec", "remote_timeout_sec"),
+                ("chunksize_mb", "remote_chunksize_mb"),
+            ],
+        )
+    elif row.whisper_type == "google":
+        _copy_mapped_fields(
+            row,
+            data,
+            [
+                ("model", "remote_model"),
+                ("api_key", "remote_api_key"),
+                ("language", "remote_language"),
+                ("timeout_sec", "remote_timeout_sec"),
+                ("chunksize_mb", "remote_chunksize_mb"),
+            ],
+        )
     elif row.whisper_type == "groq":
-        for key_map in [
-            ("api_key", "groq_api_key"),
-            ("model", "groq_model"),
-            ("language", "groq_language"),
-            ("max_retries", "groq_max_retries"),
-        ]:
-            src, dst = key_map
-            if src in data:
-                new_val = data[src]
-                if src == "api_key" and _is_empty(new_val):
-                    continue
-                setattr(row, dst, new_val)
+        _copy_mapped_fields(
+            row,
+            data,
+            [
+                ("api_key", "groq_api_key"),
+                ("model", "groq_model"),
+                ("language", "groq_language"),
+                ("max_retries", "groq_max_retries"),
+            ],
+        )
     else:
         # test type has no extra fields
         pass
@@ -453,6 +487,7 @@ def to_pydantic_config() -> PydanticConfig:
         | RemoteWhisperConfig
         | TestWhisperConfig
         | GroqWhisperConfig
+        | GoogleWhisperConfig
         | None
     ) = None
     w = data["whisper"]
@@ -476,6 +511,14 @@ def to_pydantic_config() -> PydanticConfig:
             model=w.get("model", DEFAULTS.WHISPER_GROQ_MODEL),
             language=w.get("language", "en"),
             max_retries=w.get("max_retries", 3),
+        )
+    elif wtype == "google":
+        whisper_obj = GoogleWhisperConfig(
+            api_key=w.get("api_key") or "",
+            model=w.get("model", DEFAULTS.WHISPER_GOOGLE_MODEL),
+            language=w.get("language", DEFAULTS.WHISPER_GOOGLE_LANGUAGE),
+            timeout_sec=w.get("timeout_sec", DEFAULTS.WHISPER_GOOGLE_TIMEOUT_SEC),
+            chunksize_mb=w.get("chunksize_mb", DEFAULTS.WHISPER_GOOGLE_CHUNKSIZE_MB),
         )
     elif wtype == "test":
         whisper_obj = TestWhisperConfig()
@@ -614,6 +657,8 @@ def _apply_top_level_env_overrides(cfg: PydanticConfig) -> None:
         os.environ.get("LLM_API_KEY")
         or os.environ.get("OPENAI_API_KEY")
         or os.environ.get("GROQ_API_KEY")
+        or os.environ.get("GEMINI_API_KEY")
+        or os.environ.get("GOOGLE_API_KEY")
     )
     if env_llm_key:
         cfg.llm_api_key = env_llm_key
@@ -721,6 +766,20 @@ def _apply_groq_whisper_runtime_overrides(whisper: GroqWhisperConfig) -> None:
         whisper.max_retries = groq_max_retries
 
 
+def _apply_google_whisper_runtime_overrides(whisper: GoogleWhisperConfig) -> None:
+    google_key = (
+        os.environ.get("GEMINI_API_KEY")
+        or os.environ.get("GOOGLE_API_KEY")
+        or os.environ.get("LLM_API_KEY")
+    )
+    if google_key:
+        whisper.api_key = google_key
+
+    google_model = os.environ.get("WHISPER_GOOGLE_MODEL")
+    if google_model:
+        whisper.model = google_model
+
+
 def _apply_whisper_env_overrides(cfg: PydanticConfig) -> None:
     if cfg.whisper is None:
         return
@@ -729,6 +788,8 @@ def _apply_whisper_env_overrides(cfg: PydanticConfig) -> None:
         _apply_remote_whisper_runtime_overrides(cfg.whisper)
     elif wtype == "groq" and isinstance(cfg.whisper, GroqWhisperConfig):
         _apply_groq_whisper_runtime_overrides(cfg.whisper)
+    elif wtype == "google" and isinstance(cfg.whisper, GoogleWhisperConfig):
+        _apply_google_whisper_runtime_overrides(cfg.whisper)
     elif wtype == "local":
         loc_model = os.environ.get("WHISPER_LOCAL_MODEL")
         if isinstance(cfg.whisper, LocalWhisperConfig) and loc_model:
@@ -884,6 +945,55 @@ def _configure_groq_whisper(cfg: PydanticConfig) -> None:
     )
 
 
+def _configure_google_whisper(cfg: PydanticConfig) -> None:
+    existing_key_any = getattr(cfg.whisper, "api_key", "")
+    existing_key = existing_key_any if isinstance(existing_key_any, str) else ""
+    google_key_env = (
+        os.environ.get("GEMINI_API_KEY")
+        or os.environ.get("GOOGLE_API_KEY")
+        or os.environ.get("LLM_API_KEY")
+    )
+    google_api_key: str = (
+        google_key_env
+        if isinstance(google_key_env, str) and google_key_env
+        else existing_key
+    )
+
+    existing_model_any = getattr(cfg.whisper, "model", DEFAULTS.WHISPER_GOOGLE_MODEL)
+    existing_model = (
+        existing_model_any
+        if isinstance(existing_model_any, str)
+        else DEFAULTS.WHISPER_GOOGLE_MODEL
+    )
+    google_model_env = os.environ.get("WHISPER_GOOGLE_MODEL")
+    google_model: str = (
+        google_model_env
+        if isinstance(google_model_env, str) and google_model_env
+        else existing_model
+    )
+
+    existing_lang_any = getattr(
+        cfg.whisper, "language", DEFAULTS.WHISPER_GOOGLE_LANGUAGE
+    )
+    google_lang: str = (
+        existing_lang_any
+        if isinstance(existing_lang_any, str)
+        else DEFAULTS.WHISPER_GOOGLE_LANGUAGE
+    )
+
+    cfg.whisper = GoogleWhisperConfig(
+        api_key=google_api_key,
+        model=google_model,
+        language=google_lang,
+        timeout_sec=int(
+            getattr(cfg.whisper, "timeout_sec", DEFAULTS.WHISPER_GOOGLE_TIMEOUT_SEC)
+        ),
+        chunksize_mb=int(
+            getattr(cfg.whisper, "chunksize_mb", DEFAULTS.WHISPER_GOOGLE_CHUNKSIZE_MB)
+        ),
+    )
+
+
 def _apply_whisper_type_override(cfg: PydanticConfig) -> None:
     env_whisper_type = os.environ.get("WHISPER_TYPE")
 
@@ -901,6 +1011,11 @@ def _apply_whisper_type_override(cfg: PydanticConfig) -> None:
             logger.info(
                 "Auto-detected WHISPER_TYPE=groq from GROQ_API_KEY environment variable"
             )
+        elif os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"):
+            env_whisper_type = "google"
+            logger.info(
+                "Auto-detected WHISPER_TYPE=google from Gemini/Google API key environment variable"
+            )
 
     if not env_whisper_type:
         return
@@ -912,6 +1027,8 @@ def _apply_whisper_type_override(cfg: PydanticConfig) -> None:
         _configure_remote_whisper(cfg)
     elif wtype == "groq":
         _configure_groq_whisper(cfg)
+    elif wtype == "google":
+        _configure_google_whisper(cfg)
     elif wtype == "test":
         cfg.whisper = TestWhisperConfig()
 

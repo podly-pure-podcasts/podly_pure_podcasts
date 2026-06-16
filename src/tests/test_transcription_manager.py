@@ -9,7 +9,7 @@ from app.extensions import db
 from app.models import Feed, ModelCall, Post, TranscriptSegment
 from podcast_processor.transcribe import Segment, Transcriber
 from podcast_processor.transcription_manager import TranscriptionManager
-from shared.config import Config, TestWhisperConfig
+from shared.config import Config, GoogleWhisperConfig, TestWhisperConfig
 from shared.test_utils import create_standard_test_config
 
 
@@ -79,6 +79,25 @@ def mock_transcriber() -> MockTranscriber:
             Segment(start=5.0, end=10.0, text="Test segment 2"),
         ]
     )
+
+
+def test_create_transcriber_for_google(
+    test_config: Config, test_logger: logging.Logger, mock_db_session: MagicMock
+) -> None:
+    from podcast_processor.transcribe import GoogleGeminiAudioTranscriber
+
+    test_config.whisper = GoogleWhisperConfig(api_key="gemini-key")
+
+    manager = TranscriptionManager(
+        test_logger,
+        test_config,
+        model_call_query=MagicMock(),
+        segment_query=MagicMock(),
+        db_session=mock_db_session,
+    )
+
+    assert isinstance(manager.transcriber, GoogleGeminiAudioTranscriber)
+    assert manager.transcriber.model_name == "google_gemini-2.5-flash-lite"
 
 
 @pytest.fixture

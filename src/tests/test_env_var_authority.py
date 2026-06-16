@@ -92,7 +92,7 @@ class TestEnvVarAuthority:
         self, app: Any, monkeypatch: Any
     ) -> None:
         """Verify that env vars are not written to DB during startup."""
-        monkeypatch.setenv("LLM_API_KEY", "env-api-key-123")
+        monkeypatch.setenv("GEMINI_API_KEY", "env-api-key-123")
         monkeypatch.setenv("LLM_MODEL", "env-model-override")
 
         with app.app_context():
@@ -118,7 +118,7 @@ class TestEnvVarAuthority:
 
     def test_runtime_config_overlays_env_vars(self, app: Any, monkeypatch: Any) -> None:
         """Verify that runtime config has env var overlays applied."""
-        monkeypatch.setenv("LLM_API_KEY", "runtime-env-key")
+        monkeypatch.setenv("GEMINI_API_KEY", "runtime-env-key")
         monkeypatch.setenv("LLM_MODEL", "runtime-env-model")
         monkeypatch.setenv("OPENAI_TIMEOUT", "120")
         monkeypatch.setenv("OPENAI_MAX_TOKENS", "8192")
@@ -151,7 +151,14 @@ class TestEnvVarAuthority:
     ) -> None:
         """Verify that DB values are used when no env var is set."""
         # Clear any LLM env vars
-        for key in ["LLM_API_KEY", "OPENAI_API_KEY", "GROQ_API_KEY", "LLM_MODEL"]:
+        for key in [
+            "LLM_API_KEY",
+            "OPENAI_API_KEY",
+            "GROQ_API_KEY",
+            "GEMINI_API_KEY",
+            "GOOGLE_API_KEY",
+            "LLM_MODEL",
+        ]:
             monkeypatch.delenv(key, raising=False)
 
         with app.app_context():
@@ -172,7 +179,7 @@ class TestEnvOverrideMetadata:
         self, app: Any, monkeypatch: Any
     ) -> None:
         """Verify that env-overridden fields have read_only=True in metadata."""
-        monkeypatch.setenv("LLM_API_KEY", "test-key")
+        monkeypatch.setenv("GEMINI_API_KEY", "test-key")
 
         with app.app_context():
             from app.routes.config_routes import _build_env_override_metadata
@@ -192,6 +199,8 @@ class TestEnvOverrideMetadata:
                 "LLM_API_KEY",
                 "OPENAI_API_KEY",
                 "GROQ_API_KEY",
+                "GEMINI_API_KEY",
+                "GOOGLE_API_KEY",
             ]
 
     def test_env_override_metadata_for_all_llm_fields(
@@ -234,7 +243,7 @@ class TestEnvOverriddenFieldStripping:
 
     def test_strip_env_overridden_fields(self, monkeypatch: Any) -> None:
         """Verify that env-overridden fields are removed from update payload."""
-        monkeypatch.setenv("LLM_API_KEY", "env-key")
+        monkeypatch.setenv("GEMINI_API_KEY", "env-key")
         monkeypatch.setenv("LLM_MODEL", "env-model")
         monkeypatch.setenv("OPENAI_TIMEOUT", "120")
 
@@ -291,7 +300,14 @@ class TestEnvOverriddenFieldStripping:
 
     def test_no_stripping_when_no_env_vars(self, monkeypatch: Any) -> None:
         """Verify that fields are kept when no env vars are set."""
-        for key in ["LLM_API_KEY", "OPENAI_API_KEY", "GROQ_API_KEY", "LLM_MODEL"]:
+        for key in [
+            "LLM_API_KEY",
+            "OPENAI_API_KEY",
+            "GROQ_API_KEY",
+            "GEMINI_API_KEY",
+            "GOOGLE_API_KEY",
+            "LLM_MODEL",
+        ]:
             monkeypatch.delenv(key, raising=False)
 
         from app.routes.config_routes import _strip_env_overridden_fields

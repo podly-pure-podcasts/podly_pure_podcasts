@@ -4,6 +4,7 @@ from typing import Any
 
 import flask
 import litellm
+import requests
 from flask import Blueprint, jsonify, request
 from groq import Groq
 from openai import OpenAI
@@ -163,6 +164,8 @@ def _overlay_whisper_dict(target: dict[str, Any], source: dict[str, Any]) -> Non
         _overlay_remote_whisper_fields(target, source)
     elif wtype == "groq":
         _overlay_groq_whisper_fields(target, source)
+    elif wtype == "google":
+        _overlay_google_whisper_fields(target, source)
 
 
 def _overlay_whisper_object(target: dict[str, Any], source: Any) -> None:
@@ -174,6 +177,8 @@ def _overlay_whisper_object(target: dict[str, Any], source: Any) -> None:
         _overlay_remote_whisper_fields(target, source)
     elif wtype == "groq":
         _overlay_groq_whisper_fields(target, source)
+    elif wtype == "google":
+        _overlay_google_whisper_fields(target, source)
 
 
 def _overlay_remote_whisper_fields(target: dict[str, Any], source: Any) -> None:
@@ -195,6 +200,18 @@ def _overlay_groq_whisper_fields(target: dict[str, Any], source: Any) -> None:
     target["language"] = _get_attr_or_value(source, "language", target.get("language"))
     target["max_retries"] = _get_attr_or_value(
         source, "max_retries", target.get("max_retries")
+    )
+
+
+def _overlay_google_whisper_fields(target: dict[str, Any], source: Any) -> None:
+    target["api_key"] = _get_attr_or_value(source, "api_key", target.get("api_key"))
+    target["model"] = _get_attr_or_value(source, "model", target.get("model"))
+    target["language"] = _get_attr_or_value(source, "language", target.get("language"))
+    target["timeout_sec"] = _get_attr_or_value(
+        source, "timeout_sec", target.get("timeout_sec")
+    )
+    target["chunksize_mb"] = _get_attr_or_value(
+        source, "chunksize_mb", target.get("chunksize_mb")
     )
 
 
@@ -277,7 +294,15 @@ _SIMPLE_LLM_ENV_MAP: dict[str, str] = {
 
 def _register_llm_overrides(overrides: dict[str, Any]) -> None:
     """Register LLM-related environment overrides."""
-    env_var, env_value = _first_env(["LLM_API_KEY", "OPENAI_API_KEY", "GROQ_API_KEY"])
+    env_var, env_value = _first_env(
+        [
+            "LLM_API_KEY",
+            "OPENAI_API_KEY",
+            "GROQ_API_KEY",
+            "GEMINI_API_KEY",
+            "GOOGLE_API_KEY",
+        ]
+    )
     _register_override(overrides, "llm.llm_api_key", env_var, env_value, secret=True)
 
     for env_key, field_path in _SIMPLE_LLM_ENV_MAP.items():
@@ -350,6 +375,20 @@ def _register_groq_whisper_overrides(overrides: dict[str, Any]) -> None:
         )
 
 
+def _register_google_whisper_overrides(overrides: dict[str, Any]) -> None:
+    """Register Google/Gemini audio transcription environment overrides."""
+    google_key = _first_env(["GEMINI_API_KEY", "GOOGLE_API_KEY", "LLM_API_KEY"])
+    _register_override(
+        overrides, "whisper.api_key", google_key[0], google_key[1], secret=True
+    )
+
+    google_model = os.environ.get("WHISPER_GOOGLE_MODEL")
+    if google_model:
+        _register_override(
+            overrides, "whisper.model", "WHISPER_GOOGLE_MODEL", google_model
+        )
+
+
 def _register_local_whisper_overrides(overrides: dict[str, Any]) -> None:
     """Register local whisper environment overrides."""
     local_model = os.environ.get("WHISPER_LOCAL_MODEL")
@@ -373,6 +412,8 @@ def _determine_whisper_type_for_metadata(data: dict[str, Any]) -> str | None:
             env_whisper_type = "remote"
         elif os.environ.get("GROQ_API_KEY") and not os.environ.get("LLM_API_KEY"):
             env_whisper_type = "groq"
+        elif os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"):
+            env_whisper_type = "google"
 
     if env_whisper_type:
         wtype = env_whisper_type.strip().lower()
@@ -398,6 +439,8 @@ def _build_env_override_metadata(data: dict[str, Any]) -> dict[str, Any]:
         _register_remote_whisper_overrides(overrides)
     elif wtype == "groq":
         _register_groq_whisper_overrides(overrides)
+    elif wtype == "google":
+        _register_google_whisper_overrides(overrides)
     elif wtype == "local":
         _register_local_whisper_overrides(overrides)
 
@@ -415,6 +458,8 @@ def _get_llm_overridden_fields() -> set[str]:
         os.environ.get("LLM_API_KEY")
         or os.environ.get("OPENAI_API_KEY")
         or os.environ.get("GROQ_API_KEY")
+        or os.environ.get("GEMINI_API_KEY")
+        or os.environ.get("GOOGLE_API_KEY")
     ):
         overridden.add("llm.llm_api_key")
 
@@ -451,6 +496,16 @@ def _get_whisper_overridden_fields() -> set[str]:
         overridden.add("whisper.model")
     if os.environ.get("GROQ_MAX_RETRIES"):
         overridden.add("whisper.max_retries")
+
+    # Google/Gemini audio transcription
+    if (
+        os.environ.get("GEMINI_API_KEY")
+        or os.environ.get("GOOGLE_API_KEY")
+        or os.environ.get("LLM_API_KEY")
+    ):
+        overridden.add("whisper.api_key")
+    if os.environ.get("WHISPER_GOOGLE_MODEL"):
+        overridden.add("whisper.model")
 
     # Local whisper
     if os.environ.get("WHISPER_LOCAL_MODEL"):
@@ -670,6 +725,12 @@ def _get_env_whisper_api_key(whisper_type: str) -> str | None:
         )
     if whisper_type == "groq":
         return os.environ.get("GROQ_API_KEY")
+    if whisper_type == "google":
+        return (
+            os.environ.get("GEMINI_API_KEY")
+            or os.environ.get("GOOGLE_API_KEY")
+            or os.environ.get("LLM_API_KEY")
+        )
     return None
 
 
@@ -754,6 +815,28 @@ def _test_groq_whisper(whisper_cfg: dict[str, Any]) -> flask.Response:
     return _make_success_response("Groq whisper connection OK")
 
 
+def _test_google_whisper(whisper_cfg: dict[str, Any]) -> flask.Response:
+    """Test Google/Gemini audio transcription configuration."""
+    api_key_any = _get_whisper_config_value(whisper_cfg, "api_key")
+    api_key: str | None = api_key_any if isinstance(api_key_any, str) else None
+
+    if not api_key:
+        api_key = _get_env_whisper_api_key("google")
+
+    if not api_key:
+        return _make_error_response("Missing whisper.api_key")
+
+    model_any = _get_whisper_config_value(whisper_cfg, "model", "gemini-2.5-flash-lite")
+    model = model_any if isinstance(model_any, str) else "gemini-2.5-flash-lite"
+    response = requests.get(
+        f"https://generativelanguage.googleapis.com/v1beta/models/{model}",
+        params={"key": api_key},
+        timeout=30,
+    )
+    response.raise_for_status()
+    return _make_success_response("Google audio transcription connection OK")
+
+
 @config_bp.route("/api/config/test-whisper", methods=["POST"])
 def api_test_whisper() -> flask.Response:
     """Test whisper configuration based on whisper_type."""
@@ -775,6 +858,8 @@ def api_test_whisper() -> flask.Response:
             return _test_remote_whisper(whisper_cfg)
         if wtype == "groq":
             return _test_groq_whisper(whisper_cfg)
+        if wtype == "google":
+            return _test_google_whisper(whisper_cfg)
         return _make_error_response(f"Unknown whisper_type '{wtype}'")
     except Exception as e:  # noqa: BLE001
         logger.error(f"Whisper connection test failed: {e}")

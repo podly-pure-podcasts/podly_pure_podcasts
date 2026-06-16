@@ -4,7 +4,7 @@ from __future__ import annotations
 # Single source of truth for defaults across runtime, DB models, and Pydantic config.
 
 # LLM defaults
-LLM_DEFAULT_MODEL = "groq/openai/gpt-oss-120b"
+LLM_DEFAULT_MODEL = "gemini/gemini-2.5-flash-lite"
 OPENAI_DEFAULT_MAX_TOKENS = 4096
 OPENAI_DEFAULT_TIMEOUT_SEC = 300
 LLM_DEFAULT_MAX_CONCURRENT_CALLS = 3
@@ -28,6 +28,11 @@ WHISPER_REMOTE_CHUNKSIZE_MB = 24
 WHISPER_GROQ_MODEL = "whisper-large-v3-turbo"
 WHISPER_GROQ_LANGUAGE = "en"
 WHISPER_GROQ_MAX_RETRIES = 0
+
+WHISPER_GOOGLE_MODEL = "gemini-2.5-flash-lite"
+WHISPER_GOOGLE_LANGUAGE = "sv-SE"
+WHISPER_GOOGLE_TIMEOUT_SEC = 600
+WHISPER_GOOGLE_CHUNKSIZE_MB = 6
 
 # Processing defaults
 PROCESSING_NUM_SEGMENTS_TO_INPUT_TO_PROMPT = 60

@@ -93,8 +93,7 @@ export interface UseConfigStateReturn {
   isFieldReadOnly: (path: string) => boolean;
 
   // Recommended defaults
-  groqRecommendedModel: string;
-  groqRecommendedWhisper: string;
+  geminiRecommendedModel: string;
 
   // Env warning modal
   envWarningPaths: string[];
@@ -103,11 +102,11 @@ export interface UseConfigStateReturn {
   handleDismissEnvWarning: () => void;
 
   // Whisper type change handler
-  handleWhisperTypeChange: (nextType: 'local' | 'remote' | 'groq') => void;
+  handleWhisperTypeChange: (nextType: 'local' | 'remote' | 'groq' | 'google') => void;
 
-  // Groq quick setup mutation
-  applyGroqKey: (key: string) => Promise<void>;
-  isApplyingGroqKey: boolean;
+  // Gemini quick setup mutation
+  applyGeminiKey: (key: string) => Promise<void>;
+  isApplyingGeminiKey: boolean;
 }
 
 export function useConfigState(): UseConfigStateReturn {
@@ -157,13 +156,13 @@ export function useConfigState(): UseConfigStateReturn {
   const [showEnvWarning, setShowEnvWarning] = useState(false);
 
   const initialProbeDone = useRef(false);
-  const groqRecommendedModel = useMemo(() => 'groq/openai/gpt-oss-120b', []);
-  const groqRecommendedWhisper = useMemo(() => 'whisper-large-v3-turbo', []);
+  const geminiRecommendedModel = useMemo(() => 'gemini/gemini-2.5-flash-lite', []);
 
   const getWhisperApiKey = (w: WhisperConfig | undefined): string => {
     if (!w) return '';
     if (w.whisper_type === 'remote') return w.api_key ?? '';
     if (w.whisper_type === 'groq') return w.api_key ?? '';
+    if (w.whisper_type === 'google') return w.api_key ?? '';
     return '';
   };
 
@@ -413,7 +412,7 @@ export function useConfigState(): UseConfigStateReturn {
   };
 
   // Whisper type change handler
-  const handleWhisperTypeChange = (nextType: 'local' | 'remote' | 'groq') => {
+  const handleWhisperTypeChange = (nextType: 'local' | 'remote' | 'groq' | 'google') => {
     updatePending((prevConfig) => {
       const prevWhisper = {
         ...(prevConfig.whisper as unknown as Record<string, unknown>),
@@ -430,6 +429,10 @@ export function useConfigState(): UseConfigStateReturn {
       if (nextType === 'groq') {
         if (!nextModel || isNonGroqDefault || isDeprecatedGroq) {
           nextModel = 'whisper-large-v3-turbo';
+        }
+      } else if (nextType === 'google') {
+        if (!nextModel || isNonGroqDefault || isDeprecatedGroq || prevModel.startsWith('whisper')) {
+          nextModel = 'gemini-2.5-flash-lite';
         }
       } else if (nextType === 'remote') {
         if (!nextModel || prevModel === 'base' || prevModel === 'base.en') {
@@ -452,6 +455,13 @@ export function useConfigState(): UseConfigStateReturn {
         delete nextWhisper.base_url;
         delete nextWhisper.timeout_sec;
         delete nextWhisper.chunksize_mb;
+      } else if (nextType === 'google') {
+        nextWhisper.model = nextModel ?? 'gemini-2.5-flash-lite';
+        nextWhisper.language = (prevWhisper.language as string | undefined) || 'sv-SE';
+        nextWhisper.timeout_sec = (prevWhisper.timeout_sec as number | undefined) ?? 600;
+        nextWhisper.chunksize_mb = (prevWhisper.chunksize_mb as number | undefined) ?? 6;
+        delete nextWhisper.base_url;
+        delete nextWhisper.max_retries;
       } else if (nextType === 'remote') {
         nextWhisper.model = nextModel ?? 'whisper-1';
         nextWhisper.language = (prevWhisper.language as string | undefined) || 'en';
@@ -470,21 +480,22 @@ export function useConfigState(): UseConfigStateReturn {
     });
   };
 
-  // Groq key mutation
-  const applyGroqKeyMutation = useMutation({
+  // Gemini key mutation
+  const applyGeminiKeyMutation = useMutation({
     mutationFn: async (key: string) => {
       const next = {
         llm: {
           ...(pending?.llm as LLMConfig),
           llm_api_key: key,
-          llm_model: groqRecommendedModel,
+          llm_model: geminiRecommendedModel,
         },
         whisper: {
-          whisper_type: 'groq',
+          whisper_type: 'google',
           api_key: key,
-          model: groqRecommendedWhisper,
-          language: 'en',
-          max_retries: 3,
+          model: geminiRecommendedModel.replace('gemini/', ''),
+          language: 'sv-SE',
+          timeout_sec: 600,
+          chunksize_mb: 6,
         },
       } as Partial<CombinedConfig>;
 
@@ -499,23 +510,23 @@ export function useConfigState(): UseConfigStateReturn {
         configApi.testWhisper({ whisper: next.whisper as WhisperConfig }),
       ]);
       if (!llmRes?.ok) throw new Error(llmRes?.error || 'LLM test failed');
-      if (!whisperRes?.ok) throw new Error(whisperRes?.error || 'Whisper test failed');
+      if (!whisperRes?.ok) throw new Error(whisperRes?.error || 'Transcription test failed');
 
       return await configApi.updateConfig(next);
     },
     onSuccess: () => {
       setHasEdits(false);
       refetch();
-      toast.success('Groq key verified and saved. Defaults applied.');
+      toast.success('Gemini key verified and saved. Defaults applied.');
       setLlmStatus({ status: 'ok', message: 'LLM connection OK', error: '' });
-      setWhisperStatus({ status: 'ok', message: 'Whisper connection OK', error: '' });
+      setWhisperStatus({ status: 'ok', message: 'Google audio transcription OK', error: '' });
     },
   });
 
-  const applyGroqKey = async (key: string) => {
-    await toast.promise(applyGroqKeyMutation.mutateAsync(key), {
-      loading: 'Verifying Groq key and applying defaults...',
-      success: 'Groq configured successfully',
+  const applyGeminiKey = async (key: string) => {
+    await toast.promise(applyGeminiKeyMutation.mutateAsync(key), {
+      loading: 'Verifying Gemini key and applying defaults...',
+      success: 'Gemini configured successfully',
       error: (err: unknown) => {
         const e = err as {
           response?: { data?: { error?: string; message?: string } };
@@ -525,7 +536,7 @@ export function useConfigState(): UseConfigStateReturn {
           e?.response?.data?.error ||
           e?.response?.data?.message ||
           e?.message ||
-          'Failed to configure Groq'
+          'Failed to configure Gemini'
         );
       },
     });
@@ -559,8 +570,7 @@ export function useConfigState(): UseConfigStateReturn {
     isFieldReadOnly,
 
     // Recommended defaults
-    groqRecommendedModel,
-    groqRecommendedWhisper,
+    geminiRecommendedModel,
 
     // Env warning modal
     envWarningPaths,
@@ -571,9 +581,9 @@ export function useConfigState(): UseConfigStateReturn {
     // Whisper type change
     handleWhisperTypeChange,
 
-    // Groq quick setup
-    applyGroqKey,
-    isApplyingGroqKey: applyGroqKeyMutation.isPending,
+    // Gemini quick setup
+    applyGeminiKey,
+    isApplyingGeminiKey: applyGeminiKeyMutation.isPending,
   };
 }
 

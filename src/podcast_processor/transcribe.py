@@ -1,3 +1,5 @@
+import base64
+import json
 import logging
 import shutil
 import time
@@ -5,13 +7,14 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
 
+import requests
 from groq import Groq
 from openai import OpenAI
 from openai.types.audio.transcription_segment import TranscriptionSegment
 from pydantic import BaseModel
 
 from podcast_processor.audio import split_audio
-from shared.config import GroqWhisperConfig, RemoteWhisperConfig
+from shared.config import GoogleWhisperConfig, GroqWhisperConfig, RemoteWhisperConfig
 
 
 class Segment(BaseModel):
@@ -355,3 +358,152 @@ class GroqWhisperTranscriber(Transcriber):
 
         # unreachable, but satisfies type checker
         return []
+
+
+class GeminiTranscriptionSegment(BaseModel):
+    start: float
+    end: float
+    text: str
+
+
+class GoogleGeminiAudioTranscriber(Transcriber):
+    def __init__(self, logger: logging.Logger, config: GoogleWhisperConfig):
+        self.logger = logger
+        self.config = config
+
+    @property
+    def model_name(self) -> str:
+        return f"google_{self.config.model}"
+
+    def transcribe(self, audio_file_path: str) -> list[Segment]:
+        self.logger.info(
+            "[WHISPER_GOOGLE] Starting Gemini audio transcription for: %s",
+            audio_file_path,
+        )
+        audio_chunk_path = audio_file_path + "_parts"
+
+        chunks = split_audio(
+            Path(audio_file_path),
+            Path(audio_chunk_path),
+            self.config.chunksize_mb * 1024 * 1024,
+        )
+
+        self.logger.info("[WHISPER_GOOGLE] Processing %d chunks", len(chunks))
+        all_segments: list[GeminiTranscriptionSegment] = []
+
+        try:
+            for idx, chunk in enumerate(chunks):
+                chunk_path, offset = chunk
+                self.logger.info(
+                    "[WHISPER_GOOGLE] Processing chunk %d/%d: %s",
+                    idx + 1,
+                    len(chunks),
+                    chunk_path,
+                )
+                segments = self.get_segments_for_chunk(str(chunk_path))
+                all_segments.extend(self.add_offset_to_segments(segments, offset))
+        finally:
+            shutil.rmtree(audio_chunk_path, ignore_errors=True)
+
+        self.logger.info(
+            "[WHISPER_GOOGLE] Transcription complete: %d total segments",
+            len(all_segments),
+        )
+        return self.convert_segments(all_segments)
+
+    @staticmethod
+    def convert_segments(segments: list[GeminiTranscriptionSegment]) -> list[Segment]:
+        return [
+            Segment(start=seg.start, end=seg.end, text=seg.text) for seg in segments
+        ]
+
+    @staticmethod
+    def add_offset_to_segments(
+        segments: list[GeminiTranscriptionSegment], offset_ms: int
+    ) -> list[GeminiTranscriptionSegment]:
+        offset_sec = float(offset_ms) / 1000.0
+        for segment in segments:
+            segment.start += offset_sec
+            segment.end += offset_sec
+        return segments
+
+    def get_segments_for_chunk(
+        self, chunk_path: str
+    ) -> list[GeminiTranscriptionSegment]:
+        with open(chunk_path, "rb") as audio_file:
+            audio_b64 = base64.b64encode(audio_file.read()).decode("ascii")
+
+        response = requests.post(
+            self._endpoint(),
+            params={"key": self.config.api_key},
+            json={
+                "contents": [
+                    {
+                        "role": "user",
+                        "parts": [
+                            {"text": self._prompt()},
+                            {
+                                "inline_data": {
+                                    "mime_type": self._mime_type(chunk_path),
+                                    "data": audio_b64,
+                                }
+                            },
+                        ],
+                    }
+                ],
+                "generationConfig": {
+                    "temperature": 0,
+                    "response_mime_type": "application/json",
+                },
+            },
+            timeout=self.config.timeout_sec,
+        )
+        response.raise_for_status()
+
+        text = self._extract_response_text(response.json())
+        parsed = json.loads(text)
+        raw_segments = parsed.get(
+            "segments", parsed if isinstance(parsed, list) else []
+        )
+        if not isinstance(raw_segments, list):
+            raise ValueError("Gemini transcription response did not include segments")
+
+        return [GeminiTranscriptionSegment(**item) for item in raw_segments]
+
+    def _endpoint(self) -> str:
+        return (
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{self.config.model}:generateContent"
+        )
+
+    def _prompt(self) -> str:
+        return (
+            "Transcribe this Swedish podcast audio for ad detection. "
+            "Return only JSON with a segments array. Each segment must have "
+            "start, end, and text fields. start and end are seconds from the "
+            "beginning of this audio chunk. Use short sentence-sized segments. "
+            "Keep Swedish text in Swedish. Do not add commentary."
+        )
+
+    @staticmethod
+    def _mime_type(path: str) -> str:
+        suffix = Path(path).suffix.lower()
+        if suffix == ".mp3":
+            return "audio/mpeg"
+        if suffix == ".wav":
+            return "audio/wav"
+        if suffix == ".m4a":
+            return "audio/mp4"
+        return "audio/mpeg"
+
+    @staticmethod
+    def _extract_response_text(payload: dict[str, Any]) -> str:
+        candidates = payload.get("candidates") or []
+        if not candidates:
+            raise ValueError("Gemini transcription response had no candidates")
+        content = candidates[0].get("content") or {}
+        parts = content.get("parts") or []
+        text = "".join(part.get("text", "") for part in parts if isinstance(part, dict))
+        if not text.strip():
+            raise ValueError("Gemini transcription response had no text")
+        return text
