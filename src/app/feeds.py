@@ -337,6 +337,28 @@ def fetch_feed(url: str) -> feedparser.FeedParserDict:
     return feed_data
 
 
+def _should_whitelist_new_post(
+    feed: Feed, post: Post, floor_date: datetime.date | None
+) -> bool:
+    if floor_date is not None and post.release_date is None:
+        logger.debug(
+            "skipping post without release_date for existing feed: %s",
+            post.title,
+        )
+        return False
+    if (
+        floor_date is not None
+        and post.release_date
+        and post.release_date.date() < floor_date
+    ):
+        logger.debug(
+            "skipping post from archive older than floor date: %s",
+            post.title,
+        )
+        return False
+    return _should_auto_whitelist_new_posts(feed, post)
+
+
 def refresh_feed(feed: Feed) -> None:
     logger.info(f"Refreshing feed with ID: {feed.id}")
     feed_data = fetch_feed(feed.rss_url)
@@ -359,6 +381,27 @@ def refresh_feed(feed: Feed) -> None:
         key=lambda p: p.release_date,
         default=None,
     )
+    oldest_whitelisted_post = min(
+        (
+            post
+            for post in feed.posts  # type: ignore[attr-defined]
+            if post.whitelisted and post.release_date
+        ),
+        key=lambda p: p.release_date,
+        default=None,
+    )
+    oldest_known_date = oldest_post.release_date.date() if oldest_post else None
+    oldest_whitelisted_date = (
+        oldest_whitelisted_post.release_date.date() if oldest_whitelisted_post else None
+    )
+
+    # Use the stricter (more recent) floor date to prevent historical
+    # back-catalog episodes from being auto-whitelisted during refresh.
+    floor_date = (
+        max(oldest_known_date, oldest_whitelisted_date)
+        if oldest_known_date and oldest_whitelisted_date
+        else (oldest_known_date or oldest_whitelisted_date)
+    )
 
     new_posts = []
     existing_post_updates = []
@@ -379,20 +422,7 @@ def refresh_feed(feed: Feed) -> None:
         if existing_post is None:
             logger.debug("found new podcast: %s", entry.title)
             p = make_post(feed, entry)
-            # do not allow automatic download of any backcatalog added to the feed
-            if (
-                oldest_post is not None
-                and p.release_date
-                and oldest_post.release_date
-                and p.release_date.date() < oldest_post.release_date.date()
-            ):
-                p.whitelisted = False
-                logger.debug(
-                    f"skipping post from archive due to \
-number_of_episodes_to_whitelist_from_archive_of_new_feed setting: {entry.title}"
-                )
-            else:
-                p.whitelisted = _should_auto_whitelist_new_posts(feed, p)
+            p.whitelisted = _should_whitelist_new_post(feed, p, floor_date)
 
             post_data = {
                 "guid": p.guid,

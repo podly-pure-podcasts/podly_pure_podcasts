@@ -343,6 +343,95 @@ def test_refresh_feed_whitelists_when_member_exists(
 @mock.patch("app.feeds._should_auto_whitelist_new_posts")
 @mock.patch("app.feeds.make_post")
 @mock.patch("app.feeds.fetch_feed")
+def test_refresh_feed_blocks_auto_whitelist_for_older_than_whitelisted_floor(
+    mock_fetch_feed,
+    mock_make_post,
+    mock_should_auto_whitelist,
+    mock_writer_client,
+    mock_feed,
+    mock_db_session,
+):
+    existing_very_old = MockPost(
+        guid="existing-very-old",
+        release_date=datetime.datetime(2021, 6, 1, tzinfo=datetime.UTC),
+    )
+    existing_whitelisted_floor = MockPost(
+        guid="existing-whitelisted-floor",
+        release_date=datetime.datetime(2024, 1, 1, tzinfo=datetime.UTC),
+    )
+    existing_whitelisted_floor.whitelisted = True
+    mock_feed.posts = [existing_very_old, existing_whitelisted_floor]
+
+    entry = mock.MagicMock()
+    entry.id = "new-backfill-guid"
+    entry.title = "Backfill Episode"
+
+    feed_data = mock.MagicMock()
+    feed_data.feed = mock.MagicMock()
+    feed_data.feed.get.return_value = None
+    feed_data.entries = [entry]
+    mock_fetch_feed.return_value = feed_data
+
+    post_one = MockPost(
+        guid="new-backfill-guid",
+        release_date=datetime.datetime(2023, 1, 1, tzinfo=datetime.UTC),
+    )
+    mock_make_post.return_value = post_one
+    mock_should_auto_whitelist.return_value = True
+
+    refresh_feed(mock_feed)
+
+    assert post_one.whitelisted is False
+    assert mock_should_auto_whitelist.call_count == 0
+    payload = mock_writer_client.action.call_args.args[1]
+    assert payload["new_posts"][0]["whitelisted"] is False
+
+
+@mock.patch("app.feeds.writer_client")
+@mock.patch("app.feeds._should_auto_whitelist_new_posts")
+@mock.patch("app.feeds.make_post")
+@mock.patch("app.feeds.fetch_feed")
+def test_refresh_feed_blocks_auto_whitelist_when_release_date_missing(
+    mock_fetch_feed,
+    mock_make_post,
+    mock_should_auto_whitelist,
+    mock_writer_client,
+    mock_feed,
+    mock_db_session,
+):
+    existing_whitelisted_floor = MockPost(
+        guid="existing-whitelisted-floor",
+        release_date=datetime.datetime(2024, 1, 1, tzinfo=datetime.UTC),
+    )
+    existing_whitelisted_floor.whitelisted = True
+    mock_feed.posts = [existing_whitelisted_floor]
+
+    entry = mock.MagicMock()
+    entry.id = "new-no-date-guid"
+    entry.title = "No Date Episode"
+
+    feed_data = mock.MagicMock()
+    feed_data.feed = mock.MagicMock()
+    feed_data.feed.get.return_value = None
+    feed_data.entries = [entry]
+    mock_fetch_feed.return_value = feed_data
+
+    post_one = MockPost(guid="new-no-date-guid", release_date=None)
+    mock_make_post.return_value = post_one
+    mock_should_auto_whitelist.return_value = True
+
+    refresh_feed(mock_feed)
+
+    assert post_one.whitelisted is False
+    assert mock_should_auto_whitelist.call_count == 0
+    payload = mock_writer_client.action.call_args.args[1]
+    assert payload["new_posts"][0]["whitelisted"] is False
+
+
+@mock.patch("app.feeds.writer_client")
+@mock.patch("app.feeds._should_auto_whitelist_new_posts")
+@mock.patch("app.feeds.make_post")
+@mock.patch("app.feeds.fetch_feed")
 def test_refresh_feed_backfills_existing_unprocessed_post_duration(
     mock_fetch_feed,
     mock_make_post,
