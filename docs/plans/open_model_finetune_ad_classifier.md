@@ -67,6 +67,48 @@ Treat external data as **augmentation only**, not a substitute for Podly-in-dist
 
 ## Recommended approach: teacher → SFT (QLoRA) → optional preference tuning
 
+### Teacher → student (yes — this is the primary path)
+
+Use a **more capable model as teacher** and fine-tune a **smaller open student** on the teacher’s outputs. Podly is already set up for this: every successful classification stores `ModelCall.prompt` + `ModelCall.response`, which are nearly ready distillation pairs.
+
+```text
+Teacher (e.g. gpt-oss-120b / GPT-4o / Claude)
+    │  same system + user prompts as production
+    ▼
+Silver labels (JSON ad_segments)
+    │  optional human review on hard cases
+    ▼
+Student SFT (Qwen3-4B/8B QLoRA)
+    │
+    ▼
+Serve student via LiteLLM openai_base_url
+```
+
+**What “distillation” means here (practical, not logit KD):**
+
+| Technique | Fit for Podly |
+|-----------|---------------|
+| **Response / imitation SFT** (train student to emit teacher JSON) | **Default.** Cheap, works with existing `ModelCall` rows, keeps LiteLLM contract. |
+| **Multi-teacher ensemble** (several strong models; keep agreement / majority) | High value for precision. Discard or flag chunks where teachers disagree. |
+| **Active teaching** (teacher labels only uncertain / cue-heavy / disagreement chunks) | Saves API cost once a weak student or heuristics exist. |
+| **True logit / feature KD** (match teacher token distributions) | Usually overkill; needs white-box teacher weights and custom training loops. Skip for v1. |
+| **On-policy self-distill** (student drafts → teacher corrects) | Optional later; useful once student is already “almost good.” |
+
+**Teacher choices:**
+
+- **In-house free teacher:** continue using the production hosted model and export historical `ModelCall`s (cheapest if retention is fixed).
+- **Stronger offline teacher for a one-shot corpus:** run a better/more careful model (or the same model at lower temperature + self-consistency) over a curated episode set and *only* keep high-agreement labels.
+- **Do not** assume the student can exceed the teacher on the same distribution without human corrections or multi-teacher filtering — distillation mostly **compresses** teacher behavior into a cheaper model.
+
+**Quality control for teacher labels:**
+
+1. Prefer `temperature=0` (or low) teacher generations.
+2. Drop unparseable / repaired-JSON responses from the train set (keep a few in eval to measure robustness).
+3. Human-review a stratified slice, especially self-promo vs external sponsor.
+4. Optionally require **two teachers agree** on `ad_segments` offsets (within tolerance) before a chunk enters silver train.
+
+This is still **supervised fine-tuning**, not magic transfer: the student learns Podly’s taxonomy and JSON habit from examples the teacher produced.
+
 ### Phase 0 — Success criteria & baseline
 
 Define offline metrics on a frozen eval set (episode-level splits, never segment-random):
