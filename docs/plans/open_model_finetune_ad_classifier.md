@@ -292,4 +292,4 @@ Higher engineering cost inside Podly; better if the goal is **CPU-only** edge in
 
 ## Bottom line
 
-Fine-tune a **small open instruct model (start Qwen3-4B, QLoRA SFT)** on **Podly’s existing prompt→JSON contract**, using **teacher `ModelCall` silver labels plus a human gold eval set**, with **precision and false-positive content seconds** as promotion gates. Serve it as a drop-in OpenAI-compatible endpoint behind LiteLLM. Treat encoder/audio approaches as fallbacks; fix **metadata retention** before expecting a large in-house corpus.
+Yes: use a **capable hosted model as teacher** and **imitate its JSON outputs** with QLoRA SFT on a **small open student (start Qwen3-4B)**. Prefer response-level distillation from `ModelCall` (optionally multi-teacher agreement), plus a human gold eval set. Gate on **precision** and **false-positive content seconds**. Serve the student behind LiteLLM. Skip logit KD for v1; fix **metadata retention** before expecting a large corpus.
