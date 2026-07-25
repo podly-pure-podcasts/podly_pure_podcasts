@@ -646,6 +646,32 @@ def test_feed_item(mock_post, app):
     assert enclosure.length == mock_post._audio_len_bytes
 
 
+def test_feed_item_percent_encodes_guid_with_slashes(mock_post, app):
+    """Upstream GUIDs with '/' must not split the enclosure URL path."""
+    mock_post.guid = "tag:audioboom.com,2026-03-26:/posts/8879470"
+
+    headers_dict = {"Host": "podly.com:5001"}
+    mock_headers = mock.MagicMock()
+    mock_headers.get.side_effect = headers_dict.get
+    mock_environ = mock.MagicMock()
+    mock_environ.get.return_value = None
+    mock_request = mock.MagicMock()
+    mock_request.headers = mock_headers
+    mock_request.environ = mock_environ
+    mock_request.is_secure = False
+
+    with app.app_context(), mock.patch("app.feeds.request", mock_request):
+        result = feed_item(mock_post)
+
+    enclosure = result.enclosure
+    assert enclosure is not None
+    assert (
+        enclosure.url
+        == "http://podly.com:5001/post/tag%3Aaudioboom.com%2C2026-03-26%3A%2Fposts%2F8879470.mp3"
+    )
+    assert result.guid == "tag:audioboom.com,2026-03-26:/posts/8879470"
+
+
 def test_feed_item_appends_podly_chapters(mock_post, app):
     mock_post.chapter_data = json.dumps(
         {
@@ -1238,9 +1264,7 @@ def test_get_guid_falls_back_to_url_hash_when_id_missing(mock_find_audio_link):
     mock_find_audio_link.return_value = "https://cdn.example.com/audio.mp3"
     entry = SimpleNamespace()  # no id, no guid
 
-    expected = str(
-        uuid.uuid5(uuid.NAMESPACE_URL, "https://cdn.example.com/audio.mp3")
-    )
+    expected = str(uuid.uuid5(uuid.NAMESPACE_URL, "https://cdn.example.com/audio.mp3"))
     assert get_guid(entry) == expected
 
 
@@ -1250,9 +1274,7 @@ def test_get_guid_falls_back_to_url_hash_when_id_empty(mock_find_audio_link):
     mock_find_audio_link.return_value = "https://cdn.example.com/audio.mp3"
     entry = SimpleNamespace(id="", guid=None)
 
-    expected = str(
-        uuid.uuid5(uuid.NAMESPACE_URL, "https://cdn.example.com/audio.mp3")
-    )
+    expected = str(uuid.uuid5(uuid.NAMESPACE_URL, "https://cdn.example.com/audio.mp3"))
     assert get_guid(entry) == expected
 
 
@@ -1262,9 +1284,7 @@ def test_get_guid_falls_back_to_url_hash_when_id_whitespace_only(mock_find_audio
     mock_find_audio_link.return_value = "https://cdn.example.com/audio.mp3"
     entry = SimpleNamespace(id="   \n  ", guid=None)
 
-    expected = str(
-        uuid.uuid5(uuid.NAMESPACE_URL, "https://cdn.example.com/audio.mp3")
-    )
+    expected = str(uuid.uuid5(uuid.NAMESPACE_URL, "https://cdn.example.com/audio.mp3"))
     assert get_guid(entry) == expected
 
 

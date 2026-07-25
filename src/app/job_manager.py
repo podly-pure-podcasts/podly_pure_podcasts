@@ -2,6 +2,7 @@ import logging
 from typing import Any
 
 from app.extensions import db as _db
+from app.guid_urls import post_download_api_path
 from app.models import Post, ProcessingJob
 from app.writer.client import writer_client
 from podcast_processor.processing_status_manager import ProcessingStatusManager
@@ -192,7 +193,7 @@ class JobManager:
                     "status": "skipped",
                     "message": "Post already processed",
                     "job_id": getattr(job, "id", None),
-                    "download_url": f"/api/posts/{self.post_guid}/download",
+                    "download_url": post_download_api_path(self.post_guid),
                 },
             )
 

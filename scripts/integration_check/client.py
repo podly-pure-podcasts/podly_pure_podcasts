@@ -8,8 +8,13 @@ import time
 import uuid
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import quote
 
 import requests
+
+
+def _encoded_guid(guid: str) -> str:
+    return quote(guid, safe="")
 
 
 @dataclass

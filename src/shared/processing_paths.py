@@ -2,6 +2,7 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import quote
 
 
 @dataclass
@@ -115,10 +116,14 @@ def get_job_unprocessed_path(post_guid: str, job_id: str, post_title: str) -> Pa
     """Return a unique per-job path for the unprocessed audio file.
 
     Layout: in/jobs/{post_guid}/{job_id}/{sanitized_title}.mp3
+
+    Upstream GUIDs may contain ``/`` (and other path-significant characters),
+    so the GUID is percent-encoded before being used as a directory name.
     """
     # Keep same sanitization behavior used for download filenames
     sanitized_title = re.sub(r"[^a-zA-Z0-9\s]", "", post_title).strip()
-    return get_in_root() / "jobs" / post_guid / job_id / f"{sanitized_title}.mp3"
+    safe_guid = quote(post_guid, safe="")
+    return get_in_root() / "jobs" / safe_guid / job_id / f"{sanitized_title}.mp3"
 
 
 # ---- New centralized data-root helpers ----

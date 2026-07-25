@@ -14,6 +14,7 @@ import PyRSS2Gen
 from flask import current_app, g, request
 
 from app.extensions import db
+from app.guid_urls import post_stream_path
 from app.models import Feed, Post, User, UserFeed
 from app.runtime_config import config
 from app.writer.client import writer_client
@@ -624,8 +625,10 @@ def feed_item(post: Post, prepend_feed_title: bool = False) -> PyRSS2Gen.RSSItem
     base_url = _get_base_url()
 
     # Podcast clients stream enclosure URLs directly, so use the inline MP3 route
-    # rather than the attachment-style download endpoint.
-    audio_url = _append_feed_token_params(f"{base_url}/post/{post.guid}.mp3")
+    # rather than the attachment-style download endpoint. Upstream GUIDs may
+    # contain reserved characters (e.g. audioboom `tag:...:/posts/N`), so the
+    # GUID must be a single percent-encoded path segment.
+    audio_url = _append_feed_token_params(f"{base_url}{post_stream_path(post.guid)}")
     description = build_post_feed_description_html(post)
 
     title = post.title

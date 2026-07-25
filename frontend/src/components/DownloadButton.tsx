@@ -31,7 +31,7 @@ export default function DownloadButton({
   
   const isProcessing = status?.status === 'pending' || status?.status === 'running' || status?.status === 'starting';
   const isCompleted = hasProcessedAudio || status?.status === 'completed';
-  const downloadUrl = status?.download_url || (hasProcessedAudio ? `/api/posts/${episodeGuid}/download` : undefined);
+  const downloadUrl = status?.download_url || (hasProcessedAudio ? `/api/posts/${encodeURIComponent(episodeGuid)}/download` : undefined);
 
   const handleDownloadClick = async () => {
     if (!isWhitelisted) {
