@@ -9,6 +9,7 @@ from app.db_guard import db_guard, reset_session
 from app.extensions import db as _db
 from app.extensions import scheduler
 from app.feeds import refresh_feed
+from app.guid_urls import post_download_api_path
 from app.job_manager import JobManager as SingleJobManager
 from app.models import Feed, JobsManagerRun, Post, ProcessingJob
 from app.processor import get_processor
@@ -232,7 +233,7 @@ class JobsManager:
                         "total_steps": 4,
                         "progress_percentage": 100.0,
                         "message": "Post already processed",
-                        "download_url": f"/api/posts/{post_guid}/download",
+                        "download_url": post_download_api_path(post_guid),
                     }
                 return {
                     "status": "not_started",
@@ -263,7 +264,7 @@ class JobsManager:
                 feed_title=getattr(post.feed, "title", None),
                 post_title=post.title,
             ):
-                response["download_url"] = f"/api/posts/{post_guid}/download"
+                response["download_url"] = post_download_api_path(post_guid)
             if job.status == "failed" and job.error_message:
                 response["error"] = job.error_message
             if job.status == "cancelled" and job.error_message:

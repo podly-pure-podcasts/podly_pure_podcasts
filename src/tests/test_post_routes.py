@@ -2,6 +2,7 @@ import datetime
 import json
 from types import SimpleNamespace
 from unittest import mock
+from urllib.parse import quote
 
 from flask import g
 
@@ -10,6 +11,112 @@ from app.models import Feed, ModelCall, Post, TranscriptSegment, User
 from app.routes.post_routes import post_bp
 from app.runtime_config import config as runtime_config
 from shared.config import LocalWhisperConfig
+
+
+def _encoded_guid(guid: str) -> str:
+    return quote(guid, safe="")
+
+
+def test_processing_estimate_accepts_guid_with_slashes(app):
+    app.testing = True
+    app.register_blueprint(post_bp)
+
+    with app.app_context():
+        feed = Feed(title="Slash GUID Feed", rss_url="https://example.com/feed.xml")
+        db.session.add(feed)
+        db.session.commit()
+
+        post = Post(
+            feed_id=feed.id,
+            guid="tag:audioboom.com,2026-03-26:/posts/8879470",
+            download_url="https://example.com/audio.mp3",
+            title="Slash GUID Episode",
+            duration=1800,
+            whitelisted=True,
+        )
+        db.session.add(post)
+        db.session.commit()
+        guid = post.guid
+
+    response = app.test_client().get(
+        f"/api/posts/{_encoded_guid(guid)}/processing-estimate"
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload is not None
+    assert payload["post_guid"] == guid
+    assert payload["estimated_minutes"] == 30.0
+
+
+def test_process_post_accepts_guid_with_slashes(app):
+    app.testing = True
+    app.register_blueprint(post_bp)
+
+    with app.app_context():
+        feed = Feed(title="Slash GUID Feed", rss_url="https://example.com/feed.xml")
+        db.session.add(feed)
+        db.session.commit()
+
+        post = Post(
+            feed_id=feed.id,
+            guid="tag:audioboom.com,2026-03-26:/posts/8879470",
+            download_url="https://example.com/audio.mp3",
+            title="Slash GUID Episode",
+            whitelisted=True,
+        )
+        db.session.add(post)
+        db.session.commit()
+        guid = post.guid
+
+    with mock.patch("app.routes.post_routes.get_jobs_manager") as mock_mgr:
+        mock_mgr.return_value.start_post_processing.return_value = {
+            "status": "started",
+            "job_id": "job-123",
+            "message": "ok",
+        }
+
+        response = app.test_client().post(f"/api/posts/{_encoded_guid(guid)}/process")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload is not None
+    assert payload["status"] == "started"
+    mock_mgr.return_value.start_post_processing.assert_called_once_with(
+        guid,
+        priority="interactive",
+        requested_by_user_id=None,
+        billing_user_id=None,
+    )
+
+
+def test_stream_route_accepts_guid_with_slashes(app, tmp_path):
+    app.testing = True
+    app.register_blueprint(post_bp)
+
+    with app.app_context():
+        feed = Feed(title="Slash GUID Feed", rss_url="https://example.com/feed.xml")
+        db.session.add(feed)
+        db.session.commit()
+
+        processed_audio = tmp_path / "processed.mp3"
+        processed_audio.write_bytes(b"processed audio")
+
+        post = Post(
+            feed_id=feed.id,
+            guid="tag:audioboom.com,2026-03-26:/posts/8879470",
+            download_url="https://example.com/audio.mp3",
+            title="Slash GUID Episode",
+            whitelisted=True,
+            processed_audio_path=str(processed_audio),
+        )
+        db.session.add(post)
+        db.session.commit()
+        guid = post.guid
+
+    response = app.test_client().get(f"/post/{_encoded_guid(guid)}.mp3")
+    assert response.status_code == 200
+    assert response.data == b"processed audio"
 
 
 def test_download_endpoints_increment_counter(app, tmp_path):

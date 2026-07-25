@@ -66,6 +66,9 @@ const buildAbsoluteUrl = (path: string): string => {
   return `${origin}/${path}`;
 };
 
+const postApiPath = (guid: string, suffix: string): string =>
+  `/api/posts/${encodeURIComponent(guid)}${suffix}`;
+
 export const feedsApi = {
   getFeeds: async (): Promise<Feed[]> => {
     const response = await api.get('/feeds');
@@ -117,7 +120,7 @@ export const feedsApi = {
     whitelisted: boolean,
     triggerProcessing = false
   ): Promise<{ processing_job?: { status: string; job_id?: string; message?: string } }> => {
-    const response = await api.post(`/api/posts/${guid}/whitelist`, {
+    const response = await api.post(postApiPath(guid, '/whitelist'), {
       whitelisted,
       trigger_processing: triggerProcessing,
     });
@@ -160,7 +163,7 @@ export const feedsApi = {
     can_process: boolean;
     reason: string | null;
   }> => {
-    const response = await api.get(`/api/posts/${guid}/processing-estimate`);
+    const response = await api.get(postApiPath(guid, '/processing-estimate'));
     return response.data;
   },
 
@@ -178,19 +181,19 @@ export const feedsApi = {
 
   // New post processing methods
   processPost: async (guid: string): Promise<{ status: string; job_id?: string; message: string; download_url?: string }> => {
-    const response = await api.post(`/api/posts/${guid}/process`);
+    const response = await api.post(postApiPath(guid, '/process'));
     return response.data;
   },
 
   reprocessPost: async (guid: string): Promise<{ status: string; job_id?: string; message: string; download_url?: string }> => {
-    const response = await api.post(`/api/posts/${guid}/reprocess`);
+    const response = await api.post(postApiPath(guid, '/reprocess'));
     return response.data;
   },
 
   reprocessPostKeepTranscript: async (
     guid: string
   ): Promise<{ status: string; job_id?: string; message: string; download_url?: string }> => {
-    const response = await api.post(`/api/posts/${guid}/reprocess/keep-transcript`);
+    const response = await api.post(postApiPath(guid, '/reprocess/keep-transcript'));
     return response.data;
   },
 
@@ -204,28 +207,28 @@ export const feedsApi = {
     download_url?: string;
     error?: string;
   }> => {
-    const response = await api.get(`/api/posts/${guid}/status`);
+    const response = await api.get(postApiPath(guid, '/status'));
     return response.data;
   },
 
   // Get audio URL for post
   getPostAudioUrl: (guid: string): string => {
-    return buildAbsoluteUrl(`/api/posts/${guid}/audio`);
+    return buildAbsoluteUrl(postApiPath(guid, '/audio'));
   },
 
   // Get download URL for processed post
   getPostDownloadUrl: (guid: string): string => {
-    return buildAbsoluteUrl(`/api/posts/${guid}/download`);
+    return buildAbsoluteUrl(postApiPath(guid, '/download'));
   },
 
   // Get download URL for original post
   getPostOriginalDownloadUrl: (guid: string): string => {
-    return buildAbsoluteUrl(`/api/posts/${guid}/download/original`);
+    return buildAbsoluteUrl(postApiPath(guid, '/download/original'));
   },
 
   // Download processed post
   downloadPost: async (guid: string): Promise<void> => {
-    const response = await api.get(`/api/posts/${guid}/download`, {
+    const response = await api.get(postApiPath(guid, '/download'), {
       responseType: 'blob',
     });
 
@@ -242,7 +245,7 @@ export const feedsApi = {
 
   // Download original post
   downloadOriginalPost: async (guid: string): Promise<void> => {
-    const response = await api.get(`/api/posts/${guid}/download/original`, {
+    const response = await api.get(postApiPath(guid, '/download/original'), {
       responseType: 'blob',
     });
 
@@ -385,7 +388,7 @@ export const feedsApi = {
       note?: string;
     } | null;
   }> => {
-    const response = await api.get(`/api/posts/${guid}/stats`);
+    const response = await api.get(postApiPath(guid, '/stats'));
     return response.data;
   },
 
