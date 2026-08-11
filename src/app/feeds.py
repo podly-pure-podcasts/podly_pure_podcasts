@@ -654,6 +654,15 @@ def feed_item(post: Post, prepend_feed_title: bool = False) -> PyRSS2Gen.RSSItem
     return item
 
 
+def _format_feed_rss_title(feed_title: str | None) -> str:
+    """Apply the configured prefix to a feed title for RSS output."""
+    title = feed_title or ""
+    prefix = (getattr(config, "feed_title_prefix", None) or "").strip()
+    if prefix:
+        return f"{prefix} {title}"
+    return title
+
+
 def generate_feed_xml(feed: Feed) -> Any:
     logger.info(f"Generating XML for feed with ID: {feed.id}")
 
@@ -680,7 +689,7 @@ def generate_feed_xml(feed: Feed) -> Any:
     last_build_date = format_datetime(datetime.datetime.now(datetime.UTC))
 
     rss_feed = PyRSS2Gen.RSS2(
-        title="[podly] " + feed.title,
+        title=_format_feed_rss_title(feed.title),
         link=link,
         description=_normalize_feed_text(feed.description),
         lastBuildDate=last_build_date,

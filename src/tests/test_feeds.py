@@ -1147,6 +1147,40 @@ def test_generate_feed_xml_includes_all_when_autoprocess_enabled(
             runtime_config.autoprocess_on_download = original_flag
 
 
+@mock.patch("app.feeds.feed_item")
+@mock.patch("app.feeds.PyRSS2Gen.Image")
+@mock.patch("app.feeds.PyRSS2Gen.RSS2")
+@pytest.mark.parametrize(
+    ("prefix", "expected_title"),
+    [
+        ("[podly]", "[podly] Feed 1"),
+        ("[Ad-Free]", "[Ad-Free] Feed 1"),
+        ("", "Feed 1"),
+        ("   ", "Feed 1"),
+    ],
+)
+def test_generate_feed_xml_uses_feed_title_prefix(
+    mock_rss_2, mock_image, mock_feed_item, app, prefix, expected_title
+):
+    with app.app_context():
+        original_prefix = getattr(runtime_config, "feed_title_prefix", "[podly]")
+        runtime_config.feed_title_prefix = prefix
+        try:
+            feed = Feed(rss_url="http://example.com/feed-prefix", title="Feed 1")
+            db.session.add(feed)
+            db.session.commit()
+
+            mock_feed_item.return_value = mock.MagicMock()
+            mock_rss = mock_rss_2.return_value
+            mock_rss.to_xml.return_value = "<rss></rss>"
+
+            generate_feed_xml(feed)
+
+            assert mock_rss_2.call_args.kwargs["title"] == expected_title
+        finally:
+            runtime_config.feed_title_prefix = original_prefix
+
+
 @mock.patch("app.feeds.Post")
 def test_make_post(mock_post_class, mock_feed):
     # Create a mock entry

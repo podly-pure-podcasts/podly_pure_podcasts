@@ -154,6 +154,7 @@ def ensure_defaults() -> None:
             "user_limit_total": DEFAULTS.APP_USER_LIMIT_TOTAL,
             "autoprocess_on_download": DEFAULTS.APP_AUTOPROCESS_ON_DOWNLOAD,
             "cost_rate_per_hour": DEFAULTS.APP_COST_RATE_PER_HOUR,
+            "feed_title_prefix": DEFAULTS.APP_FEED_TITLE_PREFIX,
         },
     )
 
@@ -230,6 +231,7 @@ def read_combined() -> dict[str, Any]:
             "user_limit_total": app_s.user_limit_total,
             "autoprocess_on_download": app_s.autoprocess_on_download,
             "cost_rate_per_hour": app_s.cost_rate_per_hour,
+            "feed_title_prefix": app_s.feed_title_prefix,
         },
     }
 
@@ -366,6 +368,7 @@ def _update_section_app(data: dict[str, Any]) -> tuple[int | None, int | None]:
         "user_limit_total",
         "autoprocess_on_download",
         "cost_rate_per_hour",
+        "feed_title_prefix",
     ]:
         if key in data:
             setattr(row, key, data[key])
@@ -572,6 +575,11 @@ def to_pydantic_config() -> PydanticConfig:
                 "cost_rate_per_hour",
                 DEFAULTS.APP_COST_RATE_PER_HOUR,
             )
+        ),
+        feed_title_prefix=(
+            DEFAULTS.APP_FEED_TITLE_PREFIX
+            if data["app"].get("feed_title_prefix") is None
+            else str(data["app"]["feed_title_prefix"])
         ),
     )
 
