@@ -83,6 +83,18 @@ export default function AppSection() {
               }
             />
           </Field>
+          <Field
+            label="Feed title prefix"
+            hint="Shown before the podcast name in players (e.g. [Ad-Free]). Leave blank for none."
+          >
+            <input
+              className="input"
+              type="text"
+              placeholder="[podly]"
+              value={pending?.app?.feed_title_prefix ?? ''}
+              onChange={(e) => setField(['app', 'feed_title_prefix'], e.target.value)}
+            />
+          </Field>
           <div className="col-span-1 md:col-span-2 flex items-center gap-3">
             <label className="flex items-center gap-2 text-sm text-gray-700 font-medium">
               <input

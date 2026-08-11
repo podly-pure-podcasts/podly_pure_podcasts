@@ -166,6 +166,7 @@ export interface AppConfigUI {
   user_limit_total: number | null;
   autoprocess_on_download: boolean;
   cost_rate_per_hour: number;
+  feed_title_prefix: string;
 }
 
 export interface CombinedConfig {

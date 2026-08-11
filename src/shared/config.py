@@ -161,6 +161,7 @@ class Config(BaseModel):
     user_limit_total: int | None = DEFAULTS.APP_USER_LIMIT_TOTAL
     autoprocess_on_download: bool = DEFAULTS.APP_AUTOPROCESS_ON_DOWNLOAD
     cost_rate_per_hour: float = DEFAULTS.APP_COST_RATE_PER_HOUR
+    feed_title_prefix: str = DEFAULTS.APP_FEED_TITLE_PREFIX
 
     def redacted(self) -> Config:
         return self.model_copy(

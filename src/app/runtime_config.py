@@ -49,4 +49,5 @@ else:
         user_limit_total=DEFAULTS.APP_USER_LIMIT_TOTAL,
         developer_mode=os.environ.get("DEVELOPER_MODE", "false").lower() == "true",
         autoprocess_on_download=DEFAULTS.APP_AUTOPROCESS_ON_DOWNLOAD,
+        feed_title_prefix=DEFAULTS.APP_FEED_TITLE_PREFIX,
     )
