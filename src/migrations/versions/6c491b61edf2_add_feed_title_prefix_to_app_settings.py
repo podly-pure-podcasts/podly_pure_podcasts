@@ -11,7 +11,8 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "6c491b61edf2"
-down_revision = "b69cc952e445"
+# Merge upstream dual heads while adding the new column.
+down_revision = ("3e5eebc6b3b1", "a7c1b9e2d4f5")
 branch_labels = None
 depends_on = None
 
