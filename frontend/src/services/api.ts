@@ -74,13 +74,14 @@ export const feedsApi = {
 
   getFeedPosts: async (
     feedId: number,
-    options?: { page?: number; pageSize?: number; whitelistedOnly?: boolean }
+    options?: { page?: number; pageSize?: number; whitelistedOnly?: boolean; sortDir?: string}
   ): Promise<PagedResult<Episode>> => {
     const response = await api.get(`/api/feeds/${feedId}/posts`, {
       params: {
         page: options?.page,
         page_size: options?.pageSize,
         whitelisted_only: options?.whitelistedOnly,
+        sort_dir: options?.sortDir, // new
       },
     });
     return response.data;
