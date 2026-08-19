@@ -141,12 +141,16 @@ def api_feed_posts(feed_id: int) -> flask.Response:
     if whitelisted_only:
         base_query = base_query.filter_by(whitelisted=True)
 
-    # Suggested by Claude to parameterize sorting 
+    # Suggested by Claude to parameterize sorting
     sort_dir = str(request.args.get("sort_dir", "desc")).lower()
     if sort_dir not in {"asc", "desc"}:
         sort_dir = "desc"
 
-    order_col = Post.release_date.asc().nullslast() if sort_dir == "asc" else Post.release_date.desc().nullslast()
+    order_col = (
+        Post.release_date.asc().nullslast()
+        if sort_dir == "asc"
+        else Post.release_date.desc().nullslast()
+    )
     id_col = Post.id.asc() if sort_dir == "asc" else Post.id.desc()
 
     ordered_query = base_query.order_by(order_col, id_col)
