@@ -74,21 +74,25 @@ export const feedsApi = {
 
   getFeedPosts: async (
     feedId: number,
-    options?: { page?: number; pageSize?: number; whitelistedOnly?: boolean }
+    options?: { page?: number; pageSize?: number; whitelistedOnly?: boolean; sortDir?: string}
   ): Promise<PagedResult<Episode>> => {
     const response = await api.get(`/api/feeds/${feedId}/posts`, {
       params: {
         page: options?.page,
         page_size: options?.pageSize,
         whitelisted_only: options?.whitelistedOnly,
+        sort_dir: options?.sortDir, // new
       },
     });
     return response.data;
   },
 
-  addFeed: async (url: string): Promise<void> => {
+  addFeed: async (url: string, language?: string | null): Promise<void> => {
     const formData = new FormData();
     formData.append('url', url);
+    if (language) {
+      formData.append('language', language);
+    }
     await api.post('/feed', formData);
   },
 

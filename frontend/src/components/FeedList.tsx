@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import type { Feed } from '../types';
+import { WHISPER_LANGUAGE_NAMES } from '../constants/whisperLanguages';
 import type { FeedSortOption } from '../utils/feedListSort';
 
 function getLatestEpisodeTimestamp(feed: Feed): number | null {
@@ -213,8 +214,18 @@ export default function FeedList({
                     {feed.author && (
                       <p className="text-sm text-gray-600 mt-1">by {feed.author}</p>
                     )}
-                    <div className="flex items-center justify-between mt-2">
+                    <div className="flex items-center gap-2 mt-2">
                       <span className="text-xs text-gray-500">{feed.posts_count} episodes</span>
+                      {feed.language && (
+                        <span
+                          lang={feed.language}
+                          title={`Transcription language: ${WHISPER_LANGUAGE_NAMES[feed.language] ?? feed.language}`}
+                          className="px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase bg-gray-100 text-gray-700 border border-gray-200"
+                        >
+                          {feed.language}
+                        </span>
+                      )}
+                      <span className="flex-1" />
                       {showMembership && (
                         <div className="flex items-center gap-2">
                           <span

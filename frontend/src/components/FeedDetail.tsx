@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import type { Feed, Episode, PagedResult, ConfigResponse } from '../types';
 import { feedsApi, configApi } from '../services/api';
@@ -20,7 +20,7 @@ interface FeedDetailProps {
   onFeedDeleted?: () => void;
 }
 
-type SortOption = 'newest' | 'oldest' | 'title';
+// type SortOption = 'newest' | 'oldest' | 'title';
 type EpisodeDescriptionView = 'source' | 'podly';
 
 const EPISODE_DESCRIPTION_VIEW_STORAGE_KEY_PREFIX = 'podly:episode-description-view:feed:';
@@ -63,7 +63,7 @@ const EPISODES_PAGE_SIZE = 25;
 
 export default function FeedDetail({ feed, onClose, onFeedDeleted }: FeedDetailProps) {
   const { requireAuth, isAuthenticated, user } = useAuth();
-  const [sortBy, setSortBy] = useState<SortOption>('newest');
+  // const [sortBy, setSortBy] = useState<SortOption>('newest');
   const [showStickyHeader, setShowStickyHeader] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -249,18 +249,27 @@ export default function FeedDetail({ feed, onClose, onFeedDeleted }: FeedDetailP
     enabled: isAdmin,
   });
 
+  // Claude suggestion
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const handleSortChange = (newDir: 'asc' | 'desc') => {
+    setSortDir(newDir);
+    setPage(1);
+  };
+  // End
+
   const {
     data: episodesPage,
     isLoading,
     isFetching,
     error,
-  } = useQuery<PagedResult<Episode>, Error, PagedResult<Episode>, [string, number, number, boolean]>({
-    queryKey: ['episodes', currentFeed.id, page, whitelistedOnly],
+  } = useQuery<PagedResult<Episode>, Error, PagedResult<Episode>, [string, number, number, boolean, 'asc' | 'desc']>({
+    queryKey: ['episodes', currentFeed.id, page, whitelistedOnly, sortDir],
     queryFn: () =>
       feedsApi.getFeedPosts(currentFeed.id, {
         page,
         pageSize: EPISODES_PAGE_SIZE,
         whitelistedOnly,
+        sortDir,
       }),
     placeholderData: (previousData) => previousData,
   });
@@ -542,23 +551,23 @@ export default function FeedDetail({ feed, onClose, onFeedDeleted }: FeedDetailP
     }
   };
 
-  const episodesToShow = useMemo(() => episodes, [episodes]);
+  // const episodesToShow = useMemo(() => episodes, [episodes]);
 
-  const sortedEpisodes = useMemo(() => {
-    const list = [...episodesToShow];
-    return list.sort((a, b) => {
-      switch (sortBy) {
-        case 'newest':
-          return new Date(b.release_date || 0).getTime() - new Date(a.release_date || 0).getTime();
-        case 'oldest':
-          return new Date(a.release_date || 0).getTime() - new Date(b.release_date || 0).getTime();
-        case 'title':
-          return a.title.localeCompare(b.title);
-        default:
-          return 0;
-      }
-    });
-  }, [episodesToShow, sortBy]);
+  // const sortedEpisodes = useMemo(() => {
+  //   const list = [...episodesToShow];
+  //   return list.sort((a, b) => {
+  //     switch (sortBy) {
+  //       case 'newest':
+  //         return new Date(b.release_date || 0).getTime() - new Date(a.release_date || 0).getTime();
+  //       case 'oldest':
+  //         return new Date(a.release_date || 0).getTime() - new Date(b.release_date || 0).getTime();
+  //       case 'title':
+  //         return a.title.localeCompare(b.title);
+  //       default:
+  //         return 0;
+  //     }
+  //   });
+  // }, [episodesToShow, sortBy]);
 
   // Calculate whitelist status for bulk button
   const allWhitelisted = totalCount > 0 && whitelistedCount === totalCount;
@@ -652,14 +661,13 @@ export default function FeedDetail({ feed, onClose, onFeedDeleted }: FeedDetailP
                 <p className="text-sm text-gray-600 truncate">by {currentFeed.author}</p>
               )}
             </div>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as SortOption)}
+            <select 
               className="text-sm border border-gray-300 rounded-md px-3 py-1 bg-white"
+              value={sortDir}
+              onChange={(e) => handleSortChange(e.target.value as 'asc' | 'desc')}
             >
-              <option value="newest">Newest First</option>
-              <option value="oldest">Oldest First</option>
-              <option value="title">Title A-Z</option>
+              <option value="desc">Newest first</option>
+              <option value="asc">Oldest first</option>
             </select>
 
             {/* do not add addtional controls to sticky headers */}
@@ -954,14 +962,13 @@ export default function FeedDetail({ feed, onClose, onFeedDeleted }: FeedDetailP
         <div className="p-4 border-b bg-gray-50">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-gray-900">Episodes</h3>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as SortOption)}
+            <select 
               className="text-sm border border-gray-300 rounded-md px-3 py-1 bg-white"
+              value={sortDir}
+              onChange={(e) => handleSortChange(e.target.value as 'asc' | 'desc')}
             >
-              <option value="newest">Newest First</option>
-              <option value="oldest">Oldest First</option>
-              <option value="title">Title A-Z</option>
+              <option value="desc">Newest first</option>
+              <option value="asc">Oldest first</option>
             </select>
           </div>
         </div>
@@ -1009,13 +1016,13 @@ export default function FeedDetail({ feed, onClose, onFeedDeleted }: FeedDetailP
             <div className="p-6">
               <p className="text-red-600">Failed to load episodes</p>
             </div>
-          ) : sortedEpisodes.length === 0 ? (
+          ) : episodesPage?.items.length === 0 ? (
             <div className="p-6 text-center">
               <p className="text-gray-500">No episodes found</p>
             </div>
           ) : (
             <div className="divide-y divide-gray-200">
-              {sortedEpisodes.map((episode) => (
+              {episodesPage?.items.map((episode) => (
                 <div key={episode.id} className="p-4 hover:bg-gray-50">
                   <div className={`flex flex-col ${episode.whitelisted ? 'gap-3' : 'gap-2'}`}>
                     {/* Top Section: Thumbnail and Title */}

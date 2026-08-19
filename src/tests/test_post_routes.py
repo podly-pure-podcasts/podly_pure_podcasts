@@ -546,6 +546,7 @@ def test_reprocess_keep_transcript_accepts_local_whisper_model_call(app):
                     model_name="local_base.en",
                     prompt="Whisper transcription job",
                     status="success",
+                    language="en",
                 )
             )
             db.session.commit()

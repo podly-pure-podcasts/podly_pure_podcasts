@@ -79,6 +79,7 @@ def upsert_whisper_model_call_action(params: dict[str, Any]) -> dict[str, Any]:
     first_seq = params.get("first_segment_sequence_num", 0)
     last_seq = params.get("last_segment_sequence_num", -1)
     prompt = params.get("prompt") or "Whisper transcription job"
+    language = params.get("language")
 
     if post_id is None or model_name is None:
         raise ValueError("post_id and model_name are required")
@@ -92,16 +93,18 @@ def upsert_whisper_model_call_action(params: dict[str, Any]) -> dict[str, Any]:
     }
 
     def _query() -> ModelCall | None:
+        # The partial unique index on (post, model_name, language) guarantees
+        # at most one matching row. We match on those three columns (not the
+        # seq nums) so that a previously-finalized row gets reused and reset
+        # rather than colliding with a new placeholder.
         return (
             db.session.query(ModelCall)
             .filter_by(
                 post_id=int(post_id),
                 model_name=str(model_name),
-                first_segment_sequence_num=int(first_seq),
-                last_segment_sequence_num=int(last_seq),
+                language=language,
             )
-            .order_by(ModelCall.timestamp.desc())
-            .first()
+            .one_or_none()
         )
 
     model_call = _query()
@@ -112,6 +115,7 @@ def upsert_whisper_model_call_action(params: dict[str, Any]) -> dict[str, Any]:
             first_segment_sequence_num=int(first_seq),
             last_segment_sequence_num=int(last_seq),
             prompt=str(prompt),
+            language=language,
             status=str(reset_fields.get("status") or "pending"),
             retry_attempts=int(reset_fields.get("retry_attempts") or 0),
             error_message=reset_fields.get("error_message"),
@@ -127,11 +131,15 @@ def upsert_whisper_model_call_action(params: dict[str, Any]) -> dict[str, Any]:
             if model_call is None:
                 raise
 
+    # Reset to placeholder seq nums (overwriting whatever a finalized row had);
+    # reset_fields then resets status / retry_attempts / etc.
+    model_call.first_segment_sequence_num = int(first_seq)
+    model_call.last_segment_sequence_num = int(last_seq)
     for k, v in reset_fields.items():
         if hasattr(model_call, k):
             setattr(model_call, k, v)
-
     db.session.flush()
+
     return {"model_call_id": int(model_call.id)}
 
 
@@ -206,6 +214,37 @@ def replace_transcription_action(params: dict[str, Any]) -> dict[str, Any]:
             mc.response = f"{len(payload)} segments transcribed."
             mc.status = "success"
             mc.error_message = None
+
+            # When this is a real language change — i.e. a prior whisper
+            # ModelCall for another language exists — invalidate downstream
+            # caches:
+            #   1. Sibling whisper ModelCalls are marked `superseded` so the
+            #      cache lookup doesn't return them pointing at someone
+            #      else's segments.
+            #   2. LLM ModelCalls (language IS NULL — ad classifier and
+            #      similar) are deleted: their stored prompts were built
+            #      from the prior transcript content and their responses
+            #      classified ads against text that no longer exists.
+            # Gating LLM-delete on "supersede actually fired" avoids nuking
+            # ad-classifier caches on the first post-migration whisper run,
+            # where the only prior whisper row is a legacy one with
+            # language=NULL (already excluded from the supersede filter).
+            if mc.language is not None:
+                superseded = (
+                    db.session.query(ModelCall)
+                    .filter(
+                        ModelCall.post_id == post_id_i,
+                        ModelCall.id != int(model_call_id),
+                        ModelCall.status == "success",
+                        ModelCall.language.isnot(None),
+                    )
+                    .update({ModelCall.status: "superseded"}, synchronize_session=False)
+                )
+                if superseded:
+                    db.session.query(ModelCall).filter(
+                        ModelCall.post_id == post_id_i,
+                        ModelCall.language.is_(None),
+                    ).delete(synchronize_session=False)
 
     db.session.flush()
     return {"post_id": post_id_i, "segment_count": len(payload)}
