@@ -378,7 +378,7 @@ def refresh_feed(feed: Feed) -> None:
     new_posts = []
     existing_post_updates = []
     for entry in feed_data.entries:
-        existing_post = existing_posts.get(entry.id)
+        existing_post = existing_posts.get(get_guid(entry))
         if existing_post is None:
             logger.debug("found new podcast: %s", entry.title)
             p = make_post(feed, entry)

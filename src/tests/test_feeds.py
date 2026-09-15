@@ -355,7 +355,7 @@ def test_refresh_feed_backfills_existing_unprocessed_post_duration(
 ):
     existing_post = MockPost(
         id=42,
-        guid=mock_feed_data.entries[0].id,
+        guid=get_guid(mock_feed_data.entries[0]),
         title="Episode 1",
         description="Episode 1 description",
         image_url=mock_feed.image_url,
@@ -394,7 +394,7 @@ def test_refresh_feed_updates_existing_post_description(
 ):
     existing_post = MockPost(
         id=42,
-        guid=mock_feed_data.entries[0].id,
+        guid=get_guid(mock_feed_data.entries[0]),
         title="Episode 1",
         description="Plain source description",
         image_url=mock_feed.image_url,
@@ -480,6 +480,61 @@ def test_refresh_feed_action_updates_existing_post_description(app):
 
         assert result["updated_posts_count"] == 1
         assert post.description == "<p>Rich source description</p>"
+
+
+@mock.patch("app.feeds.writer_client")
+@mock.patch("app.feeds._should_auto_whitelist_new_posts")
+@mock.patch("app.feeds.make_post")
+@mock.patch("app.feeds.fetch_feed")
+def test_refresh_feed_matches_existing_post_by_derived_guid(
+    mock_fetch_feed,
+    mock_make_post,
+    mock_should_auto_whitelist,
+    mock_writer_client,
+    mock_feed,
+    mock_feed_data,
+    mock_db_session,
+):
+    """A post must be matched by get_guid(entry), not the raw entry.id.
+
+    Regression test for #231: when entry.id is not a valid UUID (the common
+    case), the stored post.guid is the uuid5 derived from the audio link, not
+    entry.id itself. Looking up existing_posts by entry.id always misses, so
+    every refresh re-created the episode as a duplicate.
+
+    entry1 already has a processed post (keyed by its derived guid); entry2 is
+    genuinely new. A correct refresh must touch the existing post (updating it,
+    not re-creating it) and create a post for only entry2.
+    """
+    existing_guid = get_guid(mock_feed_data.entries[0])
+    assert existing_guid != mock_feed_data.entries[0].id, (
+        "test pre-condition: entry.id must NOT be a valid UUID, otherwise "
+        "get_guid is a no-op and the bug cannot be exercised"
+    )
+    existing_post = MockPost(
+        id=42,
+        guid=existing_guid,
+        title="Episode 1",
+        description="Episode 1 description",
+        image_url=mock_feed.image_url,
+        duration=3600,
+    )
+    existing_post.processed_audio_path = "/tmp/processed.mp3"
+    mock_feed.posts = [existing_post]
+
+    mock_fetch_feed.return_value = mock_feed_data
+    mock_should_auto_whitelist.return_value = True
+    mock_make_post.return_value = MockPost(guid=str(uuid.uuid4()))
+
+    refresh_feed(mock_feed)
+
+    # entry1 is matched (not re-created): only the genuinely-new entry2 calls
+    # make_post. Under the pre-fix .get(entry.id) lookup entry1 was missed, so
+    # make_post ran for BOTH entries (the duplicate-creation bug).
+    assert mock_make_post.call_count == 1, (
+        "existing post was not matched by its derived guid -> duplicate created"
+    )
+    assert mock_writer_client.action.call_count == 1
 
 
 @mock.patch("app.feeds.fetch_feed")
