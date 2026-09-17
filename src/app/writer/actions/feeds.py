@@ -144,8 +144,18 @@ def update_feed_settings_action(params: dict[str, Any]) -> dict[str, Any]:
             "auto_whitelist_new_episodes_override"
         )
 
+    if "language" in params:
+        # When called from POST /feed for a newly-added feed, the route
+        # passes only_if_unset=True so a concurrent add of the same RSS
+        # URL — or a retry after a partial failure — can't overwrite a
+        # language that was already set inside the serialized writer.
+        if params.get("only_if_unset") and feed.language is not None:
+            pass
+        else:
+            feed.language = params["language"]
+
     db.session.flush()
-    return {"feed_id": feed.id}
+    return {"feed_id": feed.id, "language": feed.language}
 
 
 def increment_download_count_action(params: dict[str, Any]) -> dict[str, Any]:

@@ -2,6 +2,7 @@ import os
 import uuid
 from datetime import UTC, datetime
 
+import sqlalchemy as sa
 from sqlalchemy.orm import validates
 
 from app.auth.passwords import hash_password, verify_password
@@ -48,6 +49,7 @@ class Feed(db.Model):  # type: ignore[name-defined, misc]
     # Per-feed override for LLM chapter fallback tagging, null = use global config
     enable_llm_chapter_fallback_tagging = db.Column(db.Boolean, nullable=True)
     auto_whitelist_new_episodes_override = db.Column(db.Boolean, nullable=True)
+    language = db.Column(db.Text, nullable=True)
 
     posts = db.relationship(
         "Post", backref="feed", lazy=True, order_by="Post.release_date.desc()"
@@ -215,12 +217,18 @@ class ModelCall(db.Model):  # type: ignore[name-defined, misc]
     status = db.Column(db.String, nullable=False, default="pending")
     error_message = db.Column(db.Text, nullable=True)
     retry_attempts = db.Column(db.Integer, nullable=False, default=0)
+    # NULL = LLM/legacy row; set = Whisper row. Doubles as the discriminator
+    # for the two partial unique indexes below.
+    language = db.Column(db.Text, nullable=True)
 
     identifications = db.relationship(
         "Identification", backref="model_call", lazy="dynamic"
     )
     post = db.relationship("Post", backref=db.backref("model_calls", lazy="dynamic"))
 
+    # Two partial unique indexes — whisper rows are keyed by (post, model,
+    # language) since the same audio can be transcribed in multiple languages,
+    # while non-whisper (LLM) rows preserve the legacy chunk-based key.
     __table_args__ = (
         db.Index(
             "ix_model_call_post_chunk_model",
@@ -229,6 +237,15 @@ class ModelCall(db.Model):  # type: ignore[name-defined, misc]
             "last_segment_sequence_num",
             "model_name",
             unique=True,
+            sqlite_where=sa.text("language IS NULL"),
+        ),
+        db.Index(
+            "ix_model_call_whisper_post_model_lang",
+            "post_id",
+            "model_name",
+            "language",
+            unique=True,
+            sqlite_where=sa.text("language IS NOT NULL"),
         ),
     )
 

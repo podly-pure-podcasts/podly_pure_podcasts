@@ -9,11 +9,12 @@ import feedparser
 import PyRSS2Gen
 import pytest
 
+from app.extensions import db
 from app.feeds import (
     _get_base_url,
     _should_auto_whitelist_new_posts,
     add_feed,
-    db,
+    add_or_refresh_feed,
     feed_item,
     fetch_feed,
     generate_feed_xml,
@@ -24,7 +25,7 @@ from app.feeds import (
 )
 from app.models import Feed, Post
 from app.runtime_config import config as runtime_config
-from app.writer.actions.feeds import refresh_feed_action
+from app.writer.actions.feeds import refresh_feed_action, update_feed_settings_action
 
 logger = logging.getLogger("global_logger")
 
@@ -573,6 +574,41 @@ def test_add_or_refresh_feed_new(
     assert result == mock_feed
 
 
+def test_add_or_refresh_feed_existing_sets_language_before_refresh(app, mock_feed_data):
+    with app.app_context():
+        feed = Feed(title="Existing", rss_url="https://example.com/feed.xml")
+        db.session.add(feed)
+        db.session.commit()
+        mock_feed_data.feed.__contains__.side_effect = lambda key: key == "title"
+        calls: list[str] = []
+
+        def writer_side_effect(action, params, wait=False):
+            calls.append(action)
+            assert action == "update_feed_settings"
+            Feed.query.filter_by(id=params["feed_id"]).update(
+                {"language": params["language"]}
+            )
+            db.session.commit()
+            return SimpleNamespace(success=True, data={"language": params["language"]})
+
+        def refresh_side_effect(refreshed_feed):
+            calls.append("refresh_feed")
+            db.session.refresh(refreshed_feed)
+            assert refreshed_feed.language == "de"
+
+        with (
+            mock.patch("app.feeds.fetch_feed", return_value=mock_feed_data),
+            mock.patch("app.feeds.writer_client") as mock_writer,
+            mock.patch("app.feeds.refresh_feed", side_effect=refresh_side_effect),
+        ):
+            mock_writer.action.side_effect = writer_side_effect
+
+            result = add_or_refresh_feed(feed.rss_url, language="de")
+
+        assert result.id == feed.id
+        assert calls == ["update_feed_settings", "refresh_feed"]
+
+
 @mock.patch("app.feeds.writer_client")
 @mock.patch("app.feeds.Post")
 def test_add_feed(mock_post_class, mock_writer_client, mock_feed_data, mock_db_session):
@@ -613,6 +649,38 @@ def test_add_feed(mock_post_class, mock_writer_client, mock_feed_data, mock_db_s
         mock_writer_client.action.assert_called()
 
         assert result == mock_feed
+
+
+@mock.patch("app.feeds.writer_client")
+@mock.patch("app.feeds.Post")
+def test_add_feed_includes_language_in_writer_payload(
+    mock_post_class, mock_writer_client, mock_feed_data, mock_db_session
+):
+    del mock_post_class
+    mock_writer_client.action.return_value = SimpleNamespace(data={"feed_id": 1})
+
+    with mock.patch("app.feeds.Feed") as mock_feed_class:
+        mock_feed = MockFeed()
+        mock_feed_class.return_value = mock_feed
+        mock_db_session.get.return_value = mock_feed
+
+        mock_feed_data.feed.get = mock.MagicMock()
+        mock_feed_data.feed.get.side_effect = lambda key, default="": {
+            "description": "Test Description",
+            "author": "Test Author",
+        }.get(key, default)
+
+        with mock.patch("app.feeds.config") as mock_config:
+            mock_config.number_of_episodes_to_whitelist_from_archive_of_new_feed = 1
+            mock_config.automatically_whitelist_new_episodes = True
+            with mock.patch("app.feeds.make_post") as mock_make_post:
+                mock_make_post.return_value = MockPost()
+
+                add_feed(mock_feed_data, language="de")
+
+        action_name, payload = mock_writer_client.action.call_args.args[:2]
+        assert action_name == "add_feed"
+        assert payload["feed"]["language"] == "de"
 
 
 def test_feed_item(mock_post, app):
@@ -1452,3 +1520,41 @@ def test_get_base_url_fallback_http_without_sts():
 
     # Should use HTTP when no HTTPS indicators present
     assert result == "http://insecure.example.com"
+
+
+def test_feed_language_defaults_to_none(app):
+    with app.app_context():
+        feed = Feed(title="Test", rss_url="http://example.com/feed.rss")
+        db.session.add(feed)
+        db.session.flush()
+        assert feed.language is None
+
+
+def test_feed_language_can_be_set(app):
+    with app.app_context():
+        feed = Feed(title="Test", rss_url="http://example.com/feed2.rss", language="de")
+        db.session.add(feed)
+        db.session.flush()
+        assert feed.language == "de"
+
+
+def test_update_feed_settings_action_sets_language(app):
+    with app.app_context():
+        feed = Feed(title="Test", rss_url="http://example.com/feed3.rss")
+        db.session.add(feed)
+        db.session.commit()
+
+        update_feed_settings_action({"feed_id": feed.id, "language": "fr"})
+        db.session.refresh(feed)
+        assert feed.language == "fr"
+
+
+def test_update_feed_settings_action_clears_language(app):
+    with app.app_context():
+        feed = Feed(title="Test", rss_url="http://example.com/feed4.rss", language="fr")
+        db.session.add(feed)
+        db.session.commit()
+
+        update_feed_settings_action({"feed_id": feed.id, "language": None})
+        db.session.refresh(feed)
+        assert feed.language is None

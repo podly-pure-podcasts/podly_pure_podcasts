@@ -86,9 +86,12 @@ export const feedsApi = {
     return response.data;
   },
 
-  addFeed: async (url: string): Promise<void> => {
+  addFeed: async (url: string, language?: string | null): Promise<void> => {
     const formData = new FormData();
     formData.append('url', url);
+    if (language) {
+      formData.append('language', language);
+    }
     await api.post('/feed', formData);
   },
 

@@ -22,7 +22,7 @@ def test_remote_transcribe() -> None:
 
     transcriber = OpenAIWhisperTranscriber(logger, config)
 
-    transcription = transcriber.transcribe("file.mp3")
+    transcription = transcriber.transcribe("file.mp3", language="en")
     assert transcription == []
 
 
@@ -35,7 +35,7 @@ def test_local_transcribe() -> None:
 
     logger = logging.getLogger("global_logger")
     transcriber = LocalWhisperTranscriber(logger, "base.en")
-    transcription = transcriber.transcribe("src/tests/file.mp3")
+    transcription = transcriber.transcribe("src/tests/file.mp3", language="en")
     assert transcription == []
 
 
@@ -72,7 +72,7 @@ def test_groq_transcribe(mocker: Any) -> None:
     )
 
     transcriber = GroqWhisperTranscriber(logger, config)
-    transcription = transcriber.transcribe("test.mp3")
+    transcription = transcriber.transcribe("test.mp3", language="en")
 
     assert len(transcription) == 2
     assert transcription[0].text == "This is a test segment."

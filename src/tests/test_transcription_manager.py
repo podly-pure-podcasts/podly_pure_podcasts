@@ -1,6 +1,6 @@
 import logging
 from collections.abc import Generator
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from flask import Flask
@@ -25,9 +25,9 @@ class MockTranscriber(Transcriber):
         """Implementation of the abstract property"""
         return self._model_name
 
-    def transcribe(self, audio_file_path: str) -> list[Segment]:
+    def transcribe(self, audio_file_path: str, language: str) -> list[Segment]:
         """Return mock segments or raise exception based on configuration."""
-        del audio_file_path
+        del audio_file_path, language
         if isinstance(self.mock_response, Exception):
             raise self.mock_response
         return self.mock_response
@@ -132,12 +132,10 @@ def test_check_existing_transcription_success(
 
     with app.app_context():
         # Configure the existing mocks in the manager
-        test_manager.model_call_query.filter_by().order_by().first.return_value = (
-            model_call
-        )
+        test_manager.model_call_query.filter_by().one_or_none.return_value = model_call
         test_manager.segment_query.filter_by().order_by().all.return_value = segments
 
-        result = test_manager._check_existing_transcription(post)
+        result = test_manager._check_existing_transcription(post, "en")
 
         assert result is not None
         assert len(result) == 2
@@ -154,9 +152,9 @@ def test_check_existing_transcription_no_model_call(
 
     with app.app_context():
         # Set return value for the existing mock in the manager
-        test_manager.model_call_query.filter_by().order_by().first.return_value = None
+        test_manager.model_call_query.filter_by().one_or_none.return_value = None
 
-        result = test_manager._check_existing_transcription(post)
+        result = test_manager._check_existing_transcription(post, "en")
         assert result is None
 
 
@@ -269,6 +267,7 @@ def test_transcribe_reuses_placeholder_model_call(
             last_segment_sequence_num=-1,
             prompt="Whisper transcription job",
             status="failed_permanent",
+            language="en",
         )
         db.session.add(existing_call)
         db.session.commit()
@@ -293,3 +292,105 @@ def test_transcribe_reuses_placeholder_model_call(
         assert refreshed_call.id == existing_call.id
         assert refreshed_call.status == "success"
         assert refreshed_call.last_segment_sequence_num == 1
+
+
+def test_transcribe_passes_language_to_transcriber(
+    test_config: Config,
+    test_logger: logging.Logger,
+    mock_db_session: MagicMock,
+    app: Flask,
+) -> None:
+    """Language is forwarded to the underlying transcriber."""
+    post = Post(id=99, title="Test Post", unprocessed_audio_path="/path/to/audio.mp3")
+
+    dummy_call = ModelCall(
+        id=1,
+        post_id=99,
+        model_name="mock_transcriber",
+        status="placeholder",
+        first_segment_sequence_num=0,
+        last_segment_sequence_num=-1,
+    )
+
+    mock_model_call_query = MagicMock()
+    mock_model_call_query.filter_by().one_or_none.return_value = None
+    mock_db_session.execute.return_value = MagicMock(lastrowid=1)
+    mock_db_session.get.return_value = dummy_call
+
+    mock_segment_query = MagicMock()
+    mock_segment_query.filter_by().order_by().all.return_value = []
+
+    segments_out = [Segment(start=0.0, end=1.0, text="Hallo")]
+    transcriber = MockTranscriber(segments_out)
+
+    with app.app_context():
+        manager = TranscriptionManager(
+            test_logger,
+            test_config,
+            model_call_query=mock_model_call_query,
+            segment_query=mock_segment_query,
+            db_session=mock_db_session,
+            transcriber=transcriber,
+        )
+
+        with patch.object(
+            transcriber, "transcribe", wraps=transcriber.transcribe
+        ) as mock_transcribe:
+            manager.transcribe(post, language="de")
+            mock_transcribe.assert_called_once_with(
+                post.unprocessed_audio_path, language="de"
+            )
+
+
+def test_language_change_invalidates_cache(
+    test_config: Config,
+    test_logger: logging.Logger,
+    app: Flask,
+) -> None:
+    """Changing the per-feed language forces a fresh transcription instead of returning
+    the cached transcript from the prior language."""
+    with app.app_context():
+        feed = Feed(title="Test Feed", rss_url="http://example.com/rss.xml")
+        post = Post(
+            feed=feed,
+            guid="guid-lang",
+            download_url="http://example.com/audio.mp3",
+            title="Test Post",
+            unprocessed_audio_path="/path/to/audio.mp3",
+        )
+        db.session.add_all([feed, post])
+        db.session.commit()
+
+        en_transcript = [Segment(start=0.0, end=1.0, text="English")]
+        en_manager = TranscriptionManager(
+            test_logger,
+            test_config,
+            db_session=db.session,
+            transcriber=MockTranscriber(en_transcript),
+        )
+        en_result = en_manager.transcribe(post, language="en")
+        assert [s.text for s in en_result] == ["English"]
+        assert ModelCall.query.filter_by(post_id=post.id).count() == 1
+
+        de_transcript = [Segment(start=0.0, end=1.0, text="Deutsch")]
+        de_manager = TranscriptionManager(
+            test_logger,
+            test_config,
+            db_session=db.session,
+            transcriber=MockTranscriber(de_transcript),
+        )
+        de_result = de_manager.transcribe(post, language="de")
+        assert [s.text for s in de_result] == ["Deutsch"]
+        # Two ModelCall rows — one per language — so the en cache wasn't returned.
+        en_call = ModelCall.query.filter_by(post_id=post.id, language="en").one()
+        de_call = ModelCall.query.filter_by(post_id=post.id, language="de").one()
+        # The de transcription overwrote the shared segments table, so the en
+        # row must be marked superseded — otherwise a later en lookup would
+        # return de segments labeled as English.
+        assert en_call.status == "superseded"
+        assert de_call.status == "success"
+
+        # Re-running with the original language must re-transcribe (cache miss
+        # because the en row is superseded) — returns English from the mock.
+        en_again = en_manager.transcribe(post, language="en")
+        assert [s.text for s in en_again] == ["English"]

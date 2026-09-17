@@ -2,10 +2,27 @@ import logging
 import math
 import os
 import tempfile
+import urllib.error
+import urllib.request
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import ffmpeg
+import mutagen
+from mutagen.id3 import (
+    APIC,
+    COMM,
+    ID3,
+    TALB,
+    TCON,
+    TDRC,
+    TIT2,
+    TPE1,
+    TSSE,
+    WXXX,
+    ID3NoHeaderError,
+)
 
 logger = logging.getLogger("global_logger")
 
@@ -300,3 +317,218 @@ def split_audio(
 
     logger.info("[FFMPEG_SPLIT] Split complete: created %d chunks", len(chunks))
     return chunks
+
+
+# Frames where the source value is stale after re-encode. Source-side strings.
+_SKIP_FRAMES = frozenset({"TLEN", "TSSE"})
+
+# Cover-art bytes come back with this MIME, hard-capped to keep processing fast.
+_COVER_MAX_BYTES = 2_000_000
+_COVER_TIMEOUT_S = 5.0
+
+
+@dataclass(frozen=True)
+class MetadataFallback:
+    """Defaults used to fill ID3 frames the source MP3 is missing.
+
+    All fields are optional; only set frames actually overwrite src tags.
+    Build from Post + Feed rows via `fallback_for_post`.
+    """
+
+    title: str | None = None  # TIT2
+    artist: str | None = None  # TPE1
+    album: str | None = None  # TALB
+    year: str | None = None  # TDRC
+    comment: str | None = None  # COMM
+    cover_url: str | None = None  # APIC (downloaded on the fly)
+    url: str | None = None  # WXXX
+    genre: str | None = None  # TCON
+
+
+def fallback_for_post(
+    *,
+    post_title: str | None = None,
+    post_description: str | None = None,
+    post_release_date: Any = None,
+    post_image_url: str | None = None,
+    post_download_url: str | None = None,
+    feed_title: str | None = None,
+    feed_author: str | None = None,
+    feed_image_url: str | None = None,
+    genre: str = "Podcast",
+) -> MetadataFallback:
+    """Build a MetadataFallback from raw Post + Feed fields.
+
+    ORM-free by design; callers pass scalars (Post.title, Feed.image_url, ...).
+    Lets audio.py stay decoupled from app.models.
+    """
+    year: str | None = None
+    if post_release_date is not None:
+        try:
+            year = str(post_release_date.year)
+        except AttributeError:
+            year = str(post_release_date)[:4]
+
+    return MetadataFallback(
+        title=post_title,
+        artist=feed_author or feed_title,
+        album=feed_title,
+        year=year,
+        comment=post_description,
+        cover_url=post_image_url or feed_image_url,
+        url=post_download_url,
+        genre=genre,
+    )
+
+
+def _frame_text(frame: Any) -> list[Any]:
+    # Note: types are relaxed from list[str] because some frames (TDRC, TYER)
+    # yield mutagen's ID3TimeStamp objects which str-compare equal but are not
+    # str instances; beartype's runtime check would reject those.
+    return list(getattr(frame, "text", []) or [])
+
+
+def _is_effectively_empty(text: list[Any]) -> bool:
+    return not text or all(not str(t).strip() for t in text)
+
+
+def _missing(dst: ID3, frame_id: str) -> bool:
+    frames = dst.getall(frame_id)
+    if not frames:
+        return True
+    return _is_effectively_empty(_frame_text(frames[0]))
+
+
+def _fetch_cover(url: str) -> tuple[bytes, str] | None:
+    """Download cover art. Returns (bytes, mime) or None on any failure."""
+    try:
+        req = urllib.request.Request(
+            url, headers={"User-Agent": "Podly/1.0 (+metadata-fetch)"}
+        )
+        with urllib.request.urlopen(req, timeout=_COVER_TIMEOUT_S) as resp:
+            data = resp.read(_COVER_MAX_BYTES)
+            mime = resp.headers.get_content_type() or "image/jpeg"
+            if not mime.startswith("image/"):
+                return None
+            return data, mime
+    except (urllib.error.URLError, TimeoutError, ValueError, OSError) as e:
+        logger.warning("[METADATA] Cover fetch failed for %s: %s", url, e)
+        return None
+
+
+def _apply_fallback(dst: ID3, fallback: MetadataFallback) -> dict[str, str]:
+    """Fill missing ID3 frames from `fallback`. Returns map of frame_id -> source."""
+    filled: dict[str, str] = {}
+
+    if fallback.title and _missing(dst, "TIT2"):
+        dst.delall("TIT2")
+        dst.add(TIT2(encoding=3, text=[fallback.title[:128]]))
+        filled["TIT2"] = "db"
+
+    if fallback.artist and _missing(dst, "TPE1"):
+        dst.delall("TPE1")
+        dst.add(TPE1(encoding=3, text=[fallback.artist]))
+        filled["TPE1"] = "db"
+
+    if fallback.album and _missing(dst, "TALB"):
+        dst.delall("TALB")
+        dst.add(TALB(encoding=3, text=[fallback.album]))
+        filled["TALB"] = "db"
+
+    if fallback.year and _missing(dst, "TDRC"):
+        dst.delall("TDRC")
+        dst.add(TDRC(encoding=3, text=[fallback.year]))
+        filled["TDRC"] = "db"
+
+    if fallback.genre and _missing(dst, "TCON"):
+        dst.delall("TCON")
+        dst.add(TCON(encoding=3, text=[fallback.genre]))
+        filled["TCON"] = "db"
+
+    if fallback.comment and _missing(dst, "COMM"):
+        dst.add(
+            COMM(
+                encoding=3,
+                lang="eng",
+                desc="",
+                text=[fallback.comment[:1000]],
+            )
+        )
+        filled["COMM"] = "db"
+
+    if fallback.url and _missing(dst, "WXXX"):
+        dst.add(WXXX(encoding=3, url=fallback.url))
+        filled["WXXX"] = "db"
+
+    if not dst.getall("APIC") and fallback.cover_url:
+        data_mime = _fetch_cover(fallback.cover_url)
+        if data_mime is not None:
+            data, mime = data_mime
+            dst.add(APIC(encoding=3, mime=mime, type=3, desc="Cover", data=data))
+            filled["APIC"] = "db"
+
+    return filled
+
+
+def copy_metadata(
+    in_path: str,
+    out_path: str,
+    *,
+    fallback: MetadataFallback | None = None,
+) -> None:
+    """
+    Copy ID3 tags (artist, title, album, cover art, ...) from in_path to out_path.
+
+    ffmpeg re-encode with acodec=libmp3lame drops all ID3 tags; this restores
+    them so podcast apps display the episode metadata correctly. Call right
+    after clip_segments_with_fade or clip_segments_exact writes the output.
+
+    Frames intentionally dropped / rewritten:
+      - TLEN (length) -- the audio length changed after the cut.
+      - TSSE (encoder) -- replaced with "Podly" so players attribute the
+        re-encode to this pipeline, not to Lavf / iTunes / etc.
+
+    Frames missing-or-empty in the source are filled from `fallback`
+    (typically built from the Post + Feed DB rows via fallback_for_post).
+    Source frames that already have a value are NOT overwritten.
+    """
+    try:
+        src = ID3(in_path)
+    except (ID3NoHeaderError, mutagen.MutagenError):
+        src = None
+
+    try:
+        dst = ID3(out_path)
+    except ID3NoHeaderError:
+        dst = ID3()
+    except mutagen.MutagenError as e:
+        logger.warning("[METADATA] Failed to read existing tags on %s: %s", out_path, e)
+        return
+
+    copied: list[str] = []
+    if src:
+        for key, frame in src.items():
+            if key in _SKIP_FRAMES:
+                continue
+            dst.add(frame)
+            copied.append(key)
+
+    # Provenance: this re-encode was done by Podly.
+    dst.delall("TSSE")
+    dst.add(TSSE(encoding=3, text=["Podly"]))
+
+    filled: dict[str, str] = {}
+    if fallback is not None:
+        filled = _apply_fallback(dst, fallback)
+
+    try:
+        dst.save(out_path, v2_version=3)
+        logger.info(
+            "[METADATA] Restored %d src frame(s) on %s, %d from db (incl. APIC=%s)",
+            len(copied),
+            out_path,
+            len(filled),
+            "APIC" in copied or "APIC" in filled,
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[METADATA] Failed to save tags on %s: %s", out_path, e)

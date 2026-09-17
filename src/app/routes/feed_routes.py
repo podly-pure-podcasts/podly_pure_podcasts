@@ -31,6 +31,7 @@ from app.extensions import db
 from app.feeds import (
     _get_base_url,
     add_or_refresh_feed,
+    ensure_requested_feed_language,
     generate_aggregate_feed_xml,
     generate_feed_xml,
     is_feed_active_for_user,
@@ -51,12 +52,12 @@ from app.routes.feed_utils import (
     user_feed_count,
     whitelist_latest_for_first_member,
 )
+from app.whisper_languages import normalize_whisper_language, whisper_language_error
 from app.writer.client import writer_client
 
 from .auth_routes import _require_authenticated_user as _auth_get_user
 
 logger = logging.getLogger("global_logger")
-
 
 feed_bp = Blueprint("feed", __name__)
 _MISSING = object()
@@ -148,6 +149,18 @@ def _build_feed_settings_updates(
     if auto_whitelist_override is not _MISSING:
         updates["auto_whitelist_new_episodes_override"] = auto_whitelist_override
 
+    if "language" in payload:
+        try:
+            updates["language"] = normalize_whisper_language(payload.get("language"))
+        except ValueError:
+            return (
+                None,
+                (
+                    jsonify({"error": whisper_language_error("null")}),
+                    400,
+                ),
+            )
+
     resolved_strategy = updates.get(
         "ad_detection_strategy",
         getattr(feed, "ad_detection_strategy", "llm"),
@@ -179,7 +192,7 @@ def _build_feed_settings_updates(
 
 
 @feed_bp.route("/feed", methods=["POST"])
-def add_feed() -> ResponseReturnValue:
+def add_feed() -> ResponseReturnValue:  # noqa: PLR0912
     settings = current_app.config.get("AUTH_SETTINGS")
     user = None
     if settings and settings.require_auth:
@@ -189,6 +202,11 @@ def add_feed() -> ResponseReturnValue:
     url = request.form.get("url")
     if not url:
         return make_response(("URL is required", 400))
+
+    try:
+        language = normalize_whisper_language(request.form.get("language"))
+    except ValueError:
+        return make_response((whisper_language_error("empty"), 400))
 
     url = fix_url(url)
 
@@ -204,7 +222,8 @@ def add_feed() -> ResponseReturnValue:
             if allowance_error:
                 return allowance_error
 
-        feed = add_or_refresh_feed(url)
+        feed = add_or_refresh_feed(url, language=language)
+        ensure_requested_feed_language(feed, language)
         if user:
             created, previous_count = ensure_user_feed_membership(feed, user.id)
             if created and previous_count == 0:
@@ -943,6 +962,7 @@ def _serialize_feed(
         "auto_whitelist_new_episodes_override": getattr(
             feed, "auto_whitelist_new_episodes_override", None
         ),
+        "language": feed.language,
         "posts_count": len(cast(list[Any], feed.posts)),
         "latest_episode_release_date": _latest_episode_release_date(feed),
         "member_count": len(member_ids),

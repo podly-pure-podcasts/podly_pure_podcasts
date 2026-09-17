@@ -3,6 +3,7 @@ import { feedsApi } from '../services/api';
 import type { PodcastSearchResult } from '../types';
 import { diagnostics, emitDiagnosticError } from '../utils/diagnostics';
 import { getHttpErrorInfo } from '../utils/httpError';
+import { WHISPER_LANGUAGES } from '../constants/whisperLanguages';
 
 interface AddFeedFormProps {
   onSuccess: () => void;
@@ -16,6 +17,7 @@ const PAGE_SIZE = 10;
 
 export default function AddFeedForm({ onSuccess, onUpgradePlan, planLimitReached }: AddFeedFormProps) {
   const [url, setUrl] = useState('');
+  const [language, setLanguage] = useState('');
   const [activeMode, setActiveMode] = useState<AddMode>('search');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -58,11 +60,12 @@ export default function AddFeedForm({ onSuccess, onUpgradePlan, planLimitReached
     setUpgradePrompt(null);
 
     try {
-      diagnostics.add('info', 'Add feed request', { source, hasUrl: !!feedUrl });
-      await feedsApi.addFeed(feedUrl);
+      diagnostics.add('info', 'Add feed request', { source, hasUrl: !!feedUrl, hasLanguage: !!language });
+      await feedsApi.addFeed(feedUrl, language || null);
       if (source === 'url') {
         setUrl('');
       }
+      setLanguage('');
       diagnostics.add('info', 'Add feed success', { source });
       onSuccess();
     } catch (err) {
@@ -201,6 +204,29 @@ export default function AddFeedForm({ onSuccess, onUpgradePlan, planLimitReached
         >
           Search Podcasts
         </button>
+      </div>
+
+      <div className="mb-4">
+        <label htmlFor="new-feed-language" className="block text-sm font-medium text-gray-700 mb-1">
+          Transcription language (optional)
+        </label>
+        <p className="text-xs text-gray-500 mb-1">
+          Applies to whichever feed you add below.
+        </p>
+        <select
+          id="new-feed-language"
+          value={language}
+          onChange={(e) => setLanguage(e.target.value)}
+          disabled={!!planLimitReached}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        >
+          <option value="">Use global setting</option>
+          {WHISPER_LANGUAGES.map((lang) => (
+            <option key={lang.code} value={lang.code}>
+              {lang.name}
+            </option>
+          ))}
+        </select>
       </div>
 
       {activeMode === 'url' && (

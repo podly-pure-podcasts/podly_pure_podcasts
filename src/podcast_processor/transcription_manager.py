@@ -20,6 +20,8 @@ from .transcribe import (
     Transcriber,
 )
 
+DEFAULT_LANGUAGE = "en"
+
 
 class TranscriptionManager:
     """Handles the transcription of podcast audio files."""
@@ -59,8 +61,14 @@ class TranscriptionManager:
             return GroqWhisperTranscriber(self.logger, self.config.whisper)
         raise ValueError(f"unhandled whisper config {self.config.whisper}")
 
+    def _effective_language(self, language: str | None) -> str:
+        """The language Whisper will actually see: per-feed override > global > default."""
+        if language:
+            return language
+        return getattr(self.config.whisper, "language", DEFAULT_LANGUAGE)
+
     def _check_existing_transcription(
-        self, post: Post
+        self, post: Post, language: str
     ) -> list[TranscriptSegment] | None:
         """Checks for existing successful transcription and returns segments if valid.
 
@@ -78,15 +86,14 @@ class TranscriptionManager:
             else self.db_session.query(TranscriptSegment)
         )
 
-        existing_whisper_call = (
-            model_call_query.filter_by(
-                post_id=post.id,
-                model_name=self.transcriber.model_name,
-                status="success",
-            )
-            .order_by(ModelCall.timestamp.desc())
-            .first()
-        )
+        # At most one row matches: the (post, model_name, language) partial
+        # unique index allows only one whisper ModelCall per language per post.
+        existing_whisper_call = model_call_query.filter_by(
+            post_id=post.id,
+            model_name=self.transcriber.model_name,
+            status="success",
+            language=language,
+        ).one_or_none()
 
         if existing_whisper_call:
             self.logger.info(
@@ -119,15 +126,17 @@ class TranscriptionManager:
             )
         return None
 
-    def get_reusable_transcription(self, post: Post) -> list[TranscriptSegment] | None:
-        """Return existing transcript segments only when they are reusable as-is.
+    def get_reusable_transcription(
+        self, post: Post, language: str | None = None
+    ) -> list[TranscriptSegment] | None:
+        """Return existing transcript segments only when they are reusable as-is."""
+        feed_language = getattr(getattr(post, "feed", None), "language", None)
+        effective_language = self._effective_language(
+            language if language is not None else feed_language
+        )
+        return self._check_existing_transcription(post, effective_language)
 
-        Reuse requires a successful Whisper model call for the active transcriber
-        model and a matching set of persisted transcript segments.
-        """
-        return self._check_existing_transcription(post)
-
-    def _get_or_create_whisper_model_call(self, post: Post) -> ModelCall:
+    def _get_or_create_whisper_model_call(self, post: Post, language: str) -> ModelCall:
         """Create or reuse the placeholder ModelCall row for a Whisper run via writer."""
         result = writer_client.action(
             "upsert_whisper_model_call",
@@ -137,6 +146,7 @@ class TranscriptionManager:
                 "first_segment_sequence_num": 0,
                 "last_segment_sequence_num": -1,
                 "prompt": "Whisper transcription job",
+                "language": language,
             },
             wait=True,
         )
@@ -151,7 +161,9 @@ class TranscriptionManager:
             raise RuntimeError(f"ModelCall {model_call_id} not found after upsert")
         return model_call
 
-    def transcribe(self, post: Post) -> list[TranscriptSegment]:
+    def transcribe(
+        self, post: Post, language: str | None = None
+    ) -> list[TranscriptSegment]:
         """
         Transcribes a podcast audio file, or retrieves existing transcription.
 
@@ -161,16 +173,19 @@ class TranscriptionManager:
         Returns:
             A list of TranscriptSegment objects with the transcription results
         """
+        effective_language = self._effective_language(language)
         self.logger.info(
-            f"Starting transcription process for post {post.id} using {self.transcriber.model_name}"
+            f"Starting transcription process for post {post.id} using {self.transcriber.model_name} (language={effective_language})"
         )
 
-        existing_segments = self.get_reusable_transcription(post)
+        existing_segments = self._check_existing_transcription(post, effective_language)
         if existing_segments is not None:
             return existing_segments
 
         # Create or reuse the ModelCall record for this transcription attempt
-        current_whisper_call = self._get_or_create_whisper_model_call(post)
+        current_whisper_call = self._get_or_create_whisper_model_call(
+            post, effective_language
+        )
         self.logger.info(
             f"Prepared Whisper ModelCall {current_whisper_call.id} for post {post.id}."
         )
@@ -182,7 +197,9 @@ class TranscriptionManager:
             # Expire session state before long-running transcription to avoid stale locks
             self.db_session.expire_all()
 
-            pydantic_segments = self.transcriber.transcribe(post.unprocessed_audio_path)
+            pydantic_segments = self.transcriber.transcribe(
+                post.unprocessed_audio_path, language=effective_language
+            )
             self.logger.info(
                 f"[TRANSCRIBE_COMPLETE] Transcription by {self.transcriber.model_name} for post {post.id} resulted in {len(pydantic_segments)} segments."
             )

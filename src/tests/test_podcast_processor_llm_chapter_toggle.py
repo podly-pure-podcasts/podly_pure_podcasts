@@ -430,7 +430,7 @@ def test_chapter_insert_strategy_writes_chapters_without_ad_removal() -> None:
         )
 
     assert resolve_mock.call_count == 2
-    transcription_manager.transcribe.assert_called_once_with(post)
+    transcription_manager.transcribe.assert_called_once_with(post, language=None)
     topic_mock.assert_called_once_with(
         transcript_segments,
         llm_model=config.llm_model,

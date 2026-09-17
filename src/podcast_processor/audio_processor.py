@@ -5,7 +5,12 @@ from app.extensions import db
 from app.models import Identification, ModelCall, Post, TranscriptSegment
 from app.writer.client import writer_client
 from podcast_processor.ad_merger import AdMerger
-from podcast_processor.audio import clip_segments_with_fade, get_audio_duration_ms
+from podcast_processor.audio import (
+    clip_segments_with_fade,
+    copy_metadata,
+    fallback_for_post,
+    get_audio_duration_ms,
+)
 from shared.config import Config
 
 
@@ -353,6 +358,25 @@ class AudioProcessor:
             fade_ms=self.config.output.fade_ms,
             out_path=output_path,
             use_vbr=True,
+        )
+
+        # ffmpeg re-encode drops ID3 tags (artist, title, cover art, ...);
+        # restore the full ID3 set from source. Frames missing in src are
+        # filled from the Post + Feed DB rows so players always see tags.
+        fallback = fallback_for_post(
+            post_title=post.title,
+            post_description=post.description,
+            post_release_date=post.release_date,
+            post_image_url=post.image_url,
+            post_download_url=post.download_url,
+            feed_title=post.feed.title if post.feed else None,
+            feed_author=post.feed.author if post.feed else None,
+            feed_image_url=post.feed.image_url if post.feed else None,
+        )
+        copy_metadata(
+            in_path=post.unprocessed_audio_path,
+            out_path=output_path,
+            fallback=fallback,
         )
 
         processed_duration_ms = get_audio_duration_ms(output_path)
