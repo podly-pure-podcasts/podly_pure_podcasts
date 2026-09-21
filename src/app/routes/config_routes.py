@@ -9,7 +9,11 @@ from groq import Groq
 from openai import OpenAI
 
 from app.auth.guards import require_admin
-from app.config_store import read_combined, to_pydantic_config
+from app.config_store import (
+    hydrate_runtime_config_inplace,
+    read_combined,
+    to_pydantic_config,
+)
 from app.processor import ProcessorSingleton
 from app.runtime_config import config as runtime_config
 from app.writer.client import writer_client
@@ -555,8 +559,8 @@ def api_put_config() -> flask.Response:
                 400,
             )
 
-        for field_name in runtime_config.__class__.model_fields.keys():
-            setattr(runtime_config, field_name, getattr(db_cfg, field_name))
+        # Re-apply env overlays so a UI save doesn't drop env-provided values
+        hydrate_runtime_config_inplace(db_cfg)
         ProcessorSingleton.reset_instance()
 
         return flask.jsonify(_sanitize_config_for_client(data))

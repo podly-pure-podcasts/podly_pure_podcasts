@@ -410,3 +410,31 @@ class TestWhisperRuntimeOverlay:
                 assert runtime_config.whisper.max_retries == 5
             finally:
                 runtime_config.whisper = original_whisper
+
+
+class TestConfigUpdateKeepsEnvOverlays:
+    def test_put_config_reapplies_env_overlays(
+        self, app: Any, monkeypatch: Any
+    ) -> None:
+        """Saving settings in the UI must not drop env-provided runtime values."""
+        monkeypatch.setenv("LLM_MODEL", "env-model")
+        monkeypatch.setenv("LLM_API_KEY", "env-api-key")
+
+        from app.config_store import hydrate_runtime_config_inplace
+        from app.routes.config_routes import config_bp
+        from app.runtime_config import config as runtime_config
+
+        app.register_blueprint(config_bp)
+        with app.app_context():
+            _create_default_settings()
+            hydrate_runtime_config_inplace()
+
+            response = app.test_client().put(
+                "/api/config",
+                json={"llm": {"openai_timeout": 99, "llm_model": "ui-model"}},
+            )
+
+            assert response.status_code == 200
+            assert runtime_config.openai_timeout == 99
+            assert runtime_config.llm_model == "env-model"
+            assert runtime_config.llm_api_key == "env-api-key"
