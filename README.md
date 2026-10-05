@@ -1,4 +1,6 @@
 <h2 align="center">
+
+[![Deploy to Railyard](https://app.railyard.run/deploy/badge)](https://app.railyard.run/deploy?repo=https://github.com/podly-pure-podcasts/podly_pure_podcasts)
 <img width="50%" src="src/app/static/images/logos/logo_with_text.png" />
 
 </h2>
