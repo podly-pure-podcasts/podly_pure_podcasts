@@ -3,10 +3,13 @@ import os
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy.orm import load_only
+
 from app.extensions import db
 from app.jobs_manager_run_service import recalculate_run_counts
 from app.model_call_utils import whisper_model_call_filter
 from app.models import (
+    Feed,
     Identification,
     ModelCall,
     Post,
@@ -19,21 +22,36 @@ logger = logging.getLogger("writer")
 
 
 def cleanup_missing_audio_paths_action(params: dict[str, Any]) -> int:
-    inconsistent_posts = Post.query.filter(
-        Post.whitelisted,
-        (
-            (Post.unprocessed_audio_path.isnot(None))
-            | (Post.processed_audio_path.isnot(None))
-        ),
-    ).all()
+    inconsistent_posts = (
+        db.session.query(Post, Feed.title)
+        .outerjoin(Feed, Feed.id == Post.feed_id)
+        .options(
+            load_only(
+                Post.id,
+                Post.guid,
+                Post.title,
+                Post.feed_id,
+                Post.unprocessed_audio_path,
+                Post.processed_audio_path,
+            )
+        )
+        .filter(
+            Post.whitelisted,
+            (
+                (Post.unprocessed_audio_path.isnot(None))
+                | (Post.processed_audio_path.isnot(None))
+            ),
+        )
+        .all()
+    )
 
-    count = 0
-    for post in inconsistent_posts:
+    changed_guids = []
+    for post, feed_title in inconsistent_posts:
         changed = False
         existing_processed_path = find_existing_processed_audio_path(
             processed_audio_path=post.processed_audio_path,
             unprocessed_audio_path=post.unprocessed_audio_path,
-            feed_title=getattr(post.feed, "title", None),
+            feed_title=feed_title,
             post_title=post.title,
         )
         if existing_processed_path:
@@ -51,12 +69,18 @@ def cleanup_missing_audio_paths_action(params: dict[str, Any]) -> int:
             changed = True
 
         if changed:
-            latest_job = (
-                ProcessingJob.query.filter_by(post_guid=post.guid)
-                .order_by(ProcessingJob.created_at.desc())
-                .first()
-            )
-            if latest_job and latest_job.status not in {"pending", "running"}:
+            changed_guids.append(post.guid)
+
+    if changed_guids:
+        latest_jobs: dict[str, ProcessingJob] = {}
+        for job in (
+            ProcessingJob.query.filter(ProcessingJob.post_guid.in_(changed_guids))
+            .order_by(ProcessingJob.created_at.desc())
+            .all()
+        ):
+            latest_jobs.setdefault(job.post_guid, job)
+        for latest_job in latest_jobs.values():
+            if latest_job.status not in {"pending", "running"}:
                 latest_job.status = "pending"
                 latest_job.current_step = 0
                 latest_job.progress_percentage = 0.0
@@ -65,9 +89,7 @@ def cleanup_missing_audio_paths_action(params: dict[str, Any]) -> int:
                 latest_job.started_at = None
                 latest_job.completed_at = None
 
-            count += 1
-
-    return count
+    return len(changed_guids)
 
 
 def clear_post_processing_data_action(params: dict[str, Any]) -> dict[str, Any]:
