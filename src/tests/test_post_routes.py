@@ -4,7 +4,9 @@ from types import SimpleNamespace
 from unittest import mock
 from urllib.parse import quote
 
+import pytest
 from flask import g
+from sqlalchemy import event
 
 from app.extensions import db
 from app.models import Feed, ModelCall, Post, TranscriptSegment, User
@@ -903,3 +905,69 @@ def test_post_stats_includes_debug_info_when_enabled(app, tmp_path):
         c["path"] == str(processed_audio.resolve()) and c["exists"] is True
         for c in candidates
     )
+
+
+@pytest.mark.parametrize(
+    "initial_statuses", [[], [False, False], [True, False], [True, True]]
+)
+def test_toggle_whitelist_all_does_not_load_post_entities(app, initial_statuses):
+    app.testing = True
+    app.register_blueprint(post_bp)
+    feed = Feed(title="Bulk Feed", rss_url="https://example.com/bulk.xml")
+    other_feed = Feed(title="Other Feed", rss_url="https://example.com/other.xml")
+    db.session.add_all([feed, other_feed])
+    db.session.flush()
+    feed_id, other_id = feed.id, other_feed.id
+    db.session.add_all(
+        [
+            Post(
+                feed_id=feed_id,
+                guid=f"bulk-{index}",
+                title=f"Episode {index}",
+                download_url=f"https://example.com/{index}.mp3",
+                whitelisted=status,
+            )
+            for index, status in enumerate(initial_statuses)
+        ]
+    )
+    db.session.add(
+        Post(
+            feed_id=other_id,
+            guid="other",
+            title="Other Episode",
+            download_url="https://example.com/other.mp3",
+            whitelisted=False,
+        )
+    )
+    db.session.commit()
+    db.session.remove()
+
+    loaded_posts = []
+
+    def record_post_load(post, context):
+        loaded_posts.append(post.id)
+
+    event.listen(Post, "load", record_post_load)
+    try:
+        response = app.test_client().post(f"/api/feeds/{feed_id}/toggle-whitelist-all")
+    finally:
+        event.remove(Post, "load", record_post_load)
+
+    assert response.status_code == 200
+    assert loaded_posts == []
+    payload = response.get_json()
+    assert payload["total_count"] == len(initial_statuses)
+    if not initial_statuses:
+        assert payload["message"] == "No posts found in this feed"
+        assert payload["whitelisted_count"] == 0
+    else:
+        expected_status = not all(initial_statuses)
+        assert payload["all_whitelisted"] is expected_status
+        assert payload["updated_count"] == len(initial_statuses)
+        assert payload["whitelisted_count"] == (
+            len(initial_statuses) if expected_status else 0
+        )
+        assert Post.query.filter_by(
+            feed_id=feed_id, whitelisted=expected_status
+        ).count() == len(initial_statuses)
+    assert Post.query.filter_by(feed_id=other_id, whitelisted=False).count() == 1
