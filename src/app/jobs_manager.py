@@ -544,17 +544,32 @@ class JobsManager:
         Refresh feeds and enqueue per-post processing into internal worker pool.
         """
         with _scheduler_app_context():
-            feeds = Feed.query.all()
-            for feed in feeds:
-                refresh_feed(feed)
+            feed_ids = [feed_id for (feed_id,) in _db.session.query(Feed.id).all()]
 
-            # Clean up posts with missing audio files
+        feeds_refreshed = sum(self._refresh_feed_by_id(feed_id) for feed_id in feed_ids)
+
+        # The writer's local fallback (tests, PODLY_WRITER_LOCAL_FALLBACK) needs a
+        # context for cleanup.
+        with _scheduler_app_context():
             self._cleanup_inconsistent_posts()
-
-            # Process new posts
-            return self.enqueue_pending_jobs(trigger=trigger, context=context)
+        result = self.enqueue_pending_jobs(trigger=trigger, context=context)
+        return {**result, "feeds_refreshed": feeds_refreshed}
 
     # ------------------------ Helpers ------------------------
+    def _refresh_feed_by_id(self, feed_id: int) -> bool:
+        """Refresh one feed in its own session; a failure is logged, not raised."""
+        with _scheduler_app_context():
+            feed = _db.session.get(Feed, feed_id)
+            if feed is None:
+                logger.warning("Skipping missing feed during refresh: id=%s", feed_id)
+                return False
+            try:
+                refresh_feed(feed)
+            except Exception:
+                logger.exception("Failed to refresh feed: id=%s", feed_id)
+                return False
+            return True
+
     def _cleanup_inconsistent_posts(self) -> None:
         """Clean up posts with missing audio files."""
         try:

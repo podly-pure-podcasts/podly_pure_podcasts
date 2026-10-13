@@ -697,11 +697,10 @@ def refresh_all_feeds_endpoint() -> Response:
         update_user_last_active(g.current_user.id)
 
     result = get_jobs_manager().start_refresh_all_feeds(trigger="manual_refresh")
-    feed_count = Feed.query.count()
     return jsonify(
         {
             "status": "success",
-            "feeds_refreshed": feed_count,
+            "feeds_refreshed": result["feeds_refreshed"],
             "jobs_enqueued": result.get("enqueued", 0),
         }
     )
