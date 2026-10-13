@@ -276,6 +276,8 @@ export interface CostSummary {
   year: number;
   month: number;
   total_cost: number;
+  /** Original audio hours, including removed ads; each completed episode counts once. */
+  total_audio_hours: number;
   cost_rate_per_hour: number;
   users: CostUser[];
   feeds: CostFeed[];

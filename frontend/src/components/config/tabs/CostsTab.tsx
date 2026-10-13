@@ -109,6 +109,9 @@ export default function CostsTab() {
               ${costs.total_cost.toFixed(2)}
             </div>
             <div className="text-sm text-gray-600 mt-1">Total processing cost this month</div>
+            <div className="text-sm text-gray-600 mt-1">
+              {(costs.total_audio_hours ?? 0).toFixed(2)} hours of original audio processed
+            </div>
           </div>
 
           {/* Per-feed breakdown */}
