@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any, cast
+from unittest.mock import Mock
+
+import pytest
+from sqlalchemy import event, inspect
 
 import app.jobs_manager as jobs_manager_module
 from app.extensions import db
 from app.jobs_manager import JobsManager
-from app.models import Feed, Post
+from app.models import Feed, JobsManagerRun, Post, ProcessingJob
+from app.writer.protocol import WriteResult
 
 
 def _create_feed() -> Feed:
@@ -120,3 +126,150 @@ def test_ensure_jobs_creates_job_when_processed_path_is_missing_file(
 
     assert created == 1
     assert created_guids == [post.guid]
+
+
+def test_ensure_jobs_reads_only_scheduling_fields(app, monkeypatch, tmp_path):
+    monkeypatch.setenv("PODLY_PODCAST_DATA_DIR", str(tmp_path))
+    feeds = [
+        Feed(title=f"Feed {index}", rss_url=f"https://example.com/{index}.xml")
+        for index in range(2)
+    ]
+    db.session.add_all(feeds)
+    db.session.flush()
+    posts = []
+    for index, feed in enumerate(feeds):
+        processed = tmp_path / f"processed-{index}.mp3"
+        processed.write_bytes(b"audio")
+        recovered = tmp_path / "srv" / f"Feed_{index}" / "recovered.mp3"
+        recovered.parent.mkdir(parents=True)
+        recovered.write_bytes(b"audio")
+        for kind, path in (
+            ("processed", str(processed)),
+            ("recovered", None),
+            ("missing", str(tmp_path / f"missing-{index}.mp3")),
+            ("existing-job", None),
+            ("excluded", None),
+        ):
+            posts.append(
+                Post(
+                    feed_id=feed.id,
+                    guid=f"{kind}-{index}",
+                    title=f"Episode {kind} {index}",
+                    download_url=f"https://example.com/{kind}-{index}.mp3",
+                    whitelisted=kind != "excluded",
+                    processed_audio_path=path,
+                    unprocessed_audio_path=(
+                        str(tmp_path / "in" / "recovered.mp3")
+                        if kind == "recovered"
+                        else None
+                    ),
+                    description="large description" * 1000,
+                    chapter_data="large chapter data" * 1000,
+                )
+            )
+        db.session.add(
+            ProcessingJob(post_guid=f"existing-job-{index}", status="completed")
+        )
+    db.session.add_all(posts)
+    db.session.commit()
+    expected_updates = [
+        (post.id, str(tmp_path / "srv" / f"Feed_{index}" / "recovered.mp3"))
+        for index in range(2)
+        for post in posts
+        if post.guid == f"recovered-{index}"
+    ]
+    db.session.remove()
+    created = []
+
+    class FakeSingleJobManager:
+        def __init__(self, guid, _status_manager, _logger, run_id):
+            self.guid = guid
+            assert run_id == "run-id"
+
+        def ensure_job(self):
+            created.append(self.guid)
+
+    monkeypatch.setattr(jobs_manager_module, "SingleJobManager", FakeSingleJobManager)
+    update = Mock(return_value=WriteResult("update", True))
+    monkeypatch.setattr(jobs_manager_module.writer_client, "update", update)
+    statements: list[str] = []
+    loaded: list[set[str]] = []
+
+    def capture_sql(_conn, _cursor, statement, _parameters, _context, _executemany):
+        statements.append(statement.lower())
+
+    def on_load(post, _context):
+        loaded.append(inspect(post).unloaded)
+
+    engine = db.engine
+    event.listen(engine, "before_cursor_execute", capture_sql)
+    event.listen(Post, "load", on_load)
+    try:
+        manager = JobsManager.__new__(JobsManager)
+        manager._status_manager = cast(Any, object())
+        assert manager._ensure_jobs_for_all_posts("run-id") == 2
+    finally:
+        event.remove(engine, "before_cursor_execute", capture_sql)
+        event.remove(Post, "load", on_load)
+
+    assert sorted(created) == ["missing-0", "missing-1"]
+    assert update.call_count == 2
+    for post_id, path in expected_updates:
+        update.assert_any_call(
+            "Post", post_id, {"processed_audio_path": path}, wait=True
+        )
+    # One query covers both feed titles; any lazy load would add statements.
+    assert len(statements) == 1
+    assert len(loaded) == 6
+    assert all({"description", "chapter_data"} <= unloaded for unloaded in loaded)
+
+
+@pytest.mark.parametrize("pending_count", [0, 3])
+@pytest.mark.parametrize("has_active_run", [False, True])
+def test_cleanup_counts_pending_jobs_without_loading_entities(
+    app, monkeypatch, pending_count, has_active_run
+):
+    jobs = [
+        ProcessingJob(post_guid=f"pending-{index}", status="pending")
+        for index in range(pending_count)
+    ]
+    jobs.extend(
+        ProcessingJob(post_guid=status, status=status)
+        for status in ("running", "completed", "failed", "cancelled", "skipped")
+    )
+    db.session.add_all(jobs)
+    db.session.commit()
+    db.session.remove()
+    manager = JobsManager.__new__(JobsManager)
+    ensure_jobs = Mock(return_value=2)
+    monkeypatch.setattr(manager, "_ensure_jobs_for_all_posts", ensure_jobs)
+    action = Mock()
+    monkeypatch.setattr(jobs_manager_module.writer_client, "action", action)
+    loaded = []
+    statements: list[str] = []
+
+    def on_load(job, _context):
+        loaded.append(job.id)
+
+    def capture_sql(_conn, _cursor, statement, _parameters, _context, _executemany):
+        statements.append(statement.lower())
+
+    engine = db.engine
+    event.listen(ProcessingJob, "load", on_load)
+    event.listen(engine, "before_cursor_execute", capture_sql)
+    try:
+        active_run = JobsManagerRun(id="run-id") if has_active_run else None
+        assert manager._cleanup_and_process_new_posts(active_run) == (2, pending_count)
+    finally:
+        event.remove(ProcessingJob, "load", on_load)
+        event.remove(engine, "before_cursor_execute", capture_sql)
+
+    ensure_jobs.assert_called_once_with("run-id" if has_active_run else None)
+    assert loaded == []
+    assert len(statements) == 1
+    if has_active_run and pending_count:
+        action.assert_called_once_with(
+            "reassign_pending_jobs", {"run_id": "run-id"}, wait=True
+        )
+    else:
+        action.assert_not_called()
