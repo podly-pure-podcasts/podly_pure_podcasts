@@ -15,7 +15,11 @@ from app.extensions import db
 from app.models import Post, ProcessingJob, TranscriptSegment
 from app.writer.client import writer_client
 from podcast_processor.ad_classifier import AdClassifier
-from podcast_processor.audio import clip_segments_exact
+from podcast_processor.audio import (
+    clip_segments_exact,
+    copy_metadata,
+    fallback_for_post,
+)
 from podcast_processor.audio_processor import AudioProcessor
 from podcast_processor.chapter_ad_detector import (
     ChapterAdDetector,
@@ -799,8 +803,27 @@ class PodcastProcessor:
                 in_path=str(post.unprocessed_audio_path),
                 out_path=processed_audio_path,
             )
+            # ffmpeg re-encode drops ID3 tags (artist, title, cover art, ...);
+            # restore the full ID3 set from source. Frames missing in src are
+            # filled from the Post + Feed DB rows so players always see tags.
+            _fb_feed = post.feed
+            copy_metadata(
+                in_path=str(post.unprocessed_audio_path),
+                out_path=processed_audio_path,
+                fallback=fallback_for_post(
+                    post_title=post.title,
+                    post_description=post.description,
+                    post_release_date=post.release_date,
+                    post_image_url=post.image_url,
+                    post_download_url=post.download_url,
+                    feed_title=_fb_feed.title if _fb_feed else None,
+                    feed_author=_fb_feed.author if _fb_feed else None,
+                    feed_image_url=_fb_feed.image_url if _fb_feed else None,
+                ),
+            )
         else:
-            # No ads found, copy the original file
+            # No ads found, copy the original file. shutil.copyfile is a byte-for-byte
+            # copy so cover art and all metadata are preserved natively.
             shutil.copyfile(str(post.unprocessed_audio_path), processed_audio_path)
 
         # Write adjusted chapters to the processed file
