@@ -16,7 +16,6 @@ from app.config_store import read_combined
 from app.extensions import db
 from app.models import (
     Feed,
-    Identification,
     ModelCall,
     Post,
     ProcessingJob,
@@ -107,28 +106,19 @@ def api_admin_costs() -> flask.Response:
     )
     post_map: dict[str, Post] = {p.guid: p for p in posts_in_month}
 
-    # Batch-query ad time per post so we can reconstruct original duration.
-    # post.duration is the cut (ad-removed) length; original = cut + ad_time.
+    # post.duration is the processed (ad-removed) length. The transcript is of
+    # the unprocessed audio, so its last segment end is a lower bound on the
+    # original length that does not depend on which ad labels were cut; it misses
+    # any untranscribed tail after the last segment.
     post_ids = [p.id for p in posts_in_month]
-    ad_segment_subq = (
-        db.session.query(Identification.transcript_segment_id)
-        .filter(Identification.label == "ad")
-        .subquery()
-    )
-    ad_time_rows = (
-        db.session.query(
-            TranscriptSegment.post_id,
-            db.func.sum(TranscriptSegment.end_time - TranscriptSegment.start_time),
+    transcript_end_by_post_id: dict[int, float] = {
+        post_id: float(end_time)
+        for post_id, end_time in db.session.query(
+            TranscriptSegment.post_id, db.func.max(TranscriptSegment.end_time)
         )
-        .filter(
-            TranscriptSegment.post_id.in_(post_ids),
-            TranscriptSegment.id.in_(ad_segment_subq),
-        )
+        .filter(TranscriptSegment.post_id.in_(post_ids))
         .group_by(TranscriptSegment.post_id)
         .all()
-    )
-    ad_time_by_post_id: dict[int, float] = {
-        row[0]: float(row[1]) for row in ad_time_rows
     }
 
     # --- Per-user monthly cost breakdown ---
@@ -142,20 +132,23 @@ def api_admin_costs() -> flask.Response:
     user_costs: dict[int, float] = {u.id: 0.0 for u in users}
     feed_costs: dict[int, float] = {f.id: 0.0 for f in feeds}
     feed_episode_counts: dict[int, int] = {f.id: 0 for f in feeds}
+    total_audio_hours = 0.0
 
     for guid, _job in job_by_guid.items():
         post = post_map.get(guid)
         if not post:
             continue
-        cut_duration = float(post.duration or 0)
-        ad_time = ad_time_by_post_id.get(post.id, 0.0)
-        duration = cut_duration + ad_time  # original duration = cut + removed ad time
+        duration = max(
+            float(post.duration or 0), transcript_end_by_post_id.get(post.id, 0.0)
+        )
+        hours = duration / 3600.0
+        total_audio_hours += hours
         feed_id = post.feed_id
         subscriber_count = feed_subscriber_count.get(feed_id, 0)
         cost_per_sub = _compute_cost_per_subscriber(
             duration, subscriber_count, cost_rate
         )
-        total_episode_cost = cost_rate * (duration / 3600.0) if duration > 0 else 0.0
+        total_episode_cost = cost_rate * hours
 
         feed_costs[feed_id] = feed_costs.get(feed_id, 0.0) + total_episode_cost
         feed_episode_counts[feed_id] = feed_episode_counts.get(feed_id, 0) + 1
@@ -207,6 +200,7 @@ def api_admin_costs() -> flask.Response:
             "year": year,
             "month": month,
             "total_cost": total_cost,
+            "total_audio_hours": round(total_audio_hours, 4),
             "cost_rate_per_hour": cost_rate,
             "users": users_data,
             "feeds": feeds_data,
