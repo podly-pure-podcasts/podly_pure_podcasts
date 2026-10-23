@@ -79,12 +79,10 @@ def test_incomplete_classification_publishes_without_ad_removal() -> None:
     ]
     processor.audio_processor = MagicMock()
     # The real _classify_ad_segments runs; only the classifier itself is a double.
-    processor.ad_classifier = MagicMock()
-    processor.ad_classifier.classify.side_effect = ClassificationIncompleteError(
-        "1 chunk(s) without a usable answer"
+    processor.quote_anchor_classifier = MagicMock()
+    processor.quote_anchor_classifier.classify.side_effect = (
+        ClassificationIncompleteError("1 chunk(s) without a usable answer")
     )
-    processor.get_user_prompt_template = MagicMock()
-    processor.get_system_prompt = MagicMock(return_value="system prompt")
     processor._finalize_processing = MagicMock()
     processor._publish_without_ad_removal = MagicMock()
 
@@ -93,10 +91,40 @@ def test_incomplete_classification_publishes_without_ad_removal() -> None:
 
     processor._perform_llm_based_processing(post, job, "/tmp/output.mp3")
 
-    processor.ad_classifier.classify.assert_called_once()
+    processor.quote_anchor_classifier.classify.assert_called_once()
     processor._publish_without_ad_removal.assert_called_once_with(
         post, job, "/tmp/output.mp3", None, "1 chunk(s) without a usable answer"
     )
+    processor.audio_processor.process_audio.assert_not_called()
+    processor._finalize_processing.assert_not_called()
+
+
+def test_quote_anchor_incomplete_classification_publishes_without_ad_removal() -> None:
+    processor = _make_processor()
+    processor.transcription_manager = MagicMock()
+    processor.transcription_manager.transcribe.return_value = [
+        TranscriptSegment(
+            post_id=1, sequence_num=0, start_time=0.0, end_time=5.0, text="hello"
+        )
+    ]
+    processor.audio_processor = MagicMock()
+    processor.quote_anchor_classifier = MagicMock()
+    processor.quote_anchor_classifier.classify.side_effect = (
+        ClassificationIncompleteError(
+            "Ad classification incomplete for quote-anchor window: "
+            "LLM response is not valid quote-ad JSON"
+        )
+    )
+    processor._finalize_processing = MagicMock()
+    processor._publish_without_ad_removal = MagicMock()
+
+    post = _make_post("/tmp/input.mp3")
+    job = ProcessingJob(id="job-1", post_guid="test-guid", status="running")
+
+    processor._perform_llm_based_processing(post, job, "/tmp/output.mp3")
+
+    processor.quote_anchor_classifier.classify.assert_called_once()
+    processor._publish_without_ad_removal.assert_called_once()
     processor.audio_processor.process_audio.assert_not_called()
     processor._finalize_processing.assert_not_called()
 
