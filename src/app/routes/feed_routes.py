@@ -59,6 +59,7 @@ from app.routes.feed_utils import (
 )
 from app.whisper_languages import normalize_whisper_language, whisper_language_error
 from app.writer.client import writer_client
+from shared.user_agent import user_agent_headers
 
 from .auth_routes import _require_authenticated_user as _auth_get_user
 
@@ -305,9 +306,7 @@ def search_feeds() -> ResponseReturnValue:
         return jsonify({"error": "term parameter is required"}), 400
 
     try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"
-        }
+        headers = user_agent_headers()
         response = requests.get(
             "http://api.podcastindex.org/search",
             headers=headers,
