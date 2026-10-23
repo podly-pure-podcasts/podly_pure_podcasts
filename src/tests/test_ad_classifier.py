@@ -612,6 +612,48 @@ def test_compute_next_overlap_segments_baseline_overlap_without_ads(
     assert [seg.sequence_num for seg in result] == [4, 5, 6, 7]
 
 
+def test_self_promo_confidence_one_is_kept_for_cut(app: Flask) -> None:
+    with app.app_context():
+        config = create_standard_test_config()
+        config.output.min_confidence = 0.8
+        classifier = AdClassifier(config=config, db_session=db.session)
+        opening = classifier._adjust_confidence(
+            base_confidence=1.0,
+            content_type="educational/self_promo",
+            segment_offset=0.0,
+        )
+        assert opening == 1.0
+        assert opening >= config.output.min_confidence
+        midroll = classifier._adjust_confidence(
+            base_confidence=1.0,
+            content_type="educational/self_promo",
+            segment_offset=400.0,
+        )
+        assert midroll == 1.0
+        assert midroll >= config.output.min_confidence
+        low = classifier._adjust_confidence(
+            base_confidence=0.85,
+            content_type="educational/self_promo",
+            segment_offset=12.0,
+        )
+        assert low == 0.85
+        assert low >= config.output.min_confidence
+
+
+def test_technical_discussion_still_demoted_below_min_confidence(app: Flask) -> None:
+    with app.app_context():
+        config = create_standard_test_config()
+        config.output.min_confidence = 0.8
+        classifier = AdClassifier(config=config, db_session=db.session)
+        technical = classifier._adjust_confidence(
+            base_confidence=0.95,
+            content_type="technical_discussion",
+            segment_offset=0.0,
+        )
+        assert technical == 0.70
+        assert technical < config.output.min_confidence
+
+
 def test_create_identifications_skips_existing_ad_label(
     test_classifier_with_mocks: AdClassifier,
 ) -> None:

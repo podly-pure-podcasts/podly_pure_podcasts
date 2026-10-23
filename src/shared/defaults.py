@@ -15,6 +15,13 @@ LLM_MAX_INPUT_TOKENS_PER_MINUTE: int | None = None
 ENABLE_BOUNDARY_REFINEMENT = True
 ENABLE_WORD_LEVEL_BOUNDARY_REFINDER = False
 ENABLE_LLM_CHAPTER_FALLBACK_TAGGING = False
+# $0 ffmpeg silencedetect snap of cut edges. Folded 2026-10-05 (±2.0s nearest).
+ENABLE_DSP_BOUNDARY_SNAP = True
+# Spot-then-confirm is the only ad-detection path: bag-of-words spotter
+# windows, 70s pad, <2 min bridging, LLM quote boundaries, 10s min ad,
+# opening isolate. No feature flags.
+SPOT_WIDE_PAD_SECONDS = 70.0
+SPOT_BRIDGE_GAP_SECONDS = 120.0
 
 # Whisper defaults
 WHISPER_DEFAULT_TYPE = "groq"
@@ -36,8 +43,11 @@ PROCESSING_MAX_OVERLAP_SEGMENTS = 30
 # Output defaults
 OUTPUT_FADE_MS = 3000
 OUTPUT_MIN_AD_SEGMENT_SEPARATION_SECONDS = 60
-OUTPUT_MIN_AD_SEGMENT_LENGTH_SECONDS = 14
+OUTPUT_MIN_AD_SEGMENT_LENGTH_SECONDS = 10
 OUTPUT_MIN_CONFIDENCE = 0.8
+# Do not fill a hole of show content between two ads (Up First 0-24s + 73-99s
+# membership CTAs were merged through ~50s of headlines at the 60s separation).
+OUTPUT_MIN_AD_CONTENT_GAP_SECONDS = 12
 
 # App defaults
 APP_BACKGROUND_UPDATE_INTERVAL_MINUTE = 30

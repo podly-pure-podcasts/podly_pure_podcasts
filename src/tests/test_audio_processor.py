@@ -145,6 +145,55 @@ def test_merge_ad_segments_end_extension(
     assert merged[0] == (28000, 30000)  # Extended to end
 
 
+def test_merge_does_not_fill_long_content_hole(
+    test_processor_with_mocks: AudioProcessor,
+) -> None:
+    """60s min-separation must not glue two ads through ~50s of show content."""
+    duration_ms = 959_000
+    ad_segments = [
+        (0.0, 24.0),
+        (73.0, 99.0),
+    ]
+
+    merged = test_processor_with_mocks.merge_ad_segments(
+        duration_ms=duration_ms,
+        ad_segments=ad_segments,
+        min_ad_segment_length_seconds=14.0,
+        min_ad_segment_separation_seconds=60.0,
+    )
+
+    assert len(merged) == 2
+    assert merged[0] == (0, 24000)
+    assert merged[1] == (73000, 99000)
+
+
+def test_snap_merged_segments_noops_without_audio(
+    test_processor_with_mocks: AudioProcessor,
+) -> None:
+    merged = [(1000, 8000)]
+    assert (
+        test_processor_with_mocks.snap_merged_segments(merged, "missing.mp3") == merged
+    )
+    test_processor_with_mocks.config.enable_dsp_boundary_snap = False
+    assert (
+        test_processor_with_mocks.snap_merged_segments(merged, "missing.mp3") == merged
+    )
+
+
+def test_snap_merged_segments_uses_refine_cuts(
+    test_processor_with_mocks: AudioProcessor,
+) -> None:
+    with patch(
+        "podcast_processor.audio_processor.refine_cuts",
+        return_value=[(1.2, 7.8)],
+    ) as mocked:
+        out = test_processor_with_mocks.snap_merged_segments(
+            [(1000, 8000)], "/tmp/does-not-need-to-exist.mp3"
+        )
+    assert out == [(1200, 7800)]
+    mocked.assert_called_once()
+
+
 def test_process_audio(
     app: Flask,
     test_config: Config,
@@ -172,6 +221,18 @@ def test_process_audio(
 
         output_path = "path/to/output.mp3"
 
+        def persist_post(
+            _model: str, post_id: int, fields: dict, wait: bool = True
+        ) -> MagicMock:
+            row = db.session.get(Post, post_id)
+            assert row is not None
+            for key, value in fields.items():
+                setattr(row, key, value)
+            db.session.commit()
+            result = MagicMock()
+            result.success = True
+            return result
+
         # Set up mocks for get_ad_segments and get_audio_duration_ms
         with (
             patch.object(processor, "get_ad_segments", return_value=[(5.0, 10.0)]),
@@ -182,6 +243,10 @@ def test_process_audio(
             patch(
                 "podcast_processor.audio_processor.clip_segments_with_fade"
             ) as mock_clip,
+            patch(
+                "podcast_processor.audio_processor.writer_client.update",
+                side_effect=persist_post,
+            ),
         ):
             # Call the method
             removed_segments = processor.process_audio(post, output_path)
@@ -194,3 +259,26 @@ def test_process_audio(
             # it is within the minimum separation threshold of the episode end.
             assert removed_segments == [(5000, 30000)]
             mock_clip.assert_called_once()
+
+
+def test_merge_drops_pushkin_preroll_at_14s_keeps_at_10s(
+    test_processor_with_mocks: AudioProcessor,
+) -> None:
+    """Planet Money DAI preroll 0-12.96s is dropped by the 14s floor."""
+    duration_ms = 2_006_151
+    ads = [(0.0, 12.9612), (261.07, 319.767)]
+    dropped = test_processor_with_mocks.merge_ad_segments(
+        duration_ms=duration_ms,
+        ad_segments=ads,
+        min_ad_segment_length_seconds=14.0,
+        min_ad_segment_separation_seconds=60.0,
+    )
+    assert dropped == [(261070, 319767)]
+    kept = test_processor_with_mocks.merge_ad_segments(
+        duration_ms=duration_ms,
+        ad_segments=ads,
+        min_ad_segment_length_seconds=10.0,
+        min_ad_segment_separation_seconds=60.0,
+    )
+    assert kept[0] == (0, 12961)
+    assert kept[1] == (261070, 319767)

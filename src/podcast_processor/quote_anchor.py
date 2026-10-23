@@ -11,7 +11,7 @@ import logging
 import re
 import unicodedata
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 logger = logging.getLogger(__name__)
 
@@ -510,7 +510,8 @@ def cuts_from_matches(matches: list[QuoteMatch]) -> list[tuple[float, float]]:
     return [(item.start, item.end) for item in matches if item.end > item.start]
 
 
-def parse_quote_ads(raw: str) -> list[QuoteAd]:
+def _quote_ads_payload(raw: str) -> dict[str, Any] | None:
+    """Return the JSON object if it is usable quote-ad output, else None."""
     text = (raw or "").strip()
     if text.startswith("```"):
         text = re.sub(r"^```(?:json)?\s*", "", text)
@@ -518,7 +519,7 @@ def parse_quote_ads(raw: str) -> list[QuoteAd]:
     start = text.find("{")
     end = text.rfind("}")
     if start < 0 or end < start:
-        return []
+        return None
     blob = text[start : end + 1]
     payload: object
     try:
@@ -527,8 +528,22 @@ def parse_quote_ads(raw: str) -> list[QuoteAd]:
         try:
             payload = json.loads(blob.replace("'", '"'))
         except json.JSONDecodeError:
-            return []
-    rows = payload.get("ads") if isinstance(payload, dict) else None
+            return None
+    if not isinstance(payload, dict) or not isinstance(payload.get("ads"), list):
+        return None
+    return payload
+
+
+def quote_ads_json_is_usable(raw: str) -> bool:
+    """True for `{"ads":[]}` and other valid envelopes; false if truncated."""
+    return _quote_ads_payload(raw) is not None
+
+
+def parse_quote_ads(raw: str) -> list[QuoteAd]:
+    payload = _quote_ads_payload(raw)
+    if payload is None:
+        return []
+    rows = payload.get("ads")
     if not isinstance(rows, list):
         return []
     ads: list[QuoteAd] = []

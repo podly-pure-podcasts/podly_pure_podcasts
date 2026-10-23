@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 from typing import Any
 
 from app.extensions import db
@@ -6,6 +7,12 @@ from app.models import Identification, ModelCall, Post, TranscriptSegment
 from app.writer.client import writer_client
 from podcast_processor.ad_merger import AdMerger
 from podcast_processor.audio import clip_segments_with_fade, get_audio_duration_ms
+from podcast_processor.boundary_snap import refine_cuts
+from podcast_processor.quote_anchor import QUOTE_ANCHOR_SOURCE
+from podcast_processor.quote_anchor_classifier import (
+    effective_min_ad_segment_length_seconds,
+)
+from shared import defaults as DEFAULTS
 from shared.config import Config
 
 
@@ -46,6 +53,15 @@ class AudioProcessor:
             A list of tuples containing start and end times (in seconds) of ad segments
         """
         self.logger.info(f"Retrieving ad segments from database for post {post.id}.")
+
+        quote_cuts = self._quote_anchor_cuts(post)
+        if quote_cuts is not None:
+            self.logger.info(
+                "Using quote-anchor cuts for post %s n=%s",
+                post.id,
+                len(quote_cuts),
+            )
+            return quote_cuts
 
         query = (
             self.identification_query
@@ -96,12 +112,17 @@ class AudioProcessor:
             )
             return []
 
-        # Content-aware merge
+        # Content-aware merge. Cap proximity at the content-hole gap so a
+        # 60s "min separation" does not glue two ads through show content.
+        merge_gap = min(
+            float(self.config.output.min_ad_segment_separation_seconds),
+            float(DEFAULTS.OUTPUT_MIN_AD_CONTENT_GAP_SECONDS),
+        )
         ad_groups = self.ad_merger.merge(
             ad_segments=ad_segments_with_text,
             identifications=valid_identifications,
-            max_gap=float(self.config.output.min_ad_segment_separation_seconds),
-            min_content_gap=12.0,
+            max_gap=merge_gap,
+            min_content_gap=float(DEFAULTS.OUTPUT_MIN_AD_CONTENT_GAP_SECONDS),
         )
 
         # If boundary refinement persisted refined windows on the post, prefer those
@@ -118,6 +139,41 @@ class AudioProcessor:
         ad_segments_times = [(g.start_time, g.end_time) for g in ad_groups]
         ad_segments_times.sort(key=lambda x: x[0])
         return ad_segments_times
+
+    def _quote_anchor_cuts(self, post: Post) -> list[tuple[float, float]] | None:
+        """Return stored quote-anchor windows, or None if this post is not quote-classified."""
+        post_row = self._safe_get_post_row(post)
+        refined = getattr(post_row, "refined_ad_boundaries", None) if post_row else None
+        if not isinstance(refined, list):
+            refined = getattr(post, "refined_ad_boundaries", None)
+        if not isinstance(refined, list):
+            return None
+        if not any(
+            isinstance(item, dict) and item.get("source") == QUOTE_ANCHOR_SOURCE
+            for item in refined
+        ):
+            return None
+        cuts: list[tuple[float, float]] = []
+        for item in refined:
+            if not isinstance(item, dict):
+                continue
+            if item.get("source") != QUOTE_ANCHOR_SOURCE:
+                continue
+            if item.get("empty"):
+                continue
+            start_raw = item.get("refined_start", item.get("start"))
+            end_raw = item.get("refined_end", item.get("end"))
+            if start_raw is None or end_raw is None:
+                continue
+            try:
+                start = float(start_raw)
+                end = float(end_raw)
+            except (TypeError, ValueError):
+                continue
+            if end > start:
+                cuts.append((start, end))
+        cuts.sort(key=lambda span: span[0])
+        return cuts
 
     def _apply_refined_boundaries(self, post: Post, ad_groups: Any) -> None:
         post_row = self._safe_get_post_row(post)
@@ -240,9 +296,11 @@ class AudioProcessor:
             min_separation=min_ad_segment_separation_seconds,
         )
 
-        ad_segments = self._merge_close_segments(
-            ad_segments, min_separation=min_ad_segment_separation_seconds
+        merge_gap = min(
+            float(min_ad_segment_separation_seconds),
+            float(DEFAULTS.OUTPUT_MIN_AD_CONTENT_GAP_SECONDS),
         )
+        ad_segments = self._merge_close_segments(ad_segments, min_separation=merge_gap)
         ad_segments = self._filter_short_segments(
             ad_segments, min_length=min_ad_segment_length_seconds
         )
@@ -317,6 +375,25 @@ class AudioProcessor:
             return [*ad_segments[:-1], (ad_segments[-1][0], audio_duration_seconds)]
         return ad_segments
 
+    def snap_merged_segments(
+        self,
+        merged_ad_segments_ms: list[tuple[int, int]],
+        audio_path: str | None,
+    ) -> list[tuple[int, int]]:
+        """Snap merged cut edges to nearby silence. No-op if disabled or no audio."""
+        if not merged_ad_segments_ms:
+            return merged_ad_segments_ms
+        if not getattr(self.config, "enable_dsp_boundary_snap", True):
+            return merged_ad_segments_ms
+        if not audio_path:
+            return merged_ad_segments_ms
+        cuts_s = [
+            (start / 1000.0, end / 1000.0) for start, end in merged_ad_segments_ms
+        ]
+        prefer = "earlier_start"
+        snapped = refine_cuts(cuts_s, audio_path=Path(audio_path), prefer=prefer)
+        return [(int(start * 1000), int(end * 1000)) for start, end in snapped]
+
     def process_audio(self, post: Post, output_path: str) -> list[tuple[int, int]]:
         """
         Process the podcast audio by removing ad segments.
@@ -338,12 +415,15 @@ class AudioProcessor:
         merged_ad_segments = self.merge_ad_segments(
             duration_ms=duration_ms,
             ad_segments=ad_segments,
-            min_ad_segment_length_seconds=float(
-                self.config.output.min_ad_segment_length_seconds
+            min_ad_segment_length_seconds=effective_min_ad_segment_length_seconds(
+                self.config
             ),
             min_ad_segment_separation_seconds=float(
                 self.config.output.min_ad_segement_separation_seconds
             ),
+        )
+        merged_ad_segments = self.snap_merged_segments(
+            merged_ad_segments, post.unprocessed_audio_path
         )
 
         # LLM strategy doesn't use chapter markers, so VBR is fine for smaller files

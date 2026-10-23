@@ -153,5 +153,6 @@ class TestEnvKeyValidation:
         monkeypatch.setenv("LLM_API_KEY", "llm-value")
         monkeypatch.setenv("WHISPER_REMOTE_API_KEY", "remote-value")
         monkeypatch.delenv("GROQ_API_KEY", raising=False)
+        monkeypatch.delenv("GROQ_KEY", raising=False)
 
         app_module._validate_env_key_conflicts()

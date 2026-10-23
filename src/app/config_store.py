@@ -24,6 +24,7 @@ from shared.config import (
     RemoteWhisperConfig,
     TestWhisperConfig,
 )
+from shared.env import groq_api_key
 
 logger = logging.getLogger("global_logger")
 
@@ -532,6 +533,7 @@ def to_pydantic_config() -> PydanticConfig:
                 DEFAULTS.ENABLE_LLM_CHAPTER_FALLBACK_TAGGING,
             )
         ),
+        enable_dsp_boundary_snap=bool(DEFAULTS.ENABLE_DSP_BOUNDARY_SNAP),
         output=data["output"],
         processing=data["processing"],
         background_update_interval_minute=data["app"].get(
@@ -613,7 +615,7 @@ def _apply_top_level_env_overrides(cfg: PydanticConfig) -> None:
     env_llm_key = (
         os.environ.get("LLM_API_KEY")
         or os.environ.get("OPENAI_API_KEY")
-        or os.environ.get("GROQ_API_KEY")
+        or groq_api_key()
     )
     if env_llm_key:
         cfg.llm_api_key = env_llm_key
@@ -706,7 +708,7 @@ def _apply_groq_whisper_runtime_overrides(whisper: GroqWhisperConfig) -> None:
 
     Accepts WHISPER_GROQ_MODEL as an alias for GROQ_WHISPER_MODEL.
     """
-    groq_key = os.environ.get("GROQ_API_KEY")
+    groq_key = groq_api_key()
     if groq_key:
         whisper.api_key = groq_key
     groq_model = os.environ.get("GROQ_WHISPER_MODEL") or os.environ.get(
@@ -844,10 +846,8 @@ def _configure_groq_whisper(cfg: PydanticConfig) -> None:
     """Configure groq whisper type."""
     existing_key_any = getattr(cfg.whisper, "api_key", "")
     existing_key = existing_key_any if isinstance(existing_key_any, str) else ""
-    groq_key_env = os.environ.get("GROQ_API_KEY")
-    groq_api_key: str = (
-        groq_key_env if isinstance(groq_key_env, str) and groq_key_env else existing_key
-    )
+    groq_key_env = groq_api_key()
+    groq_api_key_val: str = groq_key_env if groq_key_env else existing_key
 
     existing_model_any = getattr(cfg.whisper, "model", DEFAULTS.WHISPER_GROQ_MODEL)
     existing_model = (
@@ -877,7 +877,7 @@ def _configure_groq_whisper(cfg: PydanticConfig) -> None:
     )
 
     cfg.whisper = GroqWhisperConfig(
-        api_key=groq_api_key,
+        api_key=groq_api_key_val,
         model=groq_model_val,
         language=groq_lang,
         max_retries=max_retries,
@@ -894,7 +894,7 @@ def _apply_whisper_type_override(cfg: PydanticConfig) -> None:
             logger.info(
                 "Auto-detected WHISPER_TYPE=remote from WHISPER_REMOTE_API_KEY environment variable"
             )
-        elif os.environ.get("GROQ_API_KEY") and not os.environ.get("LLM_API_KEY"):
+        elif groq_api_key() and not os.environ.get("LLM_API_KEY"):
             # Only auto-detect groq for whisper if LLM_API_KEY is not set
             # (to avoid confusion when GROQ_API_KEY is only meant for LLM)
             env_whisper_type = "groq"

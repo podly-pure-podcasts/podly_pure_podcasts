@@ -1,9 +1,35 @@
 import re
 from re import Pattern
 
+# Production analyze() keys. Extra scout keys are appended only when
+# include_scout_extras=True so AdClassifier neighbor expansion is unchanged.
+CORE_ANALYZE_KEYS: tuple[str, ...] = (
+    "url",
+    "promo",
+    "phone",
+    "cta",
+    "transition",
+    "self_promo",
+)
+STRONG_CUE_KEYS: tuple[str, ...] = ("url", "promo", "phone", "cta")
+SCOUT_EXTRA_KEYS: tuple[str, ...] = ("sponsor", "ad_break")
+
+# Weights used by score(). Strong cues match AdClassifier neighbor expansion.
+DEFAULT_SIGNAL_WEIGHTS: dict[str, float] = {
+    "url": 1.0,
+    "promo": 1.0,
+    "phone": 1.0,
+    "cta": 0.8,
+    "transition": 0.5,
+    "self_promo": 0.4,
+    "sponsor": 1.0,
+    "ad_break": 0.7,
+}
+
 
 class CueDetector:
-    def __init__(self) -> None:
+    def __init__(self, include_scout_extras: bool = False) -> None:
+        self.include_scout_extras = include_scout_extras
         self.url_pattern: Pattern[str] = re.compile(
             r"\b([a-z0-9\-\.]+\.(?:com|net|org|io))\b", re.I
         )
@@ -25,6 +51,35 @@ class CueDetector:
             r"\b(my|our)\s+(book|course|newsletter|fund|patreon|substack|community|platform)\b",
             re.I,
         )
+        # Scout-only extras. Off by default so production highlight/analyze stay
+        # identical. These cover phrases chapter-filter already knows about that
+        # the production neighbor-expansion regexes do not.
+        self.sponsor_pattern: Pattern[str] = re.compile(
+            r"\b(sponsored by|brought to you by|this episode is sponsored|"
+            r"paid partnership|our sponsor)\b",
+            re.I,
+        )
+        self.ad_break_pattern: Pattern[str] = re.compile(
+            r"\b(ad break|a word from our sponsor|after these messages|"
+            r"advertisement)\b",
+            re.I,
+        )
+
+    def _core_patterns(self) -> list[Pattern[str]]:
+        return [
+            self.url_pattern,
+            self.promo_pattern,
+            self.phone_pattern,
+            self.cta_pattern,
+            self.transition_pattern,
+            self.self_promo_pattern,
+        ]
+
+    def _active_patterns(self) -> list[Pattern[str]]:
+        patterns = self._core_patterns()
+        if self.include_scout_extras:
+            patterns.extend([self.sponsor_pattern, self.ad_break_pattern])
+        return patterns
 
     def has_cue(self, text: str) -> bool:
         return bool(
@@ -35,7 +90,7 @@ class CueDetector:
         )
 
     def analyze(self, text: str) -> dict[str, bool]:
-        return {
+        signals = {
             "url": bool(self.url_pattern.search(text)),
             "promo": bool(self.promo_pattern.search(text)),
             "phone": bool(self.phone_pattern.search(text)),
@@ -43,6 +98,27 @@ class CueDetector:
             "transition": bool(self.transition_pattern.search(text)),
             "self_promo": bool(self.self_promo_pattern.search(text)),
         }
+        if self.include_scout_extras:
+            signals["sponsor"] = bool(self.sponsor_pattern.search(text))
+            signals["ad_break"] = bool(self.ad_break_pattern.search(text))
+        return signals
+
+    def has_strong_cue(self, text: str) -> bool:
+        """Match AdClassifier neighbor-expansion strong-cue logic."""
+        signals = self.analyze(text)
+        return any(signals.get(key, False) for key in STRONG_CUE_KEYS)
+
+    def score(
+        self, text: str, weights: dict[str, float] | None = None
+    ) -> tuple[float, dict[str, bool]]:
+        """Weighted sum of analyze() flags. Returns (score, signals)."""
+        signals = self.analyze(text)
+        active_weights = weights or DEFAULT_SIGNAL_WEIGHTS
+        total = 0.0
+        for key, fired in signals.items():
+            if fired:
+                total += active_weights.get(key, 0.0)
+        return total, signals
 
     def highlight_cues(self, text: str) -> str:
         """
@@ -50,16 +126,7 @@ class CueDetector:
         Useful for drawing attention to cues in LLM prompts.
         """
         matches: list[tuple[int, int]] = []
-        patterns = [
-            self.url_pattern,
-            self.promo_pattern,
-            self.phone_pattern,
-            self.cta_pattern,
-            self.transition_pattern,
-            self.self_promo_pattern,
-        ]
-
-        for pattern in patterns:
+        for pattern in self._active_patterns():
             for match in pattern.finditer(text):
                 matches.append(match.span())
 

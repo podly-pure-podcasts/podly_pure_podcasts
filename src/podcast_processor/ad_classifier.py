@@ -831,11 +831,12 @@ class AdClassifier:
             adjusted_confidence = self._adjust_confidence(
                 base_confidence=pred.confidence,
                 content_type=content_type,
+                segment_offset=pred.segment_offset,
             )
 
             if adjusted_confidence < self.config.output.min_confidence:
                 self.logger.info(
-                    f"Ad prediction offset {pred.segment_offset:.2f} for post {model_call.post_id} ignored due to low confidence: {pred.confidence:.2f} (min: {self.config.output.min_confidence})"
+                    f"Ad prediction offset {pred.segment_offset:.2f} for post {model_call.post_id} ignored due to low confidence: {adjusted_confidence:.2f} (raw {pred.confidence:.2f}, content_type={content_type}, min: {self.config.output.min_confidence})"
                 )
                 continue
 
@@ -900,13 +901,24 @@ class AdClassifier:
         return inserted, matched_segments
 
     def _adjust_confidence(
-        self, *, base_confidence: float, content_type: str | None
+        self,
+        *,
+        base_confidence: float,
+        content_type: str | None,
+        segment_offset: float | None = None,
     ) -> float:
-        """Demote confidence for self-promo/educational contexts."""
+        """Adjust confidence by content type.
+
+        Policy 2026-10-05: educational/self_promo (membership, network/sister
+        show, first-party app plugs) counts as an ad and is not demoted.
+        technical_discussion is still demoted so example-company talk stays
+        below OUTPUT_MIN_CONFIDENCE=0.8.
+        """
+        del segment_offset
         if not content_type:
             return base_confidence
 
-        if content_type in {"educational/self_promo", "technical_discussion"}:
+        if content_type == "technical_discussion":
             return max(0.0, base_confidence - 0.25)
         if content_type == "transition":
             return max(0.0, base_confidence - 0.1)

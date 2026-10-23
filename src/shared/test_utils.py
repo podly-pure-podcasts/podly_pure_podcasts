@@ -29,7 +29,7 @@ def create_standard_test_config(
         output=OutputConfig(
             fade_ms=2000,
             min_ad_segement_separation_seconds=60,
-            min_ad_segment_length_seconds=14,
+            min_ad_segment_length_seconds=10,
             min_confidence=0.7,
         ),
         processing=ProcessingConfig(

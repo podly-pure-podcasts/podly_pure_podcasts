@@ -17,6 +17,7 @@ from app.config_store import (
 from app.processor import ProcessorSingleton
 from app.runtime_config import config as runtime_config
 from app.writer.client import writer_client
+from shared.env import groq_api_key
 from shared.llm_utils import model_uses_max_completion_tokens
 
 logger = logging.getLogger("global_logger")
@@ -281,7 +282,9 @@ _SIMPLE_LLM_ENV_MAP: dict[str, str] = {
 
 def _register_llm_overrides(overrides: dict[str, Any]) -> None:
     """Register LLM-related environment overrides."""
-    env_var, env_value = _first_env(["LLM_API_KEY", "OPENAI_API_KEY", "GROQ_API_KEY"])
+    env_var, env_value = _first_env(
+        ["LLM_API_KEY", "OPENAI_API_KEY", "GROQ_API_KEY", "GROQ_KEY"]
+    )
     _register_override(overrides, "llm.llm_api_key", env_var, env_value, secret=True)
 
     for env_key, field_path in _SIMPLE_LLM_ENV_MAP.items():
@@ -292,11 +295,9 @@ def _register_llm_overrides(overrides: dict[str, Any]) -> None:
 
 def _register_groq_shared_overrides(overrides: dict[str, Any]) -> None:
     """Register shared Groq API key override metadata."""
-    groq_key = os.environ.get("GROQ_API_KEY")
+    env_var, groq_key = _first_env(["GROQ_API_KEY", "GROQ_KEY"])
     if groq_key:
-        _register_override(
-            overrides, "groq.api_key", "GROQ_API_KEY", groq_key, secret=True
-        )
+        _register_override(overrides, "groq.api_key", env_var, groq_key, secret=True)
 
 
 def _register_remote_whisper_overrides(overrides: dict[str, Any]) -> None:
@@ -336,11 +337,9 @@ def _register_remote_whisper_overrides(overrides: dict[str, Any]) -> None:
 
 def _register_groq_whisper_overrides(overrides: dict[str, Any]) -> None:
     """Register groq whisper environment overrides."""
-    groq_key = os.environ.get("GROQ_API_KEY")
+    env_var, groq_key = _first_env(["GROQ_API_KEY", "GROQ_KEY"])
     if groq_key:
-        _register_override(
-            overrides, "whisper.api_key", "GROQ_API_KEY", groq_key, secret=True
-        )
+        _register_override(overrides, "whisper.api_key", env_var, groq_key, secret=True)
 
     groq_model_env, groq_model_val = _first_env(
         ["GROQ_WHISPER_MODEL", "WHISPER_GROQ_MODEL"]
@@ -375,7 +374,7 @@ def _determine_whisper_type_for_metadata(data: dict[str, Any]) -> str | None:
     if not env_whisper_type:
         if os.environ.get("WHISPER_REMOTE_API_KEY"):
             env_whisper_type = "remote"
-        elif os.environ.get("GROQ_API_KEY") and not os.environ.get("LLM_API_KEY"):
+        elif groq_api_key() and not os.environ.get("LLM_API_KEY"):
             env_whisper_type = "groq"
 
     if env_whisper_type:
@@ -418,7 +417,7 @@ def _get_llm_overridden_fields() -> set[str]:
     if (
         os.environ.get("LLM_API_KEY")
         or os.environ.get("OPENAI_API_KEY")
-        or os.environ.get("GROQ_API_KEY")
+        or groq_api_key()
     ):
         overridden.add("llm.llm_api_key")
 
@@ -449,7 +448,7 @@ def _get_whisper_overridden_fields() -> set[str]:
         overridden.add("whisper.chunksize_mb")
 
     # Groq whisper
-    if os.environ.get("GROQ_API_KEY"):
+    if groq_api_key():
         overridden.add("whisper.api_key")
     if os.environ.get("GROQ_WHISPER_MODEL") or os.environ.get("WHISPER_GROQ_MODEL"):
         overridden.add("whisper.model")
@@ -673,7 +672,7 @@ def _get_env_whisper_api_key(whisper_type: str) -> str | None:
             "OPENAI_API_KEY"
         )
     if whisper_type == "groq":
-        return os.environ.get("GROQ_API_KEY")
+        return groq_api_key() or None
     return None
 
 

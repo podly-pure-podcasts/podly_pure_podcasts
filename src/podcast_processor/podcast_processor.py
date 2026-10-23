@@ -39,10 +39,7 @@ from podcast_processor.chapter_writer import (
 )
 from podcast_processor.podcast_downloader import PodcastDownloader, sanitize_title
 from podcast_processor.processing_status_manager import ProcessingStatusManager
-from podcast_processor.prompt import (
-    DEFAULT_SYSTEM_PROMPT_PATH,
-    DEFAULT_USER_PROMPT_TEMPLATE_PATH,
-)
+from podcast_processor.quote_anchor_classifier import QuoteAnchorClassifier
 from podcast_processor.transcription_manager import TranscriptionManager
 from shared.config import Config
 from shared.processing_paths import (
@@ -113,6 +110,7 @@ class PodcastProcessor:
         logger: logging.Logger | None = None,
         transcription_manager: TranscriptionManager | None = None,
         ad_classifier: AdClassifier | None = None,
+        quote_anchor_classifier: QuoteAnchorClassifier | None = None,
         audio_processor: AudioProcessor | None = None,
         status_manager: ProcessingStatusManager | None = None,
         db_session: Any | None = None,
@@ -146,12 +144,19 @@ class PodcastProcessor:
         else:
             self.ad_classifier = ad_classifier
 
+        if quote_anchor_classifier is None:
+            self.quote_anchor_classifier = QuoteAnchorClassifier(
+                config, logger=self.logger, db_session=self.db_session
+            )
+        else:
+            self.quote_anchor_classifier = quote_anchor_classifier
+
         if audio_processor is None:
             self.audio_processor = AudioProcessor(config=config, logger=self.logger)
         else:
             self.audio_processor = audio_processor
 
-    def process(  # noqa: PLR0912
+    def process(
         self,
         post: Post,
         job_id: str,
@@ -1012,14 +1017,11 @@ class PodcastProcessor:
         self.status_manager.update_job_status(
             job, "running", 3, "Identifying ads", 75.0
         )
-        user_prompt_template = self.get_user_prompt_template(
-            DEFAULT_USER_PROMPT_TEMPLATE_PATH
+        self.logger.info(
+            "spot-then-confirm: bag-of-words windows + per-break LLM quotes"
         )
-        system_prompt = self.get_system_prompt(DEFAULT_SYSTEM_PROMPT_PATH)
-        self.ad_classifier.classify(
+        self.quote_anchor_classifier.classify(
             transcript_segments=transcript_segments,
-            system_prompt=system_prompt,
-            user_prompt_template=user_prompt_template,
             post=post,
         )
 

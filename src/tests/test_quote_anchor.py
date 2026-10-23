@@ -9,6 +9,8 @@ from podcast_processor.quote_anchor import (
     match_quotes_in_order,
     match_rate,
     normalize_tokens,
+    parse_quote_ads,
+    quote_ads_json_is_usable,
     resolve_ads,
     token_edit_distance,
     word_index_range,
@@ -702,3 +704,18 @@ def test_segment_fallback_when_dai_missing_from_word_stream() -> None:
     assert matches[0].method == "segment_fallback"
     assert matches[0].start == 404.36
     assert matches[0].end == 459.36
+
+
+def test_quote_ads_json_usable_empty_list_and_rejects_truncated() -> None:
+    assert quote_ads_json_is_usable('{"ads":[]}') is True
+    assert (
+        quote_ads_json_is_usable(
+            '{"ads":[{"start_quote":"support for the show","end_quote":"url.com",'
+            '"content_type":"promotional_external","confidence":0.9}]}'
+        )
+        is True
+    )
+    assert quote_ads_json_is_usable('{"ads": [{"start_quote": "partial') is False
+    assert quote_ads_json_is_usable("") is False
+    assert quote_ads_json_is_usable("not json") is False
+    assert parse_quote_ads('{"ads": [{"start_quote": "partial') == []

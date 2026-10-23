@@ -76,6 +76,23 @@ def clip_segments_with_fade(
         )
 
 
+def _keep_ranges(
+    ad_segments_ms: list[tuple[int, int]], audio_duration_ms: int
+) -> list[tuple[int, int]]:
+    """Return content windows to keep (inverse of merged ad ranges)."""
+    keep: list[tuple[int, int]] = []
+    last_end = 0
+    for start_ms, end_ms in ad_segments_ms:
+        if end_ms < start_ms:
+            continue
+        if start_ms > last_end:
+            keep.append((last_end, start_ms))
+        last_end = max(last_end, end_ms)
+    if last_end < audio_duration_ms:
+        keep.append((last_end, audio_duration_ms))
+    return keep
+
+
 def _clip_segments_complex(
     ad_segments_ms: list[tuple[int, int]],
     fade_ms: int,
@@ -84,36 +101,46 @@ def _clip_segments_complex(
     audio_duration_ms: int,
     encoding_args: dict[str, Any],
 ) -> None:
-    """Original complex approach with fades."""
+    """Cut ads and fade the kept content edges. Never re-insert ad audio.
+
+    Previous behavior faded the first/last `fade_ms` of each *ad* window, so a
+    preroll starting at t=0 still opened with the DAI cold-open. Fades now apply
+    only to retained content (fade-out before a cut, fade-in after one).
+    """
+    keep_segments = _keep_ranges(ad_segments_ms, audio_duration_ms)
+    if not keep_segments:
+        raise ValueError("No audio segments to keep after ad removal")
 
     trimmed_list = []
-
-    last_end = 0
-    for start_ms, end_ms in ad_segments_ms:
-        trimmed_list.extend(
-            [
-                ffmpeg.input(in_path).filter(
-                    "atrim", start=last_end / 1000.0, end=start_ms / 1000.0
-                ),
-                ffmpeg.input(in_path)
-                .filter(
-                    "atrim", start=start_ms / 1000.0, end=(start_ms + fade_ms) / 1000.0
-                )
-                .filter("afade", t="out", ss=0, d=fade_ms / 1000.0),
-                ffmpeg.input(in_path)
-                .filter("atrim", start=(end_ms - fade_ms) / 1000.0, end=end_ms / 1000.0)
-                .filter("afade", t="in", ss=0, d=fade_ms / 1000.0),
-            ]
+    for kstart, kend in keep_segments:
+        duration_ms = kend - kstart
+        if duration_ms <= 0:
+            continue
+        clip = (
+            ffmpeg.input(in_path)
+            .filter("atrim", start=kstart / 1000.0, end=kend / 1000.0)
+            .filter("asetpts", "PTS-STARTPTS")
         )
-
-        last_end = end_ms
-
-    if last_end != audio_duration_ms:
-        trimmed_list.append(
-            ffmpeg.input(in_path).filter(
-                "atrim", start=last_end / 1000.0, end=audio_duration_ms / 1000.0
+        wants_fade_in = kstart > 0 and fade_ms > 0
+        wants_fade_out = kend < audio_duration_ms and fade_ms > 0
+        fade_in_ms = min(fade_ms, duration_ms) if wants_fade_in else 0
+        fade_out_ms = min(fade_ms, duration_ms) if wants_fade_out else 0
+        if fade_in_ms + fade_out_ms > duration_ms:
+            fade_in_ms = duration_ms // 2 if wants_fade_in else 0
+            fade_out_ms = (duration_ms - fade_in_ms) if wants_fade_out else 0
+        if fade_in_ms > 0:
+            clip = clip.filter("afade", t="in", st=0, d=fade_in_ms / 1000.0)
+        if fade_out_ms > 0:
+            clip = clip.filter(
+                "afade",
+                t="out",
+                st=(duration_ms - fade_out_ms) / 1000.0,
+                d=fade_out_ms / 1000.0,
             )
-        )
+        trimmed_list.append(clip)
+
+    if not trimmed_list:
+        raise ValueError("No audio segments to keep after ad removal")
 
     logger.info(
         "[FFMPEG_CONCAT] Starting audio concatenation: %s -> %s (%d segments)",
@@ -121,9 +148,13 @@ def _clip_segments_complex(
         out_path,
         len(trimmed_list),
     )
+    stream = (
+        trimmed_list[0]
+        if len(trimmed_list) == 1
+        else ffmpeg.concat(*trimmed_list, v=0, a=1)
+    )
     (
-        ffmpeg.concat(*trimmed_list, v=0, a=1)
-        .output(out_path, acodec="libmp3lame", **encoding_args)
+        stream.output(out_path, acodec="libmp3lame", **encoding_args)
         .overwrite_output()
         .run()
     )
@@ -208,17 +239,7 @@ def _clip_segments_simple(
 ) -> None:
     """Simpler approach without fades - more reliable for many segments."""
 
-    # Build list of segments to keep (inverse of ad segments)
-    keep_segments: list[tuple[int, int]] = []
-    last_end = 0
-
-    for start_ms, end_ms in ad_segments_ms:
-        if start_ms > last_end:
-            keep_segments.append((last_end, start_ms))
-        last_end = end_ms
-
-    if last_end < audio_duration_ms:
-        keep_segments.append((last_end, audio_duration_ms))
+    keep_segments = _keep_ranges(ad_segments_ms, audio_duration_ms)
 
     if not keep_segments:
         raise ValueError("No audio segments to keep after ad removal")

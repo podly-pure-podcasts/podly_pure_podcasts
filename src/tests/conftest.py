@@ -19,6 +19,7 @@ from podcast_processor.podcast_downloader import PodcastDownloader
 from podcast_processor.processing_status_manager import ProcessingStatusManager
 from podcast_processor.transcription_manager import TranscriptionManager
 from shared.config import Config
+from shared.local_writer import force_local_writer
 from shared.test_utils import create_standard_test_config
 
 # Set up whisper and torch mocks
@@ -40,6 +41,19 @@ torch_mock.device = MagicMock()
 # Pre-mock the modules to avoid imports during test collection
 sys.modules["whisper"] = whisper_mock
 sys.modules["torch"] = torch_mock
+
+
+@pytest.fixture(autouse=True)
+def _no_live_experiment_llm(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Live confirm requires an explicit flag; never inherit one from the env."""
+    monkeypatch.delenv("PODLY_GEMINI_CONFIRM_LIVE", raising=False)
+    monkeypatch.delenv("PODLY_GROQ_CONFIRM_LIVE", raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _force_local_writer() -> None:
+    """Keep pytest writes in-process even when Cake's podly-writer is running."""
+    force_local_writer()
 
 
 @pytest.fixture
