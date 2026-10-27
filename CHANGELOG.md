@@ -1,3 +1,80 @@
+# [2.8.0](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.7.14...v2.8.0) (2026-10-23)
+
+
+### Bug Fixes
+
+* **ad-classifier:** retry bad LLM output, fail incomplete classification ([731b454](https://github.com/podly-pure-podcasts/podly_pure_podcasts/commit/731b454e5a7d8e9b6dc3a551293e3525af590a7d))
+
+
+### Features
+
+* **processor:** publish without ad removal when ad detection is incomplete ([8e1c547](https://github.com/podly-pure-podcasts/podly_pure_podcasts/commit/8e1c5471e4caaa028688e98f560f44be4a321d55))
+
+## [2.7.14](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.7.13...v2.7.14) (2026-10-23)
+
+
+### Bug Fixes
+
+* **writer:** derive the reply wait from the busy timeout, with an env override ([c4a8a58](https://github.com/podly-pure-podcasts/podly_pure_podcasts/commit/c4a8a5893ef2d5a60e63a22f9c92c9120f06129e))
+* **writer:** wait for the writer's reply longer than SQLite's busy timeout ([9979ba6](https://github.com/podly-pure-podcasts/podly_pure_podcasts/commit/9979ba6bfcc7695676b9bc6b7302ce0e52e495ca))
+
+## [2.7.13](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.7.12...v2.7.13) (2026-10-23)
+
+
+### Bug Fixes
+
+* **deps:** bump certifi to 2026.10.19 (distrust emSign ECC Root CA - G3) ([9230c0a](https://github.com/podly-pure-podcasts/podly_pure_podcasts/commit/9230c0a3078e1c569ae3c04ec879752ccfcf648f))
+
+## [2.7.12](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.7.11...v2.7.12) (2026-10-20)
+
+
+### Performance Improvements
+
+* **feeds:** gzip feed XML for clients that accept it ([fee7e90](https://github.com/podly-pure-podcasts/podly_pure_podcasts/commit/fee7e90661e2248f44f441e4d6441e8936f7dc3d))
+
+## [2.7.11](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.7.10...v2.7.11) (2026-10-20)
+
+
+### Bug Fixes
+
+* **processing:** store the processed runtime for every strategy ([eb6eedd](https://github.com/podly-pure-podcasts/podly_pure_podcasts/commit/eb6eedd3539bbc31f56372f988fbab79dc1521ba))
+
+
+### Performance Improvements
+
+* **feeds:** cache processed-audio durations instead of probing every request ([9baff93](https://github.com/podly-pure-podcasts/podly_pure_podcasts/commit/9baff933d86fd56f058fb5d2a95357e1d276a07e))
+
+## [2.7.10](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.7.9...v2.7.10) (2026-10-20)
+
+
+### Bug Fixes
+
+* **ci:** fail scripts/ci.sh when lint or tests fail ([2fe6644](https://github.com/podly-pure-podcasts/podly_pure_podcasts/commit/2fe66443c625733daea20b3cf47be26beaf890aa))
+
+## [2.7.9](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.7.8...v2.7.9) (2026-10-19)
+
+
+### Performance Improvements
+
+* **jobs:** reduce scheduling query allocations ([3f46d90](https://github.com/podly-pure-podcasts/podly_pure_podcasts/commit/3f46d904d71d3523ac03971a616296d0f5166379))
+
+## [2.7.8](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.7.7...v2.7.8) (2026-10-18)
+
+
+### Performance Improvements
+
+* **posts:** count whitelist state without loading episodes ([afa1d9b](https://github.com/podly-pure-podcasts/podly_pure_podcasts/commit/afa1d9bf5408f8d67d88538a6bc6852ed1eb0764))
+* **scheduler:** refresh feeds in separate ORM sessions ([d9e2b26](https://github.com/podly-pure-podcasts/podly_pure_podcasts/commit/d9e2b26e0e3782a543276312c0ad39cab4ce42dd))
+* **writer:** join feed titles and batch job lookups in audio cleanup ([36a25ab](https://github.com/podly-pure-podcasts/podly_pure_podcasts/commit/36a25abefdd8fe82598b7a8e66eb9a26ea8b277a))
+
+## [2.7.7](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.7.6...v2.7.7) (2026-10-14)
+
+
+### Bug Fixes
+
+* **docker:** install torch 2.13 ROCm wheel from the rocm7.1 index ([2ce9f0d](https://github.com/podly-pure-podcasts/podly_pure_podcasts/commit/2ce9f0d05fea4621201bf1622b44e6f02310b914)), closes [#250](https://github.com/podly-pure-podcasts/podly_pure_podcasts/issues/250)
+* **docker:** install variant torch wheels with --no-deps ([5077d7d](https://github.com/podly-pure-podcasts/podly_pure_podcasts/commit/5077d7d18682949c00dde9e46c2403bc17a86ca1))
+
 ## [2.7.6](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.7.5...v2.7.6) (2026-10-14)
 
 

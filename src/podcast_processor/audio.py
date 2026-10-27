@@ -150,6 +150,55 @@ def clip_segments_exact(
     )
 
 
+def prepend_clip(clip_path: str, in_path: str, out_path: str) -> None:
+    """Write clip followed by the full audio of in_path to out_path as MP3.
+
+    The clip is converted to the sample rate and channel count of in_path, so
+    the episode keeps its format. Chapters are dropped because their times no
+    longer match; other metadata of in_path is kept.
+    """
+    sample_rate, channels = _audio_stream_format(in_path)
+    channel_layout = "mono" if channels == 1 else "stereo"
+
+    def _normalized(path: str) -> Any:
+        return (
+            ffmpeg.input(path)
+            .audio.filter("aresample", sample_rate)
+            .filter(
+                "aformat",
+                sample_fmts="fltp",
+                sample_rates=sample_rate,
+                channel_layouts=channel_layout,
+            )
+        )
+
+    logger.info(
+        "[FFMPEG_CONCAT] Prepending %s to %s -> %s", clip_path, in_path, out_path
+    )
+    (
+        ffmpeg.concat(_normalized(clip_path), _normalized(in_path), v=0, a=1)
+        .output(
+            out_path,
+            format="mp3",
+            acodec="libmp3lame",
+            map_metadata=1,
+            map_chapters=-1,
+            **_get_encoding_args(use_vbr=True),
+        )
+        .overwrite_output()
+        .run()
+    )
+
+
+def _audio_stream_format(in_path: str) -> tuple[int, int]:
+    """Return (sample_rate, channels) of the first audio stream of in_path."""
+    probe = ffmpeg.probe(in_path)
+    for stream in probe.get("streams", []):
+        if stream.get("codec_type") == "audio":
+            return int(stream["sample_rate"]), int(stream.get("channels") or 2)
+    raise ValueError(f"No audio stream in {in_path}")
+
+
 def _clip_segments_simple(
     ad_segments_ms: list[tuple[int, int]],
     in_path: str,

@@ -20,8 +20,10 @@ export function useEpisodeStatus(episodeGuid: string, isWhitelisted: boolean, ha
   });
 
   useEffect(() => {
-    if (query.data?.status === 'completed' && feedId) {
-      // Invalidate episodes list to refresh UI (show Play button)
+    const status = query.data?.status;
+    if ((status === 'completed' || status === 'failed') && feedId) {
+      // Invalidate episodes list to refresh UI (show Play button). A failed job
+      // can still have published the episode without ad removal.
       queryClient.invalidateQueries({ queryKey: ['episodes', feedId] });
     }
   }, [query.data?.status, feedId, queryClient]);

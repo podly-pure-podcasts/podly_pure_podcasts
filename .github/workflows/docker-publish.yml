@@ -150,6 +150,8 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: |
+            latest=false
           tags: |
             type=ref,event=branch,suffix=-${{ matrix.variant.name }}-${{ env.ARCH }}
             type=ref,event=pr,suffix=-${{ matrix.variant.name }}-${{ env.ARCH }}
@@ -182,6 +184,8 @@ jobs:
     if: ${{ needs.changes.outputs.skip == 'false' && github.event_name != 'pull_request' }}
     runs-on: ubuntu-latest
     strategy:
+      # One GPU variant must not cancel CPU/NVIDIA siblings, or skip manifests.
+      fail-fast: false
       matrix:
         variant:
           - name: "latest"
@@ -203,7 +207,8 @@ jobs:
             gpu_amd: "false"
             lite_build: "false"
           - name: "gpu-amd"
-            base: "rocm/dev-ubuntu-22.04:6.4-complete"
+            # torch 2.13.0 has no rocm6.4 wheel; 2.13.0+rocm7.1 is published.
+            base: "rocm/dev-ubuntu-22.04:7.1-complete"
             gpu: "false"
             gpu_nvidia: "false"
             gpu_amd: "true"
@@ -280,6 +285,8 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: |
+            latest=false
           tags: |
             type=ref,event=branch,suffix=-${{ matrix.variant.name }}-${{ env.ARCH }}
             type=ref,event=pr,suffix=-${{ matrix.variant.name }}-${{ env.ARCH }}
@@ -395,6 +402,8 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: |
+            latest=false
           tags: |
             type=ref,event=branch,suffix=-${{ matrix.variant.name }}-${{ env.ARCH }}
             type=ref,event=pr,suffix=-${{ matrix.variant.name }}-${{ env.ARCH }}
@@ -423,7 +432,9 @@ jobs:
 
   manifest:
     needs: [changes, build-amd64, build-arm64]
-    if: ${{ needs.changes.outputs.skip == 'false' }}
+    # CPU/lite arch images can succeed while a GPU matrix cell fails. Still
+    # publish multi-arch latest/lite so :latest is not left amd64-only.
+    if: ${{ always() && needs.changes.result == 'success' && needs.changes.outputs.skip == 'false' && needs.build-arm64.result == 'success' && (needs.build-amd64.result == 'success' || needs.build-amd64.result == 'failure') }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -475,6 +486,8 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: |
+            latest=${{ matrix.variant == 'latest' }}
           tags: |
             type=ref,event=branch,suffix=-${{ matrix.variant }}
             type=ref,event=pr,suffix=-${{ matrix.variant }}

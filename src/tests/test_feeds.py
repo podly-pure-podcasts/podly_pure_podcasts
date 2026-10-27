@@ -1714,3 +1714,118 @@ def test_update_feed_settings_action_clears_language(app):
         update_feed_settings_action({"feed_id": feed.id, "language": None})
         db.session.refresh(feed)
         assert feed.language is None
+
+
+def test_processed_audio_duration_probes_each_file_once(tmp_path):
+    from app import feeds
+
+    audio = tmp_path / "episode.mp3"
+    audio.write_bytes(b"audio")
+    with (
+        mock.patch.dict(feeds._probe_duration_cache, clear=True),
+        mock.patch("app.feeds.get_audio_duration_ms", return_value=3_600_000) as probe,
+    ):
+        assert feeds._processed_audio_duration_ms(str(audio)) == 3_600_000
+        assert feeds._processed_audio_duration_ms(str(audio)) == 3_600_000
+
+    probe.assert_called_once_with(str(audio))
+
+
+def test_processed_audio_duration_reprobes_rewritten_file(tmp_path):
+    from app import feeds
+
+    audio = tmp_path / "episode.mp3"
+    audio.write_bytes(b"audio")
+    with (
+        mock.patch.dict(feeds._probe_duration_cache, clear=True),
+        mock.patch(
+            "app.feeds.get_audio_duration_ms", side_effect=[3_600_000, 1_800_000]
+        ) as probe,
+    ):
+        assert feeds._processed_audio_duration_ms(str(audio)) == 3_600_000
+        audio.write_bytes(b"reprocessed audio")
+        assert feeds._processed_audio_duration_ms(str(audio)) == 1_800_000
+
+    assert probe.call_count == 2
+
+
+def test_processed_audio_duration_does_not_cache_failed_probe(tmp_path):
+    from app import feeds
+
+    audio = tmp_path / "episode.mp3"
+    audio.write_bytes(b"audio")
+    with (
+        mock.patch.dict(feeds._probe_duration_cache, clear=True),
+        mock.patch(
+            "app.feeds.get_audio_duration_ms", side_effect=[None, 3_600_000]
+        ) as probe,
+    ):
+        assert feeds._processed_audio_duration_ms(str(audio)) is None
+        assert feeds._processed_audio_duration_ms(str(audio)) == 3_600_000
+
+    assert probe.call_count == 2
+
+
+def test_processed_audio_duration_clears_cache_at_cap(tmp_path):
+    from app import feeds
+
+    first = tmp_path / "first.mp3"
+    second = tmp_path / "second.mp3"
+    first.write_bytes(b"first")
+    second.write_bytes(b"second")
+    with (
+        mock.patch.object(feeds, "_PROBE_CACHE_MAX_ENTRIES", 1),
+        mock.patch.dict(feeds._probe_duration_cache, clear=True),
+        mock.patch(
+            "app.feeds.get_audio_duration_ms",
+            side_effect=[1_000, 2_000, 1_000],
+        ) as probe,
+    ):
+        assert feeds._processed_audio_duration_ms(str(first)) == 1_000
+        assert feeds._processed_audio_duration_ms(str(second)) == 2_000
+        assert feeds._processed_audio_duration_ms(str(first)) == 1_000
+        assert len(feeds._probe_duration_cache) == 1
+
+    assert probe.call_count == 3
+
+
+def test_processed_audio_duration_is_safe_under_threads(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+
+    from app import feeds
+
+    audio = tmp_path / "episode.mp3"
+    audio.write_bytes(b"audio")
+    with (
+        mock.patch.dict(feeds._probe_duration_cache, clear=True),
+        mock.patch("app.feeds.get_audio_duration_ms", return_value=3_600_000) as probe,
+    ):
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            results = list(
+                pool.map(
+                    lambda _: feeds._processed_audio_duration_ms(str(audio)),
+                    range(32),
+                )
+            )
+        assert results == [3_600_000] * 32
+        assert str(audio) in {key[0] for key in feeds._probe_duration_cache}
+
+    assert probe.call_count >= 1
+
+
+def test_processed_audio_duration_stat_error_is_not_cached(tmp_path):
+    from app import feeds
+
+    audio = tmp_path / "missing.mp3"
+    with (
+        mock.patch.dict(feeds._probe_duration_cache, clear=True),
+        mock.patch("app.feeds.os.stat", side_effect=FileNotFoundError("gone")),
+        mock.patch(
+            "app.feeds.get_audio_duration_ms", side_effect=[None, 3_600_000]
+        ) as probe,
+    ):
+        assert feeds._processed_audio_duration_ms(str(audio)) is None
+        assert feeds._processed_audio_duration_ms(str(audio)) == 3_600_000
+        assert feeds._probe_duration_cache == {}
+
+    assert probe.call_count == 2

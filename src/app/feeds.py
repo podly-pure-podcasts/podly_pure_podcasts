@@ -2,6 +2,7 @@ import datetime
 import html
 import json
 import logging
+import os
 import re
 import uuid
 from collections.abc import Iterable
@@ -668,10 +669,34 @@ class ItunesRSSItem(PyRSS2Gen.RSSItem):
         handler.endElement("item")
 
 
+_PROBE_CACHE_MAX_ENTRIES = 4096
+_probe_duration_cache: dict[tuple[str, int, int], int] = {}
+
+
+def _processed_audio_duration_ms(path: str) -> int | None:
+    # Feed renders run this for every processed episode on every request, and
+    # each uncached probe spawns ffprobe. Keying on mtime and size re-probes a
+    # rewritten file; failed probes are not cached.
+    try:
+        stat = os.stat(path)
+    except OSError:
+        return get_audio_duration_ms(path)
+    key = (path, stat.st_mtime_ns, stat.st_size)
+    cached = _probe_duration_cache.get(key)
+    if cached is not None:
+        return cached
+    duration_ms = get_audio_duration_ms(path)
+    if duration_ms is not None:
+        if len(_probe_duration_cache) >= _PROBE_CACHE_MAX_ENTRIES:
+            _probe_duration_cache.clear()
+        _probe_duration_cache[key] = duration_ms
+    return duration_ms
+
+
 def _feed_item_duration_seconds(post: Post) -> int | None:
     processed_audio_path = getattr(post, "processed_audio_path", None)
     if processed_audio_path:
-        duration_ms = get_audio_duration_ms(processed_audio_path)
+        duration_ms = _processed_audio_duration_ms(processed_audio_path)
         if duration_ms is not None and duration_ms > 0:
             return round(duration_ms / 1000.0)
 

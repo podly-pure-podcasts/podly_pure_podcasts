@@ -35,6 +35,7 @@ def test_clear_post_processing_data_action_clears_chapter_data(app) -> None:
             processed_audio_path="/tmp/out.mp3",
             duration=123,
             chapter_data='{"chapter_source":"transcript","chapters_for_output":[]}',
+            processing_failed=True,
         )
         db.session.add(post)
         db.session.commit()
@@ -48,6 +49,7 @@ def test_clear_post_processing_data_action_clears_chapter_data(app) -> None:
         assert post.processed_audio_path is None
         assert post.duration is None
         assert post.chapter_data is None
+        assert post.processing_failed is False
 
 
 def test_clear_post_processing_data_keep_transcript_preserves_transcript(app) -> None:
@@ -72,6 +74,7 @@ def test_clear_post_processing_data_keep_transcript_preserves_transcript(app) ->
             chapter_data='{"chapter_source":"transcript","chapters_for_output":[]}',
             refined_ad_boundaries=[{"start": 1.0, "end": 2.0}],
             refined_ad_boundaries_updated_at=datetime.now(UTC).replace(tzinfo=None),
+            processing_failed=True,
         )
         db.session.add(post)
         db.session.commit()
@@ -137,6 +140,7 @@ def test_clear_post_processing_data_keep_transcript_preserves_transcript(app) ->
         assert post.chapter_data is None
         assert post.refined_ad_boundaries is None
         assert post.refined_ad_boundaries_updated_at is None
+        assert post.processing_failed is False
 
         assert TranscriptSegment.query.filter_by(post_id=post.id).count() == 1
         assert (

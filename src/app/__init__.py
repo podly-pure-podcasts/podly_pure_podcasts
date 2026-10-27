@@ -20,6 +20,7 @@ from app.config_store import (
     ensure_defaults_and_hydrate,
     hydrate_runtime_config_inplace,
 )
+from app.db_timeouts import SQLITE_BUSY_TIMEOUT_MS
 from app.extensions import db, migrate, scheduler
 from app.jobs_manager import (
     get_jobs_manager,
@@ -46,8 +47,7 @@ def _env_bool(name: str, default: bool = False) -> bool:
 
 
 def _get_sqlite_busy_timeout_ms() -> int:
-    # Longer timeout to allow large batch deletes/updates to finish before giving up
-    return 90000
+    return SQLITE_BUSY_TIMEOUT_MS
 
 
 def setup_dirs() -> None:

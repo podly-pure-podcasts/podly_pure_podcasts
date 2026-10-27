@@ -279,6 +279,7 @@ export const feedsApi = {
       release_date: string | null;
       whitelisted: boolean;
       has_processed_audio: boolean;
+      processing_failed?: boolean;
     };
     ad_detection_strategy: 'llm' | 'chapter' | 'chapter_insert';
     processing_stats: {

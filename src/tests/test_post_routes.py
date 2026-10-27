@@ -4,7 +4,9 @@ from types import SimpleNamespace
 from unittest import mock
 from urllib.parse import quote
 
+import pytest
 from flask import g
+from sqlalchemy import event
 
 from app.extensions import db
 from app.models import Feed, ModelCall, Post, TranscriptSegment, User
@@ -903,3 +905,119 @@ def test_post_stats_includes_debug_info_when_enabled(app, tmp_path):
         c["path"] == str(processed_audio.resolve()) and c["exists"] is True
         for c in candidates
     )
+
+
+@pytest.mark.parametrize(
+    "initial_statuses", [[], [False, False], [True, False], [True, True]]
+)
+def test_toggle_whitelist_all_does_not_load_post_entities(app, initial_statuses):
+    app.testing = True
+    app.register_blueprint(post_bp)
+    feed = Feed(title="Bulk Feed", rss_url="https://example.com/bulk.xml")
+    other_feed = Feed(title="Other Feed", rss_url="https://example.com/other.xml")
+    db.session.add_all([feed, other_feed])
+    db.session.flush()
+    feed_id, other_id = feed.id, other_feed.id
+    db.session.add_all(
+        [
+            Post(
+                feed_id=feed_id,
+                guid=f"bulk-{index}",
+                title=f"Episode {index}",
+                download_url=f"https://example.com/{index}.mp3",
+                whitelisted=status,
+            )
+            for index, status in enumerate(initial_statuses)
+        ]
+    )
+    db.session.add(
+        Post(
+            feed_id=other_id,
+            guid="other",
+            title="Other Episode",
+            download_url="https://example.com/other.mp3",
+            whitelisted=False,
+        )
+    )
+    db.session.commit()
+    db.session.remove()
+
+    loaded_posts = []
+
+    def record_post_load(post, context):
+        loaded_posts.append(post.id)
+
+    event.listen(Post, "load", record_post_load)
+    try:
+        response = app.test_client().post(f"/api/feeds/{feed_id}/toggle-whitelist-all")
+    finally:
+        event.remove(Post, "load", record_post_load)
+
+    assert response.status_code == 200
+    assert loaded_posts == []
+    payload = response.get_json()
+    assert payload["total_count"] == len(initial_statuses)
+    if not initial_statuses:
+        assert payload["message"] == "No posts found in this feed"
+        assert payload["whitelisted_count"] == 0
+    else:
+        expected_status = not all(initial_statuses)
+        assert payload["all_whitelisted"] is expected_status
+        assert payload["updated_count"] == len(initial_statuses)
+        assert payload["whitelisted_count"] == (
+            len(initial_statuses) if expected_status else 0
+        )
+        assert Post.query.filter_by(
+            feed_id=feed_id, whitelisted=expected_status
+        ).count() == len(initial_statuses)
+    assert Post.query.filter_by(feed_id=other_id, whitelisted=False).count() == 1
+
+
+@pytest.mark.parametrize(
+    ("processing_failed", "expected_original_duration"),
+    [(False, 110.0), (True, 100.0)],
+)
+def test_post_stats_and_feed_posts_report_processing_failed(
+    app, processing_failed, expected_original_duration
+):
+    """An episode published without ad removal keeps its full length."""
+    app.testing = True
+    app.register_blueprint(post_bp)
+
+    with app.app_context():
+        feed = Feed(title="Fallback Feed", rss_url="https://example.com/feed.xml")
+        db.session.add(feed)
+        db.session.commit()
+
+        post = Post(
+            feed_id=feed.id,
+            guid="fallback-stats-guid",
+            download_url="https://example.com/audio.mp3",
+            title="Fallback Episode",
+            whitelisted=True,
+            processed_audio_path="/tmp/fallback-stats.mp3",
+            duration=100,
+            refined_ad_boundaries=[{"refined_start": 10.0, "refined_end": 20.0}],
+            processing_failed=processing_failed,
+        )
+        db.session.add(post)
+        db.session.commit()
+        feed_id = feed.id
+        guid = post.guid
+
+    client = app.test_client()
+    stats_response = client.get(f"/api/posts/{guid}/stats")
+    posts_response = client.get(f"/api/feeds/{feed_id}/posts")
+
+    assert stats_response.status_code == 200
+    stats = stats_response.get_json()
+    assert stats["post"]["processing_failed"] is processing_failed
+    assert stats["processing_stats"]["estimated_ad_time_seconds"] == 10.0
+    assert (
+        stats["processing_stats"]["original_duration_seconds"]
+        == expected_original_duration
+    )
+
+    assert posts_response.status_code == 200
+    item = posts_response.get_json()["items"][0]
+    assert item["processing_failed"] is processing_failed

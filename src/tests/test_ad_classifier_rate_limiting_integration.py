@@ -107,7 +107,7 @@ class TestAdClassifierRateLimiting:
             # Mock successful API response
             mock_response = Mock()
             mock_choice = Mock()
-            mock_choice.message.content = "test response"
+            mock_choice.message.content = '{"ad_segments": []}'
             mock_response.choices = [mock_choice]
             mock_litellm.completion.return_value = mock_response
 
@@ -136,7 +136,7 @@ class TestAdClassifierRateLimiting:
             assert call_args[1]["messages"][0]["role"] == "system"
             assert call_args[1]["messages"][1]["role"] == "user"
 
-            assert result == "test response"
+            assert result == '{"ad_segments": []}'
 
     @patch("time.sleep")
     def test_rate_limit_backoff_timing(self, mock_sleep):

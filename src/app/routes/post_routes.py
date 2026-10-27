@@ -8,6 +8,7 @@ from typing import Any
 import flask
 from flask import Blueprint, g, jsonify, request, send_file
 from flask.typing import ResponseReturnValue
+from sqlalchemy import func
 
 from app.auth.guards import require_admin
 from app.auth.service import update_user_last_active
@@ -164,6 +165,7 @@ def api_feed_posts(feed_id: int) -> flask.Response:
             "duration": post.duration,
             "whitelisted": post.whitelisted,
             "has_processed_audio": post.processed_audio_path is not None,
+            "processing_failed": bool(post.processing_failed),
             "has_unprocessed_audio": post.unprocessed_audio_path is not None,
             "download_url": post.download_url,
             "image_url": post.image_url,
@@ -269,6 +271,7 @@ def get_post_json(p_guid: str) -> flask.Response:
         "processed_audio_path": post.processed_audio_path,
         "has_unprocessed_audio": post.unprocessed_audio_path is not None,
         "has_processed_audio": post.processed_audio_path is not None,
+        "processing_failed": bool(post.processing_failed),
         "transcript_segment_count": segment_count,
         "transcript_sample": transcript_segments,
         "model_call_count": post.model_calls.count(),
@@ -543,7 +546,10 @@ def api_post_stats(p_guid: str) -> flask.Response:
 
     # post.duration is the cut (ad-removed) audio length; reconstruct original by adding
     # back the removed ad time so the percentage uses the correct denominator.
-    original_duration_seconds = cut_duration_seconds + ad_time_seconds
+    # An episode published without ad removal still has its full length.
+    original_duration_seconds = cut_duration_seconds
+    if not post.processing_failed:
+        original_duration_seconds += ad_time_seconds
 
     ad_percentage = (
         (ad_time_seconds / original_duration_seconds) * 100
@@ -561,6 +567,7 @@ def api_post_stats(p_guid: str) -> flask.Response:
             ),
             "whitelisted": post.whitelisted,
             "has_processed_audio": post.processed_audio_path is not None,
+            "processing_failed": bool(post.processing_failed),
             "download_count": post.download_count,
         },
         "ad_detection_strategy": ad_detection_strategy,
@@ -689,6 +696,19 @@ def api_toggle_whitelist(p_guid: str) -> ResponseReturnValue:
     return flask.jsonify(response_body)
 
 
+def _whitelist_counts(feed_id: int) -> tuple[int, int]:
+    """Return (total, whitelisted) post counts for a feed."""
+    total, whitelisted = (
+        db.session.query(
+            func.count(Post.id),
+            func.count(Post.id).filter(Post.whitelisted.is_(True)),
+        )
+        .filter(Post.feed_id == feed_id)
+        .one()
+    )
+    return total, whitelisted
+
+
 @post_bp.route("/api/feeds/<int:feed_id>/toggle-whitelist-all", methods=["POST"])
 def api_toggle_whitelist_all(feed_id: int) -> ResponseReturnValue:
     """Intelligently toggle whitelist status for all posts in a feed.
@@ -701,7 +721,8 @@ def api_toggle_whitelist_all(feed_id: int) -> ResponseReturnValue:
     if error:
         return error
 
-    if not feed.posts:
+    total, whitelisted = _whitelist_counts(feed.id)
+    if not total:
         return flask.jsonify(
             {
                 "message": "No posts found in this feed",
@@ -710,7 +731,7 @@ def api_toggle_whitelist_all(feed_id: int) -> ResponseReturnValue:
             }
         )
 
-    all_whitelisted = all(post.whitelisted for post in feed.posts)
+    all_whitelisted = whitelisted == total
     new_status = not all_whitelisted
 
     try:
@@ -733,8 +754,7 @@ def api_toggle_whitelist_all(feed_id: int) -> ResponseReturnValue:
             503,
         )
 
-    whitelisted_count = Post.query.filter_by(feed_id=feed.id, whitelisted=True).count()
-    total_count = Post.query.filter_by(feed_id=feed.id).count()
+    total_count, whitelisted_count = _whitelist_counts(feed.id)
 
     return flask.jsonify(
         {

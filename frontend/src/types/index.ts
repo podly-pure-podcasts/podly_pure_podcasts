@@ -35,6 +35,7 @@ export interface Episode {
   duration: number | null;
   whitelisted: boolean;
   has_processed_audio: boolean;
+  processing_failed?: boolean;
   has_unprocessed_audio: boolean;
   download_url: string;
   image_url: string | null;

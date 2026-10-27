@@ -1184,6 +1184,15 @@ export default function FeedDetail({ feed, onClose, onFeedDeleted }: FeedDetailP
                             feedId={currentFeed.id}
                           />
 
+                          {episode.has_processed_audio && episode.processing_failed && (
+                            <span
+                              className="shrink-0 px-2 py-1 rounded-full text-xs font-medium border bg-red-50 text-red-700 border-red-200"
+                              title="Ad detection did not finish. The episode was published without ad removal; reprocess it to try again."
+                            >
+                              Processing failed
+                            </span>
+                          )}
+
                           <ProcessingStatsButton
                             episodeGuid={episode.guid}
                             hasProcessedAudio={episode.has_processed_audio}

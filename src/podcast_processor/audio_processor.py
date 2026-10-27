@@ -372,7 +372,11 @@ class AudioProcessor:
         result = writer_client.update(
             "Post",
             post.id,
-            {"processed_audio_path": output_path, "duration": post.duration},
+            {
+                "processed_audio_path": output_path,
+                "duration": post.duration,
+                "processing_failed": False,
+            },
             wait=True,
         )
         if not result or not result.success:

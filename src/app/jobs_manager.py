@@ -4,6 +4,7 @@ from threading import Event, Lock, Thread
 from typing import Any, cast
 
 from sqlalchemy import case
+from sqlalchemy.orm import joinedload, load_only
 
 from app.db_guard import db_guard, reset_session
 from app.extensions import db as _db
@@ -164,6 +165,17 @@ class JobsManager:
         """Ensure every post has an associated ProcessingJob record."""
         posts_without_jobs = (
             Post.query.outerjoin(ProcessingJob, ProcessingJob.post_guid == Post.guid)
+            .options(
+                load_only(
+                    Post.id,
+                    Post.guid,
+                    Post.feed_id,
+                    Post.title,
+                    Post.processed_audio_path,
+                    Post.unprocessed_audio_path,
+                ),
+                joinedload(Post.feed).load_only(Feed.title),
+            )
             .filter(ProcessingJob.id.is_(None), Post.whitelisted.is_(True))
             .all()
         )
@@ -544,17 +556,32 @@ class JobsManager:
         Refresh feeds and enqueue per-post processing into internal worker pool.
         """
         with _scheduler_app_context():
-            feeds = Feed.query.all()
-            for feed in feeds:
-                refresh_feed(feed)
+            feed_ids = [feed_id for (feed_id,) in _db.session.query(Feed.id).all()]
 
-            # Clean up posts with missing audio files
+        feeds_refreshed = sum(self._refresh_feed_by_id(feed_id) for feed_id in feed_ids)
+
+        # The writer's local fallback (tests, PODLY_WRITER_LOCAL_FALLBACK) needs a
+        # context for cleanup.
+        with _scheduler_app_context():
             self._cleanup_inconsistent_posts()
-
-            # Process new posts
-            return self.enqueue_pending_jobs(trigger=trigger, context=context)
+        result = self.enqueue_pending_jobs(trigger=trigger, context=context)
+        return {**result, "feeds_refreshed": feeds_refreshed}
 
     # ------------------------ Helpers ------------------------
+    def _refresh_feed_by_id(self, feed_id: int) -> bool:
+        """Refresh one feed in its own session; a failure is logged, not raised."""
+        with _scheduler_app_context():
+            feed = _db.session.get(Feed, feed_id)
+            if feed is None:
+                logger.warning("Skipping missing feed during refresh: id=%s", feed_id)
+                return False
+            try:
+                refresh_feed(feed)
+            except Exception:
+                logger.exception("Failed to refresh feed: id=%s", feed_id)
+                return False
+            return True
+
     def _cleanup_inconsistent_posts(self) -> None:
         """Clean up posts with missing audio files."""
         try:
@@ -572,13 +599,11 @@ class JobsManager:
         run_id = active_run.id if active_run else None
         created_jobs = self._ensure_jobs_for_all_posts(run_id)
 
-        pending_jobs = (
-            ProcessingJob.query.filter(ProcessingJob.status == "pending")
-            .order_by(ProcessingJob.created_at.asc())
-            .all()
-        )
+        pending_count = ProcessingJob.query.filter(
+            ProcessingJob.status == "pending"
+        ).count()
 
-        if active_run and pending_jobs:
+        if active_run and pending_count:
             try:
                 writer_client.action(
                     "reassign_pending_jobs", {"run_id": run_id}, wait=True
@@ -591,11 +616,11 @@ class JobsManager:
 
         logger.info(
             "Pending jobs ready for worker: count=%s run_id=%s",
-            len(pending_jobs),
+            pending_count,
             run_id,
         )
 
-        return created_jobs, len(pending_jobs)
+        return created_jobs, pending_count
 
     # Removed _get_active_job_for_guid - now using direct database queries
 

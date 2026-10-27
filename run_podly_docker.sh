@@ -8,7 +8,7 @@ NC='\033[0m' # No Color
 
 # Central configuration defaults
 CUDA_VERSION="12.4.1"
-ROCM_VERSION="6.4"
+ROCM_VERSION="7.1"
 CPU_BASE_IMAGE="python:3.11-slim"
 GPU_NVIDIA_BASE_IMAGE="nvidia/cuda:${CUDA_VERSION}-cudnn-devel-ubuntu22.04"
 GPU_ROCM_BASE_IMAGE="rocm/dev-ubuntu-22.04:${ROCM_VERSION}-complete"

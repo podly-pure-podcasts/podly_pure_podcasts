@@ -24,6 +24,8 @@ export default function LLMProcessingStats({
     queryFn: () => feedsApi.getPostStats(episodeGuid),
     enabled: showModal && hasProcessedAudio,
   });
+  // Published without ad removal: ads were detected, not cut.
+  const notRemoved = Boolean(stats?.post?.processing_failed);
 
   const formatDuration = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
@@ -181,7 +183,7 @@ export default function LLMProcessingStats({
                             <div className="text-2xl font-bold text-red-600 dark:text-red-200">
                               {stats.processing_stats?.ad_segments_count || 0}
                             </div>
-                            <div className="text-sm text-red-800 dark:text-red-100">Ad Segments Removed</div>
+                            <div className="text-sm text-red-800 dark:text-red-100">{notRemoved ? 'Ad Segments Detected' : 'Ad Segments Removed'}</div>
                           </div>
                         </div>
                       </div>
@@ -311,7 +313,14 @@ export default function LLMProcessingStats({
 
                         return (
                           <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                            <h3 className="font-semibold text-gray-900 mb-4 text-left">Advertisement Removal Summary</h3>
+                            <h3 className="font-semibold text-gray-900 mb-4 text-left">
+                              {notRemoved ? 'Advertisement Detection Summary' : 'Advertisement Removal Summary'}
+                            </h3>
+                            {notRemoved && (
+                              <p className="mb-4 text-sm text-red-700 text-left">
+                                Ad detection did not finish, so this episode was published without ad removal. Reprocess it to try again.
+                              </p>
+                            )}
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
                               <div>
                                 <div className="text-2xl font-bold text-blue-600">{adBlocks.length}</div>
@@ -319,11 +328,11 @@ export default function LLMProcessingStats({
                               </div>
                               <div>
                                 <div className="text-2xl font-bold text-blue-600">{formatDuration(adTimeSeconds)}</div>
-                                <div className="text-sm text-gray-600">Time Removed</div>
+                                <div className="text-sm text-gray-600">{notRemoved ? 'Ad Time Detected' : 'Time Removed'}</div>
                               </div>
                               <div>
                                 <div className="text-2xl font-bold text-rose-600">{adPercent.toFixed(1)}%</div>
-                                <div className="text-sm text-gray-600">Episode Reduced</div>
+                                <div className="text-sm text-gray-600">{notRemoved ? 'Of Episode' : 'Episode Reduced'}</div>
                               </div>
                             </div>
 
@@ -340,7 +349,7 @@ export default function LLMProcessingStats({
                                 <div className="text-gray-600">
                                   {formatDuration(cleanSeconds)} clean
                                   <span className="text-rose-600 ml-2">
-                                    {formatDuration(adTimeSeconds)} removed ({adPercent.toFixed(1)}%)
+                                    {formatDuration(adTimeSeconds)} {notRemoved ? 'ads, not removed' : 'removed'} ({adPercent.toFixed(1)}%)
                                   </span>
                                 </div>
                               </div>
@@ -375,7 +384,7 @@ export default function LLMProcessingStats({
                                 </span>
                                 <span className="flex items-center gap-2">
                                   <span className={`${timelineLegendSwatchClass} ${timelineAdSegmentClass}`} />
-                                  Ads removed
+                                  {notRemoved ? 'Ads detected' : 'Ads removed'}
                                 </span>
                               </div>
                             </div>

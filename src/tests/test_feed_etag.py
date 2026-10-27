@@ -8,6 +8,7 @@ skips the upstream fetch and the XML rebuild entirely.
 from __future__ import annotations
 
 import datetime as dt
+import gzip
 from unittest import mock
 
 from werkzeug.http import http_date
@@ -361,3 +362,70 @@ def test_get_user_aggregate_feed_returns_304_when_etag_matches(app):
     assert second.status_code == 304
     # XML must not be regenerated on the 304 path
     assert mock_gen.call_count == 1
+
+
+def test_get_feed_gzips_when_client_accepts_it(app):
+    app.testing = True
+    _register_feed_routes(app)
+
+    with app.app_context():
+        feed_id = _make_feed_with_post()
+
+    xml = b"<?xml version='1.0'?><rss>" + b"<item/>" * 500 + b"</rss>\n"
+    client = app.test_client()
+    with (
+        mock.patch("app.routes.feed_routes._spawn_async_refresh"),
+        mock.patch("app.routes.feed_routes.generate_feed_xml", return_value=xml),
+    ):
+        plain = client.get(f"/feed/{feed_id}")
+        zipped = client.get(f"/feed/{feed_id}", headers={"Accept-Encoding": "gzip"})
+        revalidated = client.get(
+            f"/feed/{feed_id}",
+            headers={
+                "Accept-Encoding": "gzip",
+                "If-None-Match": zipped.headers["ETag"],
+            },
+        )
+
+    assert "Content-Encoding" not in plain.headers
+    assert plain.data == xml
+    assert zipped.headers["Content-Encoding"] == "gzip"
+    assert gzip.decompress(zipped.data) == xml
+    assert len(zipped.data) < len(xml)
+    assert zipped.headers["ETag"] == f"W/{plain.headers['ETag']}"
+    for resp in (plain, zipped, revalidated):
+        assert "Accept-Encoding" in resp.headers["Vary"]
+    assert revalidated.status_code == 304
+    assert "Content-Encoding" not in revalidated.headers
+    assert revalidated.get_data() == b""
+    assert plain.headers["Content-Length"] == str(len(xml))
+    assert zipped.headers["Content-Length"] == str(len(zipped.data))
+
+
+def test_get_feed_skips_gzip_when_quality_is_zero(app):
+    app.testing = True
+    _register_feed_routes(app)
+
+    with app.app_context():
+        feed_id = _make_feed_with_post()
+
+    xml = b"<?xml version='1.0'?><rss>" + b"<item/>" * 500 + b"</rss>\n"
+    client = app.test_client()
+    with (
+        mock.patch("app.routes.feed_routes._spawn_async_refresh"),
+        mock.patch("app.routes.feed_routes.generate_feed_xml", return_value=xml),
+    ):
+        rejected = client.get(
+            f"/feed/{feed_id}",
+            headers={"Accept-Encoding": "gzip;q=0, identity"},
+        )
+        zipped = client.get(f"/feed/{feed_id}", headers={"Accept-Encoding": "gzip"})
+        headed = client.head(f"/feed/{feed_id}", headers={"Accept-Encoding": "gzip"})
+
+    assert "Content-Encoding" not in rejected.headers
+    assert rejected.data == xml
+    assert headed.status_code == 200
+    assert headed.headers["Content-Encoding"] == "gzip"
+    assert headed.get_data() == b""
+    assert headed.headers["Content-Length"] == zipped.headers["Content-Length"]
+    assert int(headed.headers["Content-Length"]) < len(xml)

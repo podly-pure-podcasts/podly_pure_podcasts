@@ -6,9 +6,28 @@ from typing import Any, cast
 
 from flask import current_app
 
+from app.db_timeouts import SQLITE_BUSY_TIMEOUT_MS
 from app.ipc import make_client_manager
 from app.writer.model_ops import execute_model_command
 from app.writer.protocol import WriteCommand, WriteCommandType, WriteResult
+
+# Time a caller allows on top of SQLite's busy_timeout for the queue wait and the
+# write itself.
+WRITER_REPLY_MARGIN_SEC = 30
+
+
+def writer_reply_timeout_sec() -> float:
+    """How long a caller waits for the writer's reply.
+
+    A write can first wait up to SQLite's busy_timeout for the database lock, so
+    the default outlasts that by WRITER_REPLY_MARGIN_SEC; a shorter wait fails a
+    write that then commits anyway (#267). PODLY_WRITER_REPLY_TIMEOUT_SEC
+    overrides it.
+    """
+    override = os.environ.get("PODLY_WRITER_REPLY_TIMEOUT_SEC")
+    if override:
+        return float(override)
+    return SQLITE_BUSY_TIMEOUT_MS / 1000 + WRITER_REPLY_MARGIN_SEC
 
 
 class WriterClient:
@@ -127,8 +146,13 @@ class WriterClient:
         )
 
     def submit(
-        self, cmd: WriteCommand, wait: bool = False, timeout: int = 10
+        self,
+        cmd: WriteCommand,
+        wait: bool = False,
+        timeout: float | None = None,
     ) -> WriteResult | None:
+        if timeout is None:
+            timeout = writer_reply_timeout_sec()
         reply_q: Queue[Any] | None = None
         if not self.queue:
             try:

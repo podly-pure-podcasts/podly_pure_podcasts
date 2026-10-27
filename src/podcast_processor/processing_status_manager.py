@@ -70,6 +70,7 @@ class ProcessingStatusManager:
         step: int,
         step_name: str,
         progress: float | None = None,
+        error_message: str | None = None,
     ) -> None:
         """Update job status in database."""
         # Cache job attributes before any operations that might expire the object
@@ -97,6 +98,7 @@ class ProcessingStatusManager:
                 "step": step,
                 "step_name": step_name,
                 "progress": progress,
+                "error_message": error_message,
             },
             wait=True,
         )

@@ -14,8 +14,12 @@ from sqlalchemy.orm import object_session
 from app.extensions import db
 from app.models import Post, ProcessingJob, TranscriptSegment
 from app.writer.client import writer_client
-from podcast_processor.ad_classifier import AdClassifier
-from podcast_processor.audio import clip_segments_exact
+from podcast_processor.ad_classifier import AdClassifier, ClassificationIncompleteError
+from podcast_processor.audio import (
+    clip_segments_exact,
+    get_audio_duration_ms,
+    prepend_clip,
+)
 from podcast_processor.audio_processor import AudioProcessor
 from podcast_processor.chapter_ad_detector import (
     ChapterAdDetector,
@@ -50,6 +54,11 @@ from shared.processing_paths import (
 )
 
 logger = logging.getLogger("global_logger")
+
+# Spoken notice placed before an episode that is published without ad removal.
+PROCESSING_FAILED_CLIP_PATH = (
+    Path(__file__).resolve().parent / "assets" / "processing_failed.mp3"
+)
 
 
 def get_post_processed_audio_path(post: Post) -> ProcessingPaths | None:
@@ -441,7 +450,14 @@ class PodcastProcessor:
         post_description = post.description
 
         # Step 3: Classify ad segments
-        self._classify_ad_segments(post, job, transcript_segments)
+        try:
+            self._classify_ad_segments(post, job, transcript_segments)
+        except ClassificationIncompleteError as e:
+            self._raise_if_cancelled(job, 3, cancel_callback)
+            self._publish_without_ad_removal(
+                post, job, processed_audio_path, cancel_callback, str(e)
+            )
+            return
         self._raise_if_cancelled(job, 3, cancel_callback)
 
         # Step 4: Process audio (remove ad segments)
@@ -858,12 +874,19 @@ class PodcastProcessor:
         """
         # Update the database with the processed audio path
         self._remove_unprocessed_audio(post)
-        update_data = {
+        update_data: dict[str, Any] = {
             "processed_audio_path": processed_audio_path,
             "unprocessed_audio_path": None,
+            "processing_failed": False,
         }
         if chapter_data is not None:
             update_data["chapter_data"] = chapter_data
+        # Feeds and stats read Post.duration as the processed runtime, and not
+        # every strategy cuts audio through AudioProcessor, which also stores it.
+        processed_duration_ms = get_audio_duration_ms(processed_audio_path)
+        if processed_duration_ms:
+            post.duration = processed_duration_ms / 1000.0
+            update_data["duration"] = post.duration
         result = writer_client.update(
             "Post",
             post.id,
@@ -877,6 +900,87 @@ class PodcastProcessor:
         self.status_manager.update_job_status(
             job, "completed", 4, "Processing complete", 100.0
         )
+
+    def _publish_without_ad_removal(
+        self,
+        post: Post,
+        job: ProcessingJob,
+        processed_audio_path: str,
+        cancel_callback: Callable[[], bool] | None,
+        reason: str,
+    ) -> None:
+        """
+        Publish the episode without ad removal after incomplete ad detection.
+
+        The spoken notice is placed before the full source audio. The post is
+        marked with processing_failed and the job ends as failed, so the episode
+        can be reprocessed.
+        """
+        unprocessed_audio_path = post.unprocessed_audio_path
+        if not unprocessed_audio_path:
+            raise ProcessorException("No unprocessed audio to publish")
+
+        self.logger.warning(
+            "Ad detection incomplete for post %s, publishing without ad removal: %s",
+            post.id,
+            reason,
+        )
+        self.status_manager.update_job_status(
+            job, "running", 4, "Publishing without ad removal", 90.0
+        )
+
+        # Encode under a name that processed-audio discovery does not pick up, so
+        # an interrupted encode is never served as the episode.
+        partial_path = f"{processed_audio_path}.partial"
+        try:
+            prepend_clip(
+                str(PROCESSING_FAILED_CLIP_PATH),
+                str(unprocessed_audio_path),
+                partial_path,
+            )
+            processed_duration_ms = get_audio_duration_ms(partial_path)
+            if not processed_duration_ms:
+                raise ProcessorException(
+                    "Could not read the audio published without ad removal"
+                )
+            self._raise_if_cancelled(job, 4, cancel_callback)
+            # Store the marker before the file becomes discoverable: after a crash
+            # or a lost writer reply, a fallback file found later must not look
+            # like a normally processed episode.
+            self._update_post_or_raise(post, {"processing_failed": True})
+            os.replace(partial_path, processed_audio_path)
+        finally:
+            if os.path.exists(partial_path):
+                os.remove(partial_path)
+
+        post.duration = processed_duration_ms / 1000.0
+        self._update_post_or_raise(
+            post,
+            {
+                "processed_audio_path": processed_audio_path,
+                "unprocessed_audio_path": None,
+                "duration": post.duration,
+                "chapter_data": None,
+            },
+        )
+        self._remove_unprocessed_audio(post)
+
+        self.status_manager.update_job_status(
+            job,
+            "failed",
+            4,
+            "Published without ad removal",
+            100.0,
+            error_message=(
+                f"Ad detection incomplete ({reason}). The episode was published "
+                "without ad removal; reprocess it to try again."
+            ),
+        )
+
+    def _update_post_or_raise(self, post: Post, update_data: dict[str, Any]) -> None:
+        result = writer_client.update("Post", post.id, update_data, wait=True)
+        if not result or not result.success:
+            raise RuntimeError(getattr(result, "error", "Failed to update post"))
 
     def _raise_if_cancelled(
         self,

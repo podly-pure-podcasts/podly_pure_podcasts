@@ -110,6 +110,9 @@ class Post(db.Model):  # type: ignore[name-defined, misc]
     download_count = db.Column(db.Integer, nullable=True, default=0)
     # JSON data for chapter-based processing results
     chapter_data = db.Column(db.Text, nullable=True)
+    # True when ad detection did not finish and the episode was published without
+    # ad removal (with a spoken notice); cleared by a successful run or a reprocess.
+    processing_failed = db.Column(db.Boolean, default=False, nullable=False)
 
     # Latest (most recent) refined ad cut windows for this post.
     # This is written by the ad classifier boundary refinement step and read by the

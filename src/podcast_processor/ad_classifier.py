@@ -56,6 +56,14 @@ class ClassifyException(Exception):
     """Custom exception for classification errors."""
 
 
+class InvalidModelOutputError(Exception):
+    """The LLM returned a truncated or unparseable classification response."""
+
+
+class ClassificationIncompleteError(Exception):
+    """At least one transcript chunk could not be classified."""
+
+
 class AdClassifier:
     """Handles the classification of ad segments in podcast transcripts."""
 
@@ -72,6 +80,8 @@ class AdClassifier:
         self.model_call_query = model_call_query or ModelCall.query
         self.identification_query = identification_query or Identification.query
         self.db_session = db_session or db.session
+        # ModelCall ids of chunks in the current classify() run without a usable answer
+        self._failed_model_call_ids: list[int] = []
 
         # Initialize rate limiter for the configured model
         self.rate_limiter: TokenRateLimiter | None
@@ -157,6 +167,7 @@ class AdClassifier:
         )
 
         total_segments = len(transcript_segments)
+        self._failed_model_call_ids = []
 
         try:
             current_index = 0
@@ -180,6 +191,15 @@ class AdClassifier:
                         "Breaking to avoid infinite loop."
                     )
                     break
+
+            # A chunk without a usable LLM answer has no ad identifications, so
+            # finishing would publish its ads uncut. Fail the job instead.
+            if self._failed_model_call_ids:
+                raise ClassificationIncompleteError(
+                    f"Ad classification incomplete for post {post.id}: "
+                    f"{len(self._failed_model_call_ids)} chunk(s) without a usable "
+                    f"LLM response (ModelCall ids {self._failed_model_call_ids})"
+                )
 
             # Expand neighbors using bulk operations
             # NOTE: Use self.db_session.query() instead of self.identification_query
@@ -327,10 +347,10 @@ class AdClassifier:
                 model_call=model_call,
                 current_chunk_db_segments=chunk_segments,
             )
-        if model_call.status != "success":
-            self.logger.info(
-                f"LLM call for ModelCall {model_call.id} was not successful (status: {model_call.status}). No identifications to process."
-            )
+        self.logger.error(
+            f"LLM call for ModelCall {model_call.id} has no usable response (status: {model_call.status}). No identifications to process."
+        )
+        self._failed_model_call_ids.append(model_call.id)
         return []
 
     def _build_chunk_payload(
@@ -790,6 +810,8 @@ class AdClassifier:
                 f"Error processing LLM response for ModelCall {model_call.id}: {e}",
                 exc_info=True,
             )
+            # Covers responses stored as success before they were validated.
+            self._failed_model_call_ids.append(model_call.id)
         return []
 
     def _create_identifications(
@@ -970,7 +992,7 @@ class AdClassifier:
 
     def _is_retryable_error(self, error: Exception) -> bool:
         """Determine if an error should be retried."""
-        if isinstance(error, InternalServerError):
+        if isinstance(error, (InternalServerError, InvalidModelOutputError)):
             return True
 
         # Check for retryable HTTP errors in other exception types
@@ -1042,9 +1064,10 @@ class AdClassifier:
 
                 response_first_choice = response.choices[0]
                 assert isinstance(response_first_choice, Choices)
-                content = response_first_choice.message.content
-                assert content is not None
-                raw_response_content = content
+                raw_response_content = self._usable_response_content(
+                    finish_reason=getattr(response_first_choice, "finish_reason", None),
+                    content=response_first_choice.message.content,
+                )
 
                 success_res = writer_client.update(
                     "ModelCall",
@@ -1109,6 +1132,32 @@ class AdClassifier:
             f"Maximum retries ({retry_count}) exceeded for ModelCall {model_call_obj.id}."
         )
 
+    def _usable_response_content(
+        self, *, finish_reason: Any, content: str | None
+    ) -> str:
+        """Return the response content, or raise if it cannot be classified.
+
+        Reasoning models spend part of max_tokens before answering; a cut-off or
+        unparseable answer must be retried, not stored as a successful empty result.
+        """
+        if finish_reason == "length":
+            raise InvalidModelOutputError(
+                "LLM response truncated at the output token limit "
+                "(finish_reason=length)"
+            )
+        if finish_reason == "content_filter":
+            # Treated as permanent: a filtered prompt is unlikely to pass on retry.
+            raise RuntimeError("LLM response withheld (finish_reason=content_filter)")
+        if content is None:
+            raise InvalidModelOutputError("LLM response has no content")
+        try:
+            clean_and_parse_model_output(content)
+        except (ValidationError, AssertionError) as parse_error:
+            raise InvalidModelOutputError(
+                f"LLM response is not valid ad segment JSON: {parse_error}"
+            ) from parse_error
+        return content
+
     def _handle_retryable_error(
         self,
         *,
@@ -1132,9 +1181,10 @@ class AdClassifier:
         # Update local object to reflect database state
         model_call_obj.error_message = str(error)
 
-        # Use longer backoff for rate limiting errors
+        # Use longer backoff for rate limiting errors. Invalid output quotes model text,
+        # which may contain these terms, so it never counts as rate limiting.
         error_str = str(error).lower()
-        if any(
+        if not isinstance(error, InvalidModelOutputError) and any(
             term in error_str
             for term in ["rate_limit_error", "ratelimiterror", "429", "rate limit"]
         ):
