@@ -21,6 +21,7 @@ from app.runtime_config import config
 from app.writer.client import writer_client
 from podcast_processor.audio import get_audio_duration_ms
 from podcast_processor.podcast_downloader import find_audio_link
+from shared.user_agent import get_user_agent
 
 logger = logging.getLogger("global_logger")
 
@@ -353,7 +354,7 @@ def _get_base_url() -> str:
 
 def fetch_feed(url: str) -> feedparser.FeedParserDict:
     logger.info(f"Fetching feed from URL: {url}")
-    feed_data = feedparser.parse(url)
+    feed_data = feedparser.parse(url, agent=get_user_agent())
     for entry in feed_data.entries:
         entry.id = get_guid(entry)
     return feed_data
