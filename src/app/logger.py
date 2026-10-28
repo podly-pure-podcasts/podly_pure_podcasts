@@ -92,7 +92,9 @@ def setup_logger(
 
     # Add a single console handler if not already present
     has_stream_handler = any(
-        isinstance(h, logging.StreamHandler) for h in logger.handlers
+        isinstance(h, logging.StreamHandler) 
+        and not isinstance(h, logging.FileHandler)
+        for h in logger.handlers
     )
     if not has_stream_handler:
         stream_handler = logging.StreamHandler()
