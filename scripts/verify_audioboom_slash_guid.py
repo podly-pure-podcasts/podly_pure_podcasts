@@ -8,7 +8,6 @@ https://audioboom.com/channels/451365.rss
 
 from __future__ import annotations
 
-import re
 import sys
 import tempfile
 from pathlib import Path
@@ -223,7 +222,9 @@ def main() -> int:
     verify_http_routing(guid)
     verify_feed_item_generation(guid)
 
-    print("\n=== PASS: real-world Audioboom slash-GUID bug reproduced & fix verified ===")
+    print(
+        "\n=== PASS: real-world Audioboom slash-GUID bug reproduced & fix verified ==="
+    )
     return 0
 
 

@@ -56,7 +56,14 @@ class TranscriptionManager:
         if isinstance(self.config.whisper, RemoteWhisperConfig):
             return OpenAIWhisperTranscriber(self.logger, self.config.whisper)
         if isinstance(self.config.whisper, LocalWhisperConfig):
-            return LocalWhisperTranscriber(self.logger, self.config.whisper.model)
+            # Segment Whisper only. word_timestamps=True can drop DAI midrolls
+            # (NPR Indicator Wise + donate). Quote-anchor loads word timings in
+            # QuoteAnchorClassifier.load_words and fail-closes to segment edges.
+            return LocalWhisperTranscriber(
+                self.logger,
+                self.config.whisper.model,
+                word_timestamps=False,
+            )
         if isinstance(self.config.whisper, GroqWhisperConfig):
             return GroqWhisperTranscriber(self.logger, self.config.whisper)
         raise ValueError(f"unhandled whisper config {self.config.whisper}")
