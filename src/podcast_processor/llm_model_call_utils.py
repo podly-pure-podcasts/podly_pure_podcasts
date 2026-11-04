@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from typing import Any
 
 from app.writer.client import writer_client
@@ -160,6 +161,7 @@ def call_litellm_with_tier_retry(
     base_delay: float | None = None,
     sleep: Any = time.sleep,
     model_call_id: int | None = None,
+    before_attempt: Callable[[], None] | None = None,
 ) -> Any:
     """Run `litellm.completion(**args)` with Flex-aware retry + fallback.
 
@@ -168,12 +170,20 @@ def call_litellm_with_tier_retry(
     kwarg so the call retries at the standard tier instead of failing. For
     'priority' / 'auto' / 'default' (or when the kwarg isn't set), this is a
     single straight-through `litellm.completion` invocation.
+
+    ``before_attempt`` runs before every provider request, including Flex
+    retries and the standard-tier fallback, so a rate limiter can pace each one.
     """
     import litellm  # local import to keep top-level imports cheap
 
+    def completion(**kwargs: Any) -> Any:
+        if before_attempt is not None:
+            before_attempt()
+        return litellm.completion(**kwargs)
+
     flex_active = completion_args.get("service_tier") == "flex"
     if not flex_active:
-        response = litellm.completion(**completion_args)
+        response = completion(**completion_args)
         return _record_effective_service_tier(
             response,
             completion_args,
@@ -195,7 +205,7 @@ def call_litellm_with_tier_retry(
     last_err: Exception | None = None
     for attempt in range(retries):
         try:
-            response = litellm.completion(**completion_args)
+            response = completion(**completion_args)
             return _record_effective_service_tier(
                 response,
                 completion_args,
@@ -215,7 +225,7 @@ def call_litellm_with_tier_retry(
                     exc,
                 )
                 completion_args.pop("service_tier", None)
-                response = litellm.completion(**completion_args)
+                response = completion(**completion_args)
                 return _record_effective_service_tier(
                     response,
                     completion_args,
