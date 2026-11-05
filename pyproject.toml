@@ -88,6 +88,7 @@ ignore = [
     "PLC0415", # import-outside-toplevel (intentional lazy imports)
     # PLR — rules that were globally disabled in the old pylint config
     "PLR0911", # too-many-return-statements
+    "PLR0912", # too-many-branches
     "PLR0913", # too-many-arguments
     "PLR0914", # too-many-locals
     "PLR0915", # too-many-statements

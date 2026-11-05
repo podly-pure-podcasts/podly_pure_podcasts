@@ -1,4 +1,5 @@
 import logging
+import os
 import shutil
 import time
 from abc import ABC, abstractmethod
@@ -65,9 +66,16 @@ class TestWhisperTranscriber(Transcriber):
 
 
 class LocalWhisperTranscriber(Transcriber):
-    def __init__(self, logger: logging.Logger, whisper_model: str):
+    def __init__(
+        self,
+        logger: logging.Logger,
+        whisper_model: str,
+        *,
+        word_timestamps: bool = False,
+    ):
         self.logger = logger
         self.whisper_model = whisper_model
+        self.word_timestamps = word_timestamps
 
     @property
     def model_name(self) -> str:
@@ -101,12 +109,48 @@ class LocalWhisperTranscriber(Transcriber):
 
         self.logger.info("Beginning transcription")
         start = time.time()
-        result = model.transcribe(audio_file_path, fp16=False, language=language)
+        os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
+        transcribe_kwargs: dict[str, Any] = {"fp16": False, "language": language}
+        if self.word_timestamps:
+            transcribe_kwargs["word_timestamps"] = True
+        result = model.transcribe(audio_file_path, **transcribe_kwargs)
+        from podcast_processor.word_transcripts import (
+            fill_whisper_segment_holes,
+        )
+
+        result["segments"] = fill_whisper_segment_holes(
+            audio_file_path,
+            list(result.get("segments") or []),
+            model,
+            language=language,
+        )
         end = time.time()
         elapsed = end - start
         self.logger.info(f"Transcription completed in {elapsed}")
-        segments = result["segments"]
-        typed_segments = self.convert_to_pydantic(segments)
+        if self.word_timestamps:
+            from podcast_processor.word_transcripts import (
+                payload_from_whisper_result,
+                save_word_cache,
+                word_cache_path_for_audio,
+            )
+
+            cache_path = word_cache_path_for_audio(audio_file_path)
+            save_word_cache(
+                cache_path,
+                payload_from_whisper_result(
+                    result,
+                    model_name=self.whisper_model,
+                    audio_path=audio_file_path,
+                ),
+            )
+            self.logger.info("Wrote word-timestamp cache %s", cache_path)
+        raw_segments = list(result["segments"])
+        if self.word_timestamps:
+            raw_segments = [
+                {key: value for key, value in row.items() if key != "words"}
+                for row in raw_segments
+            ]
+        typed_segments = self.convert_to_pydantic(raw_segments)
 
         return self.local_seg_to_seg(typed_segments)
 
