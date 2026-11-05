@@ -583,3 +583,37 @@ def test_try_update_model_call_prices_success_heuristic(
     )
 
     assert captured["data"]["estimated_cost_usd"] == 0.01
+
+
+def test_tier_retry_paces_every_provider_attempt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import litellm
+
+    events: list[str] = []
+
+    def failing_completion(**kwargs: Any) -> Any:
+        events.append(f"call:{kwargs.get('service_tier')}")
+        if kwargs.get("service_tier") == "flex":
+            raise RuntimeError("503 service unavailable")
+        return SimpleNamespace(choices=[])
+
+    monkeypatch.setattr(litellm, "completion", failing_completion)
+
+    call_litellm_with_tier_retry(
+        {"model": "gemini/gemini-3-flash-preview", "service_tier": "flex"},
+        config=SimpleNamespace(llm_service_tier="flex"),
+        logger=logging.getLogger("test"),
+        max_retries=2,
+        sleep=lambda _seconds: None,
+        before_attempt=lambda: events.append("pace"),
+    )
+
+    assert events == [
+        "pace",
+        "call:flex",
+        "pace",
+        "call:flex",
+        "pace",
+        "call:None",
+    ]
