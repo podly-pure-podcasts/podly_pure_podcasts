@@ -1,3 +1,10 @@
+## [2.10.1](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.10.0...v2.10.1) (2026-11-05)
+
+
+### Bug Fixes
+
+* **frontend:** scroll the feed page over the episode list and ignore ResizeObserver loop notices ([#286](https://github.com/podly-pure-podcasts/podly_pure_podcasts/issues/286)) ([89a7610](https://github.com/podly-pure-podcasts/podly_pure_podcasts/commit/89a76109d6309c23337669e01ad7d76a5398c07d)), closes [#284](https://github.com/podly-pure-podcasts/podly_pure_podcasts/issues/284) [#285](https://github.com/podly-pure-podcasts/podly_pure_podcasts/issues/285)
+
 # [2.10.0](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.9.0...v2.10.0) (2026-10-29)
 
 
