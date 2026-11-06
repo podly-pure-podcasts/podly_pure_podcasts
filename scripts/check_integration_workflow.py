@@ -16,17 +16,17 @@ import os
 import sys
 from typing import Any
 
-from integration_check.client import (
+# Add src and scripts directories to path for imports
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(project_root, "src"))
+sys.path.insert(0, os.path.join(project_root, "scripts"))
+
+from integration_check.client import (  # noqa: E402
     FeedInfo,
     IntegrationTestClient,
     PostInfo,
     generate_test_feed_url,
 )
-
-# Add src and scripts directories to path for imports
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(project_root, "src"))
-sys.path.insert(0, os.path.join(project_root, "scripts"))
 
 
 class SkipTest(Exception):

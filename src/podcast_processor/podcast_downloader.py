@@ -13,6 +13,7 @@ from flask import abort
 
 from shared.interfaces import Post
 from shared.processing_paths import get_in_root
+from shared.user_agent import user_agent_headers
 
 logger = logging.getLogger(__name__)
 
@@ -66,10 +67,7 @@ class PodcastDownloader:
 
         self.logger.info(f"Downloading {audio_link} into {download_path}...")
         referer = "https://open.acast.com/" if "acast.com" in audio_link else None
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-            "Referer": referer,
-        }
+        headers = user_agent_headers(Referer=referer)
         with requests.get(
             audio_link, stream=True, timeout=60, headers=headers
         ) as response:
