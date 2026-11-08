@@ -126,6 +126,31 @@ def _resolve_user_id_from_feed_path(path: str) -> int | None:
     return None
 
 
+_API_POST_SUFFIXES = ("/download/original", "/download", "/audio")
+_LEGACY_POST_SUFFIXES = ("/original.mp3", ".mp3")
+
+
+def _resolve_post_guid(path: str) -> str | None:
+    """Extract the full post GUID from a token-protected episode path.
+
+    GUIDs are stored verbatim from upstream feeds and may contain ``/`` and
+    ``.``; the episode routes use the ``path`` converter, so take everything
+    between the route prefix and its known suffix rather than one segment.
+    """
+    for prefix, suffixes in (
+        ("/api/posts/", _API_POST_SUFFIXES),
+        ("/post/", _LEGACY_POST_SUFFIXES),
+    ):
+        if not path.startswith(prefix):
+            continue
+        remainder = path[len(prefix) :]
+        for suffix in suffixes:
+            if remainder.endswith(suffix) and len(remainder) > len(suffix):
+                return remainder[: -len(suffix)]
+        return None
+    return None
+
+
 def _resolve_feed_id(path: str) -> int | None:
     if path.startswith("/feed/"):
         remainder = path[len("/feed/") :]
@@ -134,18 +159,8 @@ def _resolve_feed_id(path: str) -> int | None:
         except ValueError:
             return None
 
-    if path.startswith("/api/posts/"):
-        parts = path.split("/")
-        if len(parts) < 4:
-            return None
-        guid = parts[3]
-        post = Post.query.filter_by(guid=guid).first()
-        return post.feed_id if post else None
-
-    if path.startswith("/post/"):
-        remainder = path[len("/post/") :]
-        guid = remainder.split("/", 1)[0]
-        guid = guid.split(".", 1)[0]
+    guid = _resolve_post_guid(path)
+    if guid is not None:
         post = Post.query.filter_by(guid=guid).first()
         return post.feed_id if post else None
 
