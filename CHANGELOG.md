@@ -1,3 +1,10 @@
+## [2.10.2](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.10.1...v2.10.2) (2026-11-09)
+
+
+### Bug Fixes
+
+* **auth:** accept feed tokens for episode GUIDs containing slashes ([#288](https://github.com/podly-pure-podcasts/podly_pure_podcasts/issues/288)) ([805b2c3](https://github.com/podly-pure-podcasts/podly_pure_podcasts/commit/805b2c31bc2518efce3e7faf58ed522d09ae562c)), closes [#272](https://github.com/podly-pure-podcasts/podly_pure_podcasts/issues/272)
+
 ## [2.10.1](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.10.0...v2.10.1) (2026-11-05)
 
 
