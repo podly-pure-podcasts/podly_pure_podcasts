@@ -12,7 +12,10 @@ from podcast_processor.llm_model_call_utils import (
     model_supports_service_tier,
     try_update_model_call,
 )
-from shared.llm_utils import normalize_completion_args_for_model
+from shared.llm_utils import (
+    model_supports_sampling_params,
+    normalize_completion_args_for_model,
+)
 
 
 def test_extract_litellm_finish_reason_from_object_choice() -> None:
@@ -342,6 +345,91 @@ def test_normalize_reasoning_args_omits_limit_when_metadata_fails(
     assert "max_completion_tokens" not in args
     assert "max_tokens" not in args
     assert "temperature" not in args
+
+
+_SAMPLING_MODEL_MAP: dict[str, dict[str, Any]] = {
+    "claude-sonnet-5-5": {
+        "litellm_provider": "anthropic",
+        "supports_sampling_params": False,
+    },
+    "claude-sonnet-4-6": {"litellm_provider": "anthropic"},
+    "gemini/gemini-3-flash-preview": {
+        "litellm_provider": "gemini",
+        "supports_sampling_params": True,
+    },
+}
+
+
+@pytest.mark.parametrize(
+    ("model", "expected"),
+    [
+        ("anthropic/claude-sonnet-5-5", False),
+        ("claude-sonnet-5-5", False),
+        ("anthropic/claude-sonnet-4-6", True),
+        ("gemini/gemini-3-flash-preview", True),
+        ("my-local-model", True),
+        (None, True),
+        ("", True),
+    ],
+)
+def test_model_supports_sampling_params(
+    monkeypatch: pytest.MonkeyPatch, model: str | None, expected: bool
+) -> None:
+    import litellm
+
+    monkeypatch.setattr(litellm, "model_cost", _SAMPLING_MODEL_MAP)
+
+    assert model_supports_sampling_params(model) is expected
+
+
+@pytest.mark.parametrize("metadata_available", [True, False])
+def test_normalize_drops_sampling_params_for_models_without_them(
+    monkeypatch: pytest.MonkeyPatch, metadata_available: bool
+) -> None:
+    """The boundary refiners send temperature=0.1, which LiteLLM rejects with
+    UnsupportedParamsError for Claude Opus 4.7+ and the Claude 5 models."""
+    import litellm
+
+    def model_info(_model: str) -> dict[str, Any]:
+        if not metadata_available:
+            raise RuntimeError("metadata unavailable")
+        return {"max_output_tokens": 64_000}
+
+    monkeypatch.setattr(litellm, "model_cost", _SAMPLING_MODEL_MAP)
+    monkeypatch.setattr(litellm, "get_model_info", model_info)
+    args: dict[str, Any] = {
+        "model": "anthropic/claude-sonnet-5-5",
+        "max_tokens": 4096,
+        "temperature": 0.1,
+        "top_p": 0.9,
+    }
+
+    normalize_completion_args_for_model(args)
+
+    assert "temperature" not in args
+    assert "top_p" not in args
+    assert args["max_tokens"] == 4096
+
+
+def test_normalize_keeps_temperature_for_models_with_sampling_params(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import litellm
+
+    monkeypatch.setattr(litellm, "model_cost", _SAMPLING_MODEL_MAP)
+    monkeypatch.setattr(
+        litellm, "get_model_info", lambda _model: {"max_output_tokens": 64_000}
+    )
+    args: dict[str, Any] = {
+        "model": "anthropic/claude-sonnet-4-6",
+        "max_tokens": 4096,
+        "temperature": 0.1,
+    }
+
+    normalize_completion_args_for_model(args)
+
+    assert args["temperature"] == 0.1
+    assert args["max_tokens"] == 4096
 
 
 def test_apply_service_tier_noop_when_default() -> None:
