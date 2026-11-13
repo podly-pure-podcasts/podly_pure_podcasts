@@ -116,7 +116,7 @@ def upgrade():
     # ### end Alembic commands ###
 
 
-def downgrade():  # noqa: PLR0912
+def downgrade():
     bind = op.get_bind()
     inspector = sa.inspect(bind)
     existing_tables = set(inspector.get_table_names())
