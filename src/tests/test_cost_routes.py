@@ -623,3 +623,111 @@ def test_backfill_estimated_cost_applies_and_reports_updates(
         (whisper_id, 0.0),
     }
     assert all(wait for _, _, wait in updates)
+
+
+def test_admin_costs_prices_legacy_and_stale_zero_rows_from_tokens(
+    app: Any, monkeypatch: Any
+) -> None:
+    app.register_blueprint(costs_bp)
+    monkeypatch.setattr(cost_routes, "require_admin", lambda _action: (None, None))
+    monkeypatch.setattr(
+        cost_routes,
+        "read_combined",
+        lambda: {"app": {"whisper_cost_rate_per_hour": 0.0}},
+    )
+    monkeypatch.setattr(cost_routes, "_model_call_cost", lambda call: 9.0)
+
+    with app.app_context():
+        post = _seed_post("legacy-dashboard-guid")
+        db.session.add(
+            ProcessingJob(
+                post_guid=post.guid,
+                status="completed",
+                completed_at=datetime(2026, 5, 15, 12, 0, 0),
+            )
+        )
+        _add_billable_call(post.id, prompt_tokens=10)  # NULL cost
+        _add_billable_call(
+            post.id,
+            first_segment_sequence_num=2,
+            prompt_tokens=10,
+            estimated_cost_usd=0.0,
+        )
+        # A zero with no tokens is a genuine zero.
+        _add_billable_call(
+            post.id, first_segment_sequence_num=4, estimated_cost_usd=0.0
+        )
+        db.session.commit()
+
+        response = app.test_client().get("/api/admin/costs?year=2026&month=5")
+
+    assert response.get_json()["total_llm_cost"] == 18.0
+
+
+def test_admin_costs_calls_prices_legacy_rows_from_tokens(
+    app: Any, monkeypatch: Any
+) -> None:
+    app.register_blueprint(costs_bp)
+    monkeypatch.setattr(cost_routes, "require_admin", lambda _action: (None, None))
+    monkeypatch.setattr(cost_routes, "_model_call_cost", lambda call: 9.0)
+
+    with app.app_context():
+        post = _seed_post("calls-legacy-guid")
+        stored = _add_billable_call(post.id, estimated_cost_usd=0.2)
+        legacy_null = _add_billable_call(
+            post.id, first_segment_sequence_num=2, prompt_tokens=10
+        )
+        stale_zero = _add_billable_call(
+            post.id,
+            first_segment_sequence_num=4,
+            prompt_tokens=10,
+            estimated_cost_usd=0.0,
+        )
+        genuine_zero = _add_billable_call(
+            post.id, first_segment_sequence_num=6, estimated_cost_usd=0.0
+        )
+        db.session.commit()
+        ids = (stored.id, legacy_null.id, stale_zero.id, genuine_zero.id)
+
+        response = app.test_client().get("/api/admin/costs/calls?page=1&per_page=50")
+
+    by_id = {c["id"]: c["estimated_cost"] for c in response.get_json()["calls"]}
+    assert [by_id[i] for i in ids] == [0.2, 9.0, 9.0, 0.0]
+
+
+def test_backfill_estimated_cost_limit_counts_rows_that_change(
+    app: Any, monkeypatch: Any
+) -> None:
+    app.register_blueprint(costs_bp)
+    monkeypatch.setattr(cost_routes, "require_admin", lambda _action: (None, None))
+    monkeypatch.setattr(cost_routes, "_model_call_cost", lambda call: 0.5)
+    updates: list[int] = []
+
+    class _Result:
+        success = True
+
+    def fake_update(_model: str, row_id: int, data: dict[str, Any], wait: bool):
+        updates.append(row_id)
+        return _Result()
+
+    monkeypatch.setattr(cost_routes.writer_client, "update", fake_update)
+
+    with app.app_context():
+        post = _seed_post("backfill-limit-guid")
+        # Earlier unpriceable rows must not use up the limit.
+        _add_billable_call(post.id, first_segment_sequence_num=0)
+        _add_billable_call(post.id, first_segment_sequence_num=2)
+        later = _add_billable_call(
+            post.id, first_segment_sequence_num=4, prompt_tokens=10
+        )
+        _add_billable_call(post.id, first_segment_sequence_num=6, prompt_tokens=10)
+        db.session.commit()
+        later_id = later.id
+
+        response = app.test_client().post(
+            "/api/admin/costs/backfill-estimated-cost",
+            json={"apply": True, "limit": 1},
+        )
+
+    assert response.get_json()["updated"] == 1
+    assert updates == [later_id]
