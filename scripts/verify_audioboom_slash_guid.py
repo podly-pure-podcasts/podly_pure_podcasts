@@ -27,6 +27,7 @@ from app.feeds import feed_item, get_guid  # noqa: E402
 from app.guid_urls import encode_guid_for_url, post_stream_path  # noqa: E402
 from app.models import Feed, Post  # noqa: E402
 from app.routes.post_routes import post_bp  # noqa: E402
+from shared.user_agent import get_user_agent  # noqa: E402
 
 FEED_URL = "https://audioboom.com/channels/451365.rss"
 FEED_CACHE = Path("/tmp/bletchley_audioboom.rss")
@@ -35,7 +36,7 @@ FEED_CACHE = Path("/tmp/bletchley_audioboom.rss")
 def load_live_feed() -> feedparser.FeedParserDict:
     if FEED_CACHE.exists() and FEED_CACHE.stat().st_size > 1000:
         return feedparser.parse(FEED_CACHE.read_bytes())
-    return feedparser.parse(FEED_URL)
+    return feedparser.parse(FEED_URL, agent=get_user_agent())
 
 
 def pick_slash_guid_entry(parsed: feedparser.FeedParserDict):
