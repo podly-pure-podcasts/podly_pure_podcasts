@@ -1,3 +1,10 @@
+## [2.10.4](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.10.3...v2.10.4) (2026-11-13)
+
+
+### Bug Fixes
+
+* **llm:** drop sampling params for models that reject them ([#294](https://github.com/podly-pure-podcasts/podly_pure_podcasts/issues/294)) ([afc6ce2](https://github.com/podly-pure-podcasts/podly_pure_podcasts/commit/afc6ce2ab2ab2e512c49707d8e501e64e3c31039))
+
 ## [2.10.3](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.10.2...v2.10.3) (2026-11-13)
 
 
