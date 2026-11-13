@@ -20,12 +20,44 @@ _MAX_COMPLETION_TOKEN_MODELS: Final[tuple[str, ...]] = (
 )
 
 
+# Sampling parameters some models no longer accept at non-default values.
+_SAMPLING_PARAMS: Final[tuple[str, ...]] = ("temperature", "top_p", "top_k")
+
+
 def model_uses_max_completion_tokens(model_name: str | None) -> bool:
     """Return True when the target model expects `max_completion_tokens`."""
     if not model_name:
         return False
     model_lower = model_name.lower()
     return any(pattern in model_lower for pattern in _MAX_COMPLETION_TOKEN_MODELS)
+
+
+def model_supports_sampling_params(model_name: str | None) -> bool:
+    """Return False when LiteLLM's model map says the model rejects sampling params.
+
+    Claude Opus 4.7+ and the Claude 5 models accept only the default
+    temperature and no top_p/top_k. LiteLLM marks them with
+    `supports_sampling_params: false` and raises UnsupportedParamsError for any
+    other value. `litellm.get_model_info()` leaves that flag out, so read the
+    raw model map. Models without the flag are assumed to accept the params.
+    """
+    if not model_name:
+        return True
+
+    import litellm
+
+    model_cost = getattr(litellm, "model_cost", None) or {}
+    candidates = [model_name]
+    if "/" in model_name:
+        # "anthropic/claude-sonnet-5-5" is keyed as "claude-sonnet-5-5".
+        candidates.append(model_name.split("/", 1)[1])
+    for candidate in candidates:
+        entry = model_cost.get(candidate)
+        if isinstance(entry, dict):
+            flag = entry.get("supports_sampling_params")
+            if isinstance(flag, bool):
+                return flag
+    return True
 
 
 def normalize_completion_args_for_model(
@@ -39,6 +71,11 @@ def normalize_completion_args_for_model(
     # Current OpenAI reasoning models reject non-default temperature values.
     if model_uses_max_completion_tokens(model_name):
         completion_args.pop("temperature", None)
+
+    # Models without sampling params use the provider default instead.
+    if not model_supports_sampling_params(model_name):
+        for key in _SAMPLING_PARAMS:
+            completion_args.pop(key, None)
 
     try:
         import litellm
