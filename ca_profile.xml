@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<CommunityApplications>
+  <Profile>Podly removes ads from podcasts: it transcribes each new episode, has an LLM find the ad segments, cuts them out, and serves an ad-free RSS feed for any podcast app.
+
+This repository holds the Unraid template for the Podly container (unraid/podly-pure-podcasts.xml). Report problems on GitHub issues or ask on the Podly Discord.</Profile>
+  <Icon>https://raw.githubusercontent.com/podly-pure-podcasts/podly_pure_podcasts/main/frontend/public/images/logos/manifest-icon-512.maskable.png</Icon>
+  <WebPage>https://github.com/podly-pure-podcasts/podly_pure_podcasts</WebPage>
+  <Discord>https://discord.gg/FRB98GtF6N</Discord>
+  <DonateLink>https://github.com/sponsors/jdrbc</DonateLink>
+  <DonateText>Support Podly's development</DonateText>
+</CommunityApplications>
