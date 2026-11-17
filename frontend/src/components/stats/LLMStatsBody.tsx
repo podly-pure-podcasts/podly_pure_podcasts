@@ -15,6 +15,11 @@ import {
   StatsTabBarShell,
 } from './StatsLoadingFrame';
 import ShowMoreRows, { ROW_PAGE_SIZE } from './ShowMoreRows';
+import {
+  ATTEMPTS_COLUMN_LABEL,
+  ATTEMPTS_COLUMN_TITLE,
+  formatModelCallAttempts,
+} from '../../utils/modelCallAttempts';
 
 interface LLMStatsBodyProps {
   episodeGuid: string;
@@ -442,7 +447,12 @@ export default function LLMStatsBody({ episodeGuid, onClose }: LLMStatsBodyProps
                                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-600">Cost</th>
                                 )}
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-600">Timestamp</th>
-                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-600">Retries</th>
+                                <th
+                                  className="px-4 py-3 text-right text-xs font-medium text-gray-600"
+                                  title={ATTEMPTS_COLUMN_TITLE}
+                                >
+                                  {ATTEMPTS_COLUMN_LABEL}
+                                </th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-600">Actions</th>
                               </tr>
                             </thead>
@@ -481,7 +491,12 @@ export default function LLMStatsBody({ episodeGuid, onClose }: LLMStatsBodyProps
                                       </td>
                                     )}
                                     <td className="px-4 py-3 text-sm text-gray-600">{formatTimestamp(call.timestamp)}</td>
-                                    <td className="px-4 py-3 text-right text-sm tabular-nums text-gray-600">{call.retry_attempts}</td>
+                                    <td
+                                      className="px-4 py-3 text-right text-sm tabular-nums text-gray-600"
+                                      title={formatModelCallAttempts(call.retry_attempts).title}
+                                    >
+                                      {formatModelCallAttempts(call.retry_attempts).text}
+                                    </td>
                                     <td className="px-4 py-3">
                                       <button
                                         onClick={() => toggleModelCallDetails(call.id)}

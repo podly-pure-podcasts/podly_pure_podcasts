@@ -273,6 +273,50 @@ await scenario('config page (desktop)', { width: 1280, height: 400 }, async (pag
   await expectWheelScrolls(page, page.locator('main'), null, 'config page');
 });
 
+// Issue #296: `retry_attempts` includes the first try, so the column says
+// "Attempts", and transcription rows that never record a count show "—", not 0.
+const costSummary = {
+  year: 2026,
+  month: 11,
+  total_cost: 0,
+  cost_rate_per_hour: 0,
+  whisper_cost_rate_per_hour: 0,
+  total_llm_cost: 0,
+  llm_service_tier: 'default',
+  llm_cost_by_tier: {},
+  total_whisper_cost: 0,
+  total_audio_hours: 0,
+  users: [],
+  feeds: [],
+};
+const callLog = {
+  calls: [
+    { id: 101, post_id: 1, model_name: 'mock/first-try', status: 'success', timestamp: '2026-11-01T00:00:00', retry_attempts: 1 },
+    { id: 102, post_id: 1, model_name: 'mock/one-retry', status: 'success', timestamp: '2026-11-01T00:01:00', retry_attempts: 2 },
+    { id: 103, post_id: 1, model_name: 'mock/whisper', status: 'success', timestamp: '2026-11-01T00:02:00', retry_attempts: 0 },
+  ],
+  total: 3,
+  page: 1,
+  per_page: 50,
+  pages: 1,
+};
+
+await scenario('costs call log labels attempts (desktop)', { width: 1280, height: 800 }, async (page) => {
+  await page.route('**/api/admin/costs?*', (r) => r.fulfill({ json: costSummary }));
+  await page.route('**/api/admin/costs/calls*', (r) => r.fulfill({ json: callLog }));
+  await page.goto(`${base}/config?tab=costs`);
+  const table = page.locator('table', { has: page.getByText('mock/first-try', { exact: true }) });
+  await table.waitFor({ timeout: 15000 });
+  const headers = (await table.locator('thead th').allInnerTexts()).map((t) => t.trim());
+  check(headers.includes('Attempts') && !headers.includes('Retries'), `call log header says Attempts (${headers.join(', ')})`);
+  const column = headers.indexOf('Attempts');
+  const cellFor = async (model) =>
+    (await table.locator('tr', { has: page.getByText(model, { exact: true }) }).locator('td').nth(column).innerText()).trim();
+  check((await cellFor('mock/first-try')) === '1', 'first-try success shows 1 attempt');
+  check((await cellFor('mock/one-retry')) === '2', 'one retry shows 2 attempts');
+  check((await cellFor('mock/whisper')) === '—', 'untracked transcription row shows —, not 0');
+});
+
 await scenario('feed panel (phone)', { width: 390, height: 700 }, async (page) => {
   await page.goto(`${base}/`);
   await page.getByText('Mock Feed 12', { exact: true }).first().waitFor({ timeout: 15000 });
