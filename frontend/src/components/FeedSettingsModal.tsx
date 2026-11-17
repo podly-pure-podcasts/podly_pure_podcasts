@@ -51,6 +51,9 @@ export default function FeedSettingsModal({
         ? 'off'
         : 'inherit'
   );
+  const [titleExcludeStrings, setTitleExcludeStrings] = useState(
+    feed.episode_title_exclude_strings ?? ''
+  );
   const [languageOverride, setLanguageOverride] = useState(feed.language ?? '');
 
   useEffect(() => {
@@ -70,6 +73,7 @@ export default function FeedSettingsModal({
           ? 'off'
           : 'inherit'
     );
+    setTitleExcludeStrings(feed.episode_title_exclude_strings ?? '');
     setLanguageOverride(feed.language ?? '');
   }, [feed, llmChapterFallbackGlobalDefault]);
 
@@ -96,6 +100,7 @@ export default function FeedSettingsModal({
       : feed.auto_whitelist_new_episodes_override === false
         ? 'off'
         : 'inherit';
+  const currentTitleExcludeStrings = feed.episode_title_exclude_strings ?? '';
   const currentLanguageOverride = feed.language ?? '';
 
   const handleSave = () => {
@@ -122,6 +127,10 @@ export default function FeedSettingsModal({
     if (autoWhitelistOverride !== currentAutoWhitelistOverride) {
       settings.auto_whitelist_new_episodes_override =
         autoWhitelistOverride === 'inherit' ? null : autoWhitelistOverride === 'on';
+    }
+
+    if (titleExcludeStrings.trim() !== currentTitleExcludeStrings) {
+      settings.episode_title_exclude_strings = titleExcludeStrings.trim() || null;
     }
 
     if (languageOverride !== currentLanguageOverride) {
@@ -259,6 +268,25 @@ export default function FeedSettingsModal({
             <p className="text-xs text-gray-500 mt-1">
               Overrides the global setting for this feed.
             </p>
+            <div className="mt-3 ml-3 pl-3 border-l-2 border-gray-200">
+              <label className="block text-xs text-gray-600 mb-1">
+                Skip episodes whose title contains
+              </label>
+              <textarea
+                value={titleExcludeStrings}
+                onChange={(e) => setTitleExcludeStrings(e.target.value)}
+                placeholder="bonus,spit hit*,*(rerun)"
+                rows={2}
+                className="w-full rounded-lg border border-gray-300 bg-surface px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Comma-separated, case-insensitive. A phrase matches anywhere in
+                the title; use * as a wildcard to match the whole title
+                (spit hit* = starts with, *rerun = ends with). Matching new
+                episodes are never auto-whitelisted and are left out of the
+                Podly feed. You can still whitelist one by hand.
+              </p>
+            </div>
           </div>
 
           <div>

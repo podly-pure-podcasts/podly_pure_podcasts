@@ -49,6 +49,10 @@ class Feed(db.Model):  # type: ignore[name-defined, misc]
     # Per-feed override for LLM chapter fallback tagging, null = use global config
     enable_llm_chapter_fallback_tagging = db.Column(db.Boolean, nullable=True)
     auto_whitelist_new_episodes_override = db.Column(db.Boolean, nullable=True)
+    # Comma-separated, case-insensitive title phrases (``*`` wildcards allowed; see
+    # app.episode_filters). Matching new episodes are never auto-whitelisted and are
+    # left out of the Podly RSS feed unless whitelisted by hand. Null = none.
+    episode_title_exclude_strings = db.Column(db.Text, nullable=True)
     language = db.Column(db.Text, nullable=True)
     # Bumped by `refresh_feed_action` whenever something actually changes
     # (new posts, post field updates, channel-level updates). Used as the

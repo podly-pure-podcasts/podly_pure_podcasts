@@ -30,6 +30,7 @@ from werkzeug.http import http_date
 from app.auth import is_auth_enabled
 from app.auth.guards import require_admin
 from app.auth.service import update_user_last_active
+from app.episode_filters import normalize_title_exclude_strings
 from app.extensions import db
 from app.feeds import (
     _get_base_url,
@@ -100,7 +101,23 @@ def _parse_optional_feed_bool(
     return value, None
 
 
-def _build_feed_settings_updates(
+def _parse_title_exclude_update(
+    payload: dict[str, Any],
+) -> tuple[Any, ResponseReturnValue | None]:
+    if "episode_title_exclude_strings" not in payload:
+        return _MISSING, None
+    value = payload["episode_title_exclude_strings"]
+    if value is not None and not isinstance(value, str):
+        return _MISSING, (
+            jsonify(
+                {"error": "episode_title_exclude_strings must be a string or null"}
+            ),
+            400,
+        )
+    return normalize_title_exclude_strings(value), None
+
+
+def _build_feed_settings_updates(  # noqa: PLR0912
     feed: Feed,
     payload: dict[str, Any],
 ) -> tuple[dict[str, Any] | None, ResponseReturnValue | None]:
@@ -147,6 +164,12 @@ def _build_feed_settings_updates(
         return None, error_response
     if chapter_fallback_enabled is not _MISSING:
         updates["enable_llm_chapter_fallback_tagging"] = chapter_fallback_enabled
+
+    exclude_strings, error_response = _parse_title_exclude_update(payload)
+    if error_response is not None:
+        return None, error_response
+    if exclude_strings is not _MISSING:
+        updates["episode_title_exclude_strings"] = exclude_strings
 
     auto_whitelist_override, error_response = _parse_optional_feed_bool(
         payload,
@@ -1088,6 +1111,9 @@ def _serialize_feed(
         "image_url": feed.image_url,
         "auto_whitelist_new_episodes_override": getattr(
             feed, "auto_whitelist_new_episodes_override", None
+        ),
+        "episode_title_exclude_strings": getattr(
+            feed, "episode_title_exclude_strings", None
         ),
         "language": feed.language,
         "posts_count": len(cast(list[Any], feed.posts)),
