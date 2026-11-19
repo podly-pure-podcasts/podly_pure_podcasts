@@ -79,8 +79,11 @@ export default function EpisodeProcessingStatus({
         </div>
 
         {/* Current step name */}
-        <div className="text-xs text-center text-gray-600">
-          {model.currentStageLabel} ({Math.round(model.progress)}%)
+        <div className="flex items-center justify-center gap-1.5 text-xs text-center text-gray-600">
+          <span>
+            {model.currentStageLabel} ({Math.round(model.progress)}%)
+          </span>
+          {status.service_tier ? <ServiceTierChip tier={status.service_tier} /> : null}
         </div>
       </div>
 
@@ -91,5 +94,30 @@ export default function EpisodeProcessingStatus({
         </div>
       )}
     </div>
+  );
+}
+
+export function ServiceTierChip({
+  tier,
+}: {
+  tier: { label: string; latest: string; mixed: boolean };
+}) {
+  const color =
+    tier.label === 'flex'
+      ? 'bg-purple-100 text-purple-800'
+      : tier.label === 'priority'
+        ? 'bg-blue-100 text-blue-800'
+        : 'bg-gray-100 text-gray-700';
+  const title = tier.mixed
+    ? `LLM calls so far used mixed tiers; latest=${tier.latest}`
+    : `LLM calls used the "${tier.label}" service tier`;
+  return (
+    <span
+      title={title}
+      className={`inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded ${color}`}
+    >
+      {tier.label}
+      {tier.mixed ? '*' : ''}
+    </span>
   );
 }

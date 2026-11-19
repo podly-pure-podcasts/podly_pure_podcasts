@@ -7,19 +7,43 @@ import logging
 import math
 import re
 from collections.abc import Sequence
+from types import SimpleNamespace
 from typing import Any
-
-import litellm
 
 from podcast_processor.chapter_reader import Chapter, read_chapters
 from podcast_processor.description_chapter_parser import parse_chapters_from_description
+from podcast_processor.llm_model_call_utils import (
+    apply_service_tier as _apply_service_tier,
+)
+from podcast_processor.llm_model_call_utils import (
+    call_litellm_with_tier_retry as _call_litellm_with_tier_retry,
+)
 from podcast_processor.llm_model_call_utils import (
     extract_litellm_content,
     extract_litellm_finish_reason,
     extract_litellm_usage,
 )
+from podcast_processor.llm_model_call_utils import (
+    record_service_tier_on_model_call as _record_service_tier_on_model_call,
+)
+from podcast_processor.llm_model_call_utils import (
+    try_update_model_call as _try_update_model_call,
+)
+from podcast_processor.llm_model_call_utils import (
+    try_upsert_model_call as _try_upsert_model_call,
+)
 from podcast_processor.word_boundary_refiner import WordBoundaryRefiner
 from shared.llm_utils import model_uses_max_completion_tokens
+
+# Sentinel (first_seq, last_seq) pairs used when chapter LLM calls are
+# recorded as ModelCall rows so they show up in the debug UI alongside
+# classification + boundary-refine calls. Negative values can't collide with
+# real transcript segment numbers, and each phase gets its own pair so the
+# unique (post_id, first_seq, last_seq, model_name) index doesn't dedupe
+# different phases of the same run into one row.
+_CHAPTER_TITLE_REFINE_RANGE = (-100, -100)
+_TOPIC_PLAN_RANGE = (-200, -200)
+_TOPIC_PLAN_CONTINUATION_RANGE = (-201, -201)
 
 logger = logging.getLogger("global_logger")
 
@@ -409,6 +433,10 @@ def _context_segments_around_time(
     return selected or [dict(all_segments[0])]
 
 
+def _tier_config(llm_service_tier: str | None) -> Any:
+    return SimpleNamespace(llm_service_tier=llm_service_tier or "default")
+
+
 def refine_generated_chapter_titles_with_llm(
     chapters: list[Chapter],
     transcript_segments: Sequence[Any],
@@ -418,6 +446,8 @@ def refine_generated_chapter_titles_with_llm(
     openai_base_url: str | None = None,
     openai_timeout_sec: int = 300,
     logger_override: logging.Logger | None = None,
+    llm_service_tier: str | None = None,
+    post_id: int | None = None,
 ) -> list[Chapter]:
     """
     Refine transcript-generated chapter titles via a single batched LLM call.
@@ -452,9 +482,46 @@ def refine_generated_chapter_titles_with_llm(
     else:
         completion_args["max_tokens"] = 300
 
+    tier_config = _tier_config(llm_service_tier)
+    _apply_service_tier(completion_args, tier_config)
+
+    first_seq, last_seq = _CHAPTER_TITLE_REFINE_RANGE
+    model_call_id = _try_upsert_model_call(
+        post_id=post_id,
+        first_seq_num=first_seq,
+        last_seq_num=last_seq,
+        model_name=llm_model,
+        prompt=prompt,
+        logger=log,
+        log_prefix="Chapter title refine",
+    )
+    _record_service_tier_on_model_call(
+        model_call_id,
+        completion_args,
+        logger=log,
+        log_prefix="Chapter title refine",
+    )
+
     try:
-        response = litellm.completion(**completion_args)
+        response = _call_litellm_with_tier_retry(
+            completion_args,
+            config=tier_config,
+            logger=log,
+            model_call_id=model_call_id,
+        )
         content = extract_litellm_content(response)
+        _try_update_model_call(
+            model_call_id,
+            status="success",
+            response=content,
+            error_message=None,
+            logger=log,
+            log_prefix="Chapter title refine",
+            usage=extract_litellm_usage(response),
+            model_name=llm_model,
+            service_tier=completion_args.get("service_tier"),
+            prompt=prompt,
+        )
         refined_titles = _parse_refined_titles_response(content)
         if not refined_titles:
             return chapters
@@ -480,6 +547,14 @@ def refine_generated_chapter_titles_with_llm(
             "LLM chapter title refinement failed; using heuristic titles: %s",
             exc,
         )
+        _try_update_model_call(
+            model_call_id,
+            status="failed_permanent",
+            response=None,
+            error_message=str(exc),
+            logger=log,
+            log_prefix="Chapter title refine",
+        )
         return chapters
 
 
@@ -494,6 +569,8 @@ def generate_topic_chapters_from_transcript_with_llm(
     target_chapter_seconds: int = 8 * 60,
     min_chapter_seconds: int = 2 * 60,
     logger_override: logging.Logger | None = None,
+    post_id: int | None = None,
+    llm_service_tier: str | None = None,
 ) -> list[Chapter]:
     """
     Generate transcript chapters with topic-based boundaries via an LLM call.
@@ -562,6 +639,9 @@ def generate_topic_chapters_from_transcript_with_llm(
             openai_timeout_sec=openai_timeout_sec,
             logger_override=log,
             phase_label="Topic chapter",
+            llm_service_tier=llm_service_tier,
+            post_id=post_id,
+            model_call_range=_TOPIC_PLAN_RANGE,
         )
         if not parsed:
             log.warning(
@@ -585,6 +665,8 @@ def generate_topic_chapters_from_transcript_with_llm(
             openai_base_url=openai_base_url,
             openai_timeout_sec=openai_timeout_sec,
             logger_override=log,
+            llm_service_tier=llm_service_tier,
+            post_id=post_id,
         )
 
         chapters = _chapters_from_topic_plan(
@@ -897,6 +979,9 @@ def _request_topic_chapter_plan(
     openai_timeout_sec: int,
     logger_override: logging.Logger | None = None,
     phase_label: str = "Topic chapter",
+    llm_service_tier: str | None = None,
+    post_id: int | None = None,
+    model_call_range: tuple[int, int] = _TOPIC_PLAN_RANGE,
 ) -> tuple[list[tuple[int, str]], str, str | None, int | None]:
     log = logger_override or logger
     completion_args: dict[str, Any] = {
@@ -920,7 +1005,43 @@ def _request_topic_chapter_plan(
     else:
         completion_args["max_tokens"] = TOPIC_CHAPTER_LLM_MAX_OUTPUT_TOKENS
 
-    response = litellm.completion(**completion_args)
+    tier_config = _tier_config(llm_service_tier)
+    _apply_service_tier(completion_args, tier_config)
+
+    first_seq, last_seq = model_call_range
+    model_call_id = _try_upsert_model_call(
+        post_id=post_id,
+        first_seq_num=first_seq,
+        last_seq_num=last_seq,
+        model_name=llm_model,
+        prompt=prompt,
+        logger=log,
+        log_prefix=phase_label,
+    )
+    _record_service_tier_on_model_call(
+        model_call_id,
+        completion_args,
+        logger=log,
+        log_prefix=phase_label,
+    )
+
+    try:
+        response = _call_litellm_with_tier_retry(
+            completion_args,
+            config=tier_config,
+            logger=log,
+            model_call_id=model_call_id,
+        )
+    except Exception as exc:
+        _try_update_model_call(
+            model_call_id,
+            status="failed_permanent",
+            response=None,
+            error_message=str(exc),
+            logger=log,
+            log_prefix=phase_label,
+        )
+        raise
     finish_reason = extract_litellm_finish_reason(response)
     usage = extract_litellm_usage(response)
     log.info(
@@ -936,6 +1057,18 @@ def _request_topic_chapter_plan(
             phase_label,
         )
     content = extract_litellm_content(response)
+    _try_update_model_call(
+        model_call_id,
+        status="success",
+        response=content,
+        error_message=None,
+        logger=log,
+        log_prefix=phase_label,
+        usage=usage,
+        model_name=llm_model,
+        service_tier=completion_args.get("service_tier"),
+        prompt=prompt,
+    )
     expected_count = _extract_topic_chapter_count_from_text(content)
     parsed = _parse_topic_chapter_response(content)
     return parsed, content, finish_reason, expected_count
@@ -955,6 +1088,8 @@ def _retry_incomplete_topic_chapter_plan(
     openai_base_url: str | None,
     openai_timeout_sec: int,
     logger_override: logging.Logger | None = None,
+    llm_service_tier: str | None = None,
+    post_id: int | None = None,
 ) -> list[tuple[int, str]]:
     log = logger_override or logger
     merged_plan = list(initial_plan)
@@ -1019,6 +1154,9 @@ def _retry_incomplete_topic_chapter_plan(
             openai_timeout_sec=openai_timeout_sec,
             logger_override=log,
             phase_label="Topic chapter continuation",
+            llm_service_tier=llm_service_tier,
+            post_id=post_id,
+            model_call_range=_TOPIC_PLAN_CONTINUATION_RANGE,
         )
     )
     if not retry_parsed:

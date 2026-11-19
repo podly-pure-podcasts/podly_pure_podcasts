@@ -438,6 +438,8 @@ def test_chapter_insert_strategy_writes_chapters_without_ad_removal() -> None:
         openai_base_url=config.openai_base_url,
         openai_timeout_sec=config.openai_timeout,
         logger_override=processor.logger,
+        post_id=post.id,
+        llm_service_tier=config.llm_service_tier,
     )
     copy_mock.assert_called_once_with("/tmp/input.mp3", "/tmp/output.mp3")
     write_mock.assert_called_once_with(

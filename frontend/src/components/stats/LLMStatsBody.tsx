@@ -146,6 +146,8 @@ export default function LLMStatsBody({ episodeGuid, onClose }: LLMStatsBodyProps
     reportedOriginalSeconds != null &&
     stats?.post?.duration != null &&
     Math.abs(reportedOriginalSeconds - stats.post.duration) > 1;
+  const estimatedCost = stats?.processing_stats?.estimated_cost;
+  const hasCost = estimatedCost != null;
   const adPercent = stats?.processing_stats?.ad_percentage
     ?? (originalDurationSeconds > 0 ? (adTimeSeconds / originalDurationSeconds) * 100 : 0);
   const adTimelineSegments = useMemo(() => adBlocks.map((block) => ({
@@ -249,6 +251,12 @@ export default function LLMStatsBody({ episodeGuid, onClose }: LLMStatsBodyProps
                               LLM transcription
                             </span>
                           </div>
+                          {hasCost && (
+                            <div className="text-left">
+                              <span className="font-medium text-gray-700">Estimated cost:</span>
+                              <span className="ml-2 text-gray-600 tabular-nums">${estimatedCost.toFixed(4)}</span>
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -428,6 +436,11 @@ export default function LLMStatsBody({ episodeGuid, onClose }: LLMStatsBodyProps
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-600">Model</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-600">Segment range</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-600">Status</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-600">Tier</th>
+                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-600">Tokens</th>
+                                {hasCost && (
+                                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-600">Cost</th>
+                                )}
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-600">Timestamp</th>
                                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-600">Retries</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-600">Actions</th>
@@ -451,6 +464,22 @@ export default function LLMStatsBody({ episodeGuid, onClose }: LLMStatsBodyProps
                                         {call.status}
                                       </span>
                                     </td>
+                                    <td className="px-4 py-3 text-sm text-gray-600">{call.service_tier ?? '—'}</td>
+                                    <td
+                                      className="px-4 py-3 text-right text-sm tabular-nums text-gray-600"
+                                      title={
+                                        call.prompt_tokens != null
+                                          ? `${call.prompt_tokens.toLocaleString()} prompt (${(call.cached_prompt_tokens ?? 0).toLocaleString()} cached), ${(call.completion_tokens ?? 0).toLocaleString()} completion`
+                                          : undefined
+                                      }
+                                    >
+                                      {call.total_tokens != null ? call.total_tokens.toLocaleString() : '—'}
+                                    </td>
+                                    {hasCost && (
+                                      <td className="px-4 py-3 text-right text-sm tabular-nums text-gray-600">
+                                        {call.estimated_cost_usd != null ? `$${call.estimated_cost_usd.toFixed(4)}` : '—'}
+                                      </td>
+                                    )}
                                     <td className="px-4 py-3 text-sm text-gray-600">{formatTimestamp(call.timestamp)}</td>
                                     <td className="px-4 py-3 text-right text-sm tabular-nums text-gray-600">{call.retry_attempts}</td>
                                     <td className="px-4 py-3">
@@ -464,7 +493,7 @@ export default function LLMStatsBody({ episodeGuid, onClose }: LLMStatsBodyProps
                                   </tr>
                                   {expandedModelCalls.has(call.id) && (
                                     <tr className="bg-gray-50">
-                                      <td colSpan={7} className="px-4 py-4">
+                                      <td colSpan={hasCost ? 10 : 9} className="px-4 py-4">
                                         <div className="space-y-4">
                                           {call.prompt && (
                                             <div>

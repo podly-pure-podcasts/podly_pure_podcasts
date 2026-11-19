@@ -15,6 +15,7 @@ from app.auth.middleware import init_auth_middleware
 from app.auth.rate_limiter import FailureRateLimiter, FailureState
 from app.auth.state import failure_rate_limiter, feed_token_rate_limiter
 from app.extensions import db
+from app.guid_urls import encode_guid_for_url
 from app.models import Feed, Post, User
 from app.routes.auth_routes import auth_bp
 from app.routes.feed_routes import feed_bp
@@ -68,7 +69,7 @@ def auth_app() -> Generator[Flask, None, None]:
             return Response("missing user", status=500)
         return Response("ok", mimetype="text/plain")
 
-    @app.route("/api/posts/<string:guid>/download", methods=["GET"])
+    @app.route("/api/posts/<path:guid>/download", methods=["GET"])
     def download(guid: str) -> Response:
         del guid
         current = getattr(g, "current_user", None)
@@ -76,7 +77,23 @@ def auth_app() -> Generator[Flask, None, None]:
             return Response("missing user", status=500)
         return Response("download", mimetype="text/plain")
 
-    @app.route("/post/<string:guid>.mp3", methods=["GET"])
+    @app.route("/api/posts/<path:guid>/download/original", methods=["GET"])
+    def download_original(guid: str) -> Response:
+        del guid
+        current = getattr(g, "current_user", None)
+        if current is None:
+            return Response("missing user", status=500)
+        return Response("download original", mimetype="text/plain")
+
+    @app.route("/post/<path:guid>/original.mp3", methods=["GET"])
+    def stream_original(guid: str) -> Response:
+        del guid
+        current = getattr(g, "current_user", None)
+        if current is None:
+            return Response("missing user", status=500)
+        return Response("stream original", mimetype="audio/mpeg")
+
+    @app.route("/post/<path:guid>.mp3", methods=["GET"])
     def stream(guid: str) -> Response:
         del guid
         current = getattr(g, "current_user", None)
@@ -313,6 +330,85 @@ def _share_token(auth_app: Flask) -> tuple[int, str, str]:
     client.post("/api/auth/login", json={"username": "admin", "password": "password"})
     payload = client.post(f"/api/feeds/{feed_id}/share-link").get_json()
     return feed_id, payload["feed_token"], payload["feed_secret"]
+
+
+SLASH_GUID = "ozzyandkeats.podbean.com/2adb2443-7ee2-3d20-9bad-09eb1045a555"
+
+
+def _share_token_for_guid(auth_app: Flask, guid: str) -> tuple[str, str]:
+    client = auth_app.test_client()
+    with auth_app.app_context():
+        # Occupy feed id 1 so the "always allow feed 1" subscription shortcut
+        # cannot mask a lookup failure for the feed under test.
+        db.session.add(Feed(title="Other", rss_url="https://example.com/other.xml"))
+        feed = Feed(title="Example", rss_url="https://example.com/feed.xml")
+        db.session.add(feed)
+        db.session.commit()
+        db.session.add(
+            Post(
+                feed_id=feed.id,
+                guid=guid,
+                download_url="https://example.com/audio.mp3",
+                title="Episode",
+                whitelisted=True,
+            )
+        )
+        db.session.commit()
+        feed_id = feed.id
+    client.post("/api/auth/login", json={"username": "admin", "password": "password"})
+    payload = client.post(f"/api/feeds/{feed_id}/share-link").get_json()
+    return payload["feed_token"], payload["feed_secret"]
+
+
+@pytest.mark.parametrize(
+    "guid", [SLASH_GUID, "tag:example.com,2026:episode.42", "episode.42"]
+)
+@pytest.mark.parametrize(
+    "path_template",
+    [
+        "/api/posts/{}/download",
+        "/api/posts/{}/download/original",
+        "/post/{}.mp3",
+        "/post/{}/original.mp3",
+    ],
+)
+def test_feed_token_allows_episode_guid_with_slashes_and_dots(
+    auth_app: Flask, guid: str, path_template: str
+) -> None:
+    token_id, secret = _share_token_for_guid(auth_app, guid)
+    path = path_template.format(encode_guid_for_url(guid))
+    anon = auth_app.test_client()
+
+    response = anon.get(
+        path, query_string={"feed_token": token_id, "feed_secret": secret}
+    )
+    assert response.status_code == 200
+
+    missing = anon.get(path)
+    assert missing.status_code == 401
+
+
+def test_feed_token_for_another_feed_cannot_fetch_slash_guid_episode(
+    auth_app: Flask,
+) -> None:
+    _share_token_for_guid(auth_app, SLASH_GUID)
+    client = auth_app.test_client()
+    with auth_app.app_context():
+        other = Feed(title="Third", rss_url="https://example.com/third.xml")
+        db.session.add(other)
+        db.session.commit()
+        other_id = other.id
+    client.post("/api/auth/login", json={"username": "admin", "password": "password"})
+    payload = client.post(f"/api/feeds/{other_id}/share-link").get_json()
+
+    response = auth_app.test_client().get(
+        f"/api/posts/{encode_guid_for_url(SLASH_GUID)}/download",
+        query_string={
+            "feed_token": payload["feed_token"],
+            "feed_secret": payload["feed_secret"],
+        },
+    )
+    assert response.status_code == 401
 
 
 def test_stale_feed_urls_cannot_lock_out_a_valid_token(auth_app: Flask) -> None:

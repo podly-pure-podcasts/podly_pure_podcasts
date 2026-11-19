@@ -177,6 +177,7 @@ function AppShell() {
     : 'home';
   const homeRouteElement = (
     <PageTransitionFrame
+      className="h-full"
       transitionKey={homeTransitionKey}
       animateOnMount={shouldAnimateHomePage}
     >

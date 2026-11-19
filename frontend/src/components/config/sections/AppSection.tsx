@@ -77,7 +77,7 @@ export default function AppSection() {
       </Section>
 
       <Section title="Cost estimates" description="Used by the Costs tab to estimate spend.">
-        <Field label="Processing rate ($ per hour)">
+        <Field label="Legacy processing rate ($ per hour)">
           <input
             className="input"
             type="number"
@@ -85,6 +85,18 @@ export default function AppSection() {
             min="0"
             value={pending?.app?.cost_rate_per_hour ?? 0.04}
             onChange={(e) => setField(['app', 'cost_rate_per_hour'], Number(e.target.value))}
+          />
+        </Field>
+        <Field label="Whisper rate ($ per hour)">
+          <input
+            className="input"
+            type="number"
+            step="0.01"
+            min="0"
+            value={pending?.app?.whisper_cost_rate_per_hour ?? 0.04}
+            onChange={(e) =>
+              setField(['app', 'whisper_cost_rate_per_hour'], Number(e.target.value))
+            }
           />
         </Field>
       </Section>

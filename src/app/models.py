@@ -233,6 +233,24 @@ class ModelCall(db.Model):  # type: ignore[name-defined, misc]
     # NULL = LLM/legacy row; set = Whisper row. Doubles as the discriminator
     # for the two partial unique indexes below.
     language = db.Column(db.Text, nullable=True)
+    # litellm `service_tier` value sent on the last attempt of this call (e.g.
+    # "flex", "priority"). NULL when the call was made at the provider's
+    # default tier or against a provider that doesn't accept service_tier
+    # (Anthropic, Groq, etc.). Surfaced in the debug UI so it's obvious which
+    # tier produced a given ModelCall row.
+    service_tier = db.Column(db.Text, nullable=True)
+    # Token usage reported by the provider for the successful (or last) attempt
+    # of this call. Null when the provider didn't return usage, when the call
+    # never produced a response, or for legacy rows created before tracking.
+    prompt_tokens = db.Column(db.Integer, nullable=True)
+    cached_prompt_tokens = db.Column(db.Integer, nullable=True)
+    completion_tokens = db.Column(db.Integer, nullable=True)
+    total_tokens = db.Column(db.Integer, nullable=True)
+    # USD cost from token usage * LiteLLM rates, computed by the processing
+    # worker when the row is finalized so web routes can read it without
+    # importing litellm. NULL for legacy rows; see the admin
+    # `/api/admin/costs/backfill-estimated-cost` endpoint.
+    estimated_cost_usd = db.Column(db.Float, nullable=True)
 
     identifications = db.relationship(
         "Identification", backref="model_call", lazy="dynamic"
@@ -431,6 +449,11 @@ class LLMSettings(db.Model):  # type: ignore[name-defined, misc]
         nullable=False,
         default=DEFAULTS.ENABLE_LLM_CHAPTER_FALLBACK_TAGGING,
     )
+    llm_service_tier = db.Column(
+        db.Text,
+        nullable=False,
+        default=DEFAULTS.LLM_SERVICE_TIER,
+    )
 
     created_at = db.Column(db.DateTime, nullable=False, default=_utc_now_naive)
     updated_at = db.Column(db.DateTime, nullable=False, default=_utc_now_naive)
@@ -562,6 +585,11 @@ class AppSettings(db.Model):  # type: ignore[name-defined, misc]
         db.Float,
         nullable=False,
         default=DEFAULTS.APP_COST_RATE_PER_HOUR,
+    )
+    whisper_cost_rate_per_hour = db.Column(
+        db.Float,
+        nullable=False,
+        default=DEFAULTS.APP_WHISPER_COST_RATE_PER_HOUR,
     )
 
     # Hash of the environment variables used to seed configuration.

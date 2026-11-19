@@ -18,6 +18,8 @@ import type {
   PagedResult,
   CostSummary,
   CallLog,
+  EstimatedCostBackfillResult,
+  TokenBackfillResult,
   FeedSubscribersResponse,
 } from '../types';
 
@@ -209,6 +211,7 @@ export const feedsApi = {
     message: string;
     download_url?: string;
     error?: string;
+    service_tier?: { label: string; latest: string; mixed: boolean };
   }> => {
     const response = await api.get(postApiPath(guid, '/status'));
     return response.data;
@@ -283,6 +286,7 @@ export const feedsApi = {
     };
     ad_detection_strategy: 'llm' | 'chapter' | 'chapter_insert';
     processing_stats: {
+      estimated_cost?: number;
       total_segments: number;
       total_model_calls: number;
       total_identifications: number;
@@ -310,6 +314,12 @@ export const feedsApi = {
       error_message: string | null;
       prompt: string | null;
       response: string | null;
+      service_tier: string | null;
+      prompt_tokens: number | null;
+      cached_prompt_tokens: number | null;
+      completion_tokens: number | null;
+      total_tokens: number | null;
+      estimated_cost_usd?: number;
     }>;
     transcript_segments: Array<{
       id: number;
@@ -425,6 +435,7 @@ export const feedsApi = {
     message: string;
     download_url?: string;
     error?: string;
+    service_tier?: { label: string; latest: string; mixed: boolean };
   }> => {
     return feedsApi.getPostStatus(guid);
   },
@@ -443,6 +454,7 @@ export const feedsApi = {
       has_processed_audio: boolean;
     };
     processing_stats: {
+      estimated_cost?: number;
       total_segments: number;
       total_model_calls: number;
       total_identifications: number;
@@ -470,6 +482,12 @@ export const feedsApi = {
       error_message: string | null;
       prompt: string | null;
       response: string | null;
+      service_tier: string | null;
+      prompt_tokens: number | null;
+      cached_prompt_tokens: number | null;
+      completion_tokens: number | null;
+      total_tokens: number | null;
+      estimated_cost_usd?: number;
     }>;
     transcript_segments: Array<{
       id: number;
@@ -732,6 +750,18 @@ export const costsApi = {
   },
   getCalls: async (page: number = 1, perPage: number = 50): Promise<CallLog> => {
     const response = await api.get('/api/admin/costs/calls', { params: { page, per_page: perPage } });
+    return response.data;
+  },
+  backfillTokenUsage: async (
+    payload: { apply: boolean; limit?: number | null }
+  ): Promise<TokenBackfillResult> => {
+    const response = await api.post('/api/admin/costs/backfill-token-usage', payload);
+    return response.data;
+  },
+  backfillEstimatedCost: async (
+    payload: { apply: boolean; limit?: number | null }
+  ): Promise<EstimatedCostBackfillResult> => {
+    const response = await api.post('/api/admin/costs/backfill-estimated-cost', payload);
     return response.data;
   },
   cleanupCancelledFeeds: async (): Promise<{ removed: number }> => {

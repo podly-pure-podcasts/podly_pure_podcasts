@@ -1,6 +1,21 @@
 #!/bin/bash
 set -e
 
+# Docker stops the container by sending SIGTERM to PID 1, which is this script.
+# Bash as PID 1 ignores SIGTERM unless it is trapped, so every stop would wait
+# out the timeout and end in SIGKILL. Forward the signal to the services and
+# wait for them. They are background jobs, which ignore SIGINT, so they always
+# get SIGTERM.
+# shellcheck disable=SC2329 # called by the trap below
+stop_services() {
+	echo "Stopping services..."
+	# shellcheck disable=SC2046 # one argument per job PID
+	kill -TERM $(jobs -p) 2>/dev/null || true
+	wait
+	exit 143
+}
+trap stop_services TERM INT
+
 # 1. Start Writer Service in background
 echo "Starting Writer Service..."
 export PYTHONPATH="/app/src${PYTHONPATH:+:$PYTHONPATH}"

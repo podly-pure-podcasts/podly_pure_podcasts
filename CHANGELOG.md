@@ -1,3 +1,41 @@
+## [2.10.4](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.10.3...v2.10.4) (2026-11-13)
+
+
+### Bug Fixes
+
+* **llm:** drop sampling params for models that reject them ([#294](https://github.com/podly-pure-podcasts/podly_pure_podcasts/issues/294)) ([afc6ce2](https://github.com/podly-pure-podcasts/podly_pure_podcasts/commit/afc6ce2ab2ab2e512c49707d8e501e64e3c31039))
+
+## [2.10.3](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.10.2...v2.10.3) (2026-11-13)
+
+
+### Bug Fixes
+
+* **docker:** forward SIGTERM to services so docker stop exits promptly ([#290](https://github.com/podly-pure-podcasts/podly_pure_podcasts/issues/290)) ([58c667b](https://github.com/podly-pure-podcasts/podly_pure_podcasts/commit/58c667b0028ff12785d2dfad8b7a1e3276a6031a))
+
+## [2.10.2](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.10.1...v2.10.2) (2026-11-09)
+
+
+### Bug Fixes
+
+* **auth:** accept feed tokens for episode GUIDs containing slashes ([#288](https://github.com/podly-pure-podcasts/podly_pure_podcasts/issues/288)) ([805b2c3](https://github.com/podly-pure-podcasts/podly_pure_podcasts/commit/805b2c31bc2518efce3e7faf58ed522d09ae562c)), closes [#272](https://github.com/podly-pure-podcasts/podly_pure_podcasts/issues/272)
+
+## [2.10.1](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.10.0...v2.10.1) (2026-11-05)
+
+
+### Bug Fixes
+
+* **frontend:** scroll the feed page over the episode list and ignore ResizeObserver loop notices ([#286](https://github.com/podly-pure-podcasts/podly_pure_podcasts/issues/286)) ([89a7610](https://github.com/podly-pure-podcasts/podly_pure_podcasts/commit/89a76109d6309c23337669e01ad7d76a5398c07d)), closes [#284](https://github.com/podly-pure-podcasts/podly_pure_podcasts/issues/284) [#285](https://github.com/podly-pure-podcasts/podly_pure_podcasts/issues/285)
+
+# [2.10.0](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.9.0...v2.10.0) (2026-10-29)
+
+
+### Features
+
+* **costs:** cost dashboard priced from model calls ([9165b8e](https://github.com/podly-pure-podcasts/podly_pure_podcasts/commit/9165b8e76c619fdf3d94404ffac4e7c679d90732))
+* **costs:** persist an estimated cost on each model call ([c51381c](https://github.com/podly-pure-podcasts/podly_pure_podcasts/commit/c51381cb794c3a9ab4a724e1bca426d49e4bf89f))
+* **llm:** configurable service tier with Flex retry and standard fallback ([4e76120](https://github.com/podly-pure-podcasts/podly_pure_podcasts/commit/4e7612026a6c4be69dc44eb85fb2ce96ca8160e7))
+* **model-calls:** record service tier and token usage per call ([3f9b752](https://github.com/podly-pure-podcasts/podly_pure_podcasts/commit/3f9b752aade39ae5171cea73104e2eff69228c71))
+
 # [2.9.0](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.8.0...v2.9.0) (2026-10-27)
 
 

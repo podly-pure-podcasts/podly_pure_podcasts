@@ -162,6 +162,13 @@ export const emitDiagnosticError = (payload: DiagnosticErrorPayload) => {
   }
 };
 
+// Browsers report these when a ResizeObserver callback needs another layout pass
+// within the same frame. Nothing failed, so they are not shown as crashes.
+const BENIGN_BROWSER_NOTICE = /^ResizeObserver loop (completed with undelivered notifications|limit exceeded)/;
+
+export const isBenignBrowserNotice = (message: string | undefined): boolean =>
+  BENIGN_BROWSER_NOTICE.test(message ?? '');
+
 let consoleWrapped = false;
 
 export const initFrontendDiagnostics = () => {
@@ -189,6 +196,10 @@ export const initFrontendDiagnostics = () => {
   }
 
   window.addEventListener('error', (event) => {
+    if (isBenignBrowserNotice(event.message)) {
+      event.stopImmediatePropagation();
+      return;
+    }
     emitDiagnosticError({
       title: 'Unhandled error',
       message: event.message || 'Unknown error',

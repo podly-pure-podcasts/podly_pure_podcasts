@@ -143,6 +143,11 @@ def _hydrate_llm_config(data: dict[str, Any]) -> None:
         "enable_llm_chapter_fallback_tagging",
         llm.get("enable_llm_chapter_fallback_tagging"),
     )
+    llm["llm_service_tier"] = getattr(
+        runtime_config,
+        "llm_service_tier",
+        llm.get("llm_service_tier"),
+    )
 
 
 def _hydrate_whisper_config(data: dict[str, Any]) -> None:
@@ -276,6 +281,7 @@ _SIMPLE_LLM_ENV_MAP: dict[str, str] = {
     "LLM_ENABLE_TOKEN_RATE_LIMITING": "llm.llm_enable_token_rate_limiting",
     "LLM_MAX_INPUT_TOKENS_PER_CALL": "llm.llm_max_input_tokens_per_call",
     "LLM_MAX_INPUT_TOKENS_PER_MINUTE": "llm.llm_max_input_tokens_per_minute",
+    "LLM_SERVICE_TIER": "llm.llm_service_tier",
 }
 
 

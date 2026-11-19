@@ -105,6 +105,16 @@ class Config(BaseModel):
         default=DEFAULTS.ENABLE_WORD_LEVEL_BOUNDARY_REFINDER,
         description="Enable word-level (heuristic-timed) ad boundary refinement",
     )
+    llm_service_tier: str = Field(
+        default=DEFAULTS.LLM_SERVICE_TIER,
+        description=(
+            "litellm service_tier passed to providers that support it "
+            "(OpenAI, Gemini). Values: 'default' (unset), 'flex' (cheaper, "
+            "slower, may 429/503 -- the wrapper retries with backoff and "
+            "falls back to standard on exhaustion), 'priority' (faster, "
+            "pricier), 'auto'. Ignored for providers without service tiers."
+        ),
+    )
     enable_llm_chapter_fallback_tagging: bool = Field(
         default=DEFAULTS.ENABLE_LLM_CHAPTER_FALLBACK_TAGGING,
         description=(
@@ -161,6 +171,7 @@ class Config(BaseModel):
     user_limit_total: int | None = DEFAULTS.APP_USER_LIMIT_TOTAL
     autoprocess_on_download: bool = DEFAULTS.APP_AUTOPROCESS_ON_DOWNLOAD
     cost_rate_per_hour: float = DEFAULTS.APP_COST_RATE_PER_HOUR
+    whisper_cost_rate_per_hour: float = DEFAULTS.APP_WHISPER_COST_RATE_PER_HOUR
 
     def redacted(self) -> Config:
         return self.model_copy(

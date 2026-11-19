@@ -33,6 +33,7 @@ export default function LLMSection() {
   const tokenRateLimitReadOnly = isFieldReadOnly('llm.llm_enable_token_rate_limiting');
   const maxInputPerCallReadOnly = isFieldReadOnly('llm.llm_max_input_tokens_per_call');
   const maxInputPerMinReadOnly = isFieldReadOnly('llm.llm_max_input_tokens_per_minute');
+  const serviceTierReadOnly = isFieldReadOnly('llm.llm_service_tier');
 
   const handleTestLLM = () => {
     toast.promise(configApi.testLLM({ llm: pending.llm as LLMConfig }), {
@@ -90,6 +91,23 @@ export default function LLMSection() {
             onChange={(e) => setField(['llm', 'openai_base_url'], e.target.value)}
             disabled={baseUrlReadOnly}
           />
+        </Field>
+        <Field
+          label="Service tier"
+          hint="Forwarded to providers that support it (OpenAI, Gemini). Flex is about 50% cheaper but may return 429/503 under load; those calls retry with exponential backoff, then fall back to the standard tier."
+          envMeta={getEnvHint('llm.llm_service_tier')}
+        >
+          <select
+            className="input"
+            value={pending?.llm?.llm_service_tier ?? 'default'}
+            onChange={(e) => setField(['llm', 'llm_service_tier'], e.target.value)}
+            disabled={serviceTierReadOnly}
+          >
+            <option value="default">default</option>
+            <option value="flex">flex (cheaper, slower, may 429/503)</option>
+            <option value="priority">priority (faster, pricier)</option>
+            <option value="auto">auto</option>
+          </select>
         </Field>
         <TestButton onClick={handleTestLLM} label="Test connection" />
       </Section>

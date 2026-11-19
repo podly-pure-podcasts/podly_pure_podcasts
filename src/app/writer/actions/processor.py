@@ -61,8 +61,18 @@ def upsert_model_call_action(params: dict[str, Any]) -> dict[str, Any]:
             if model_call is None:
                 raise
 
-    # Match prior behavior: reset only when pending/failed_retries.
-    if model_call.status in ["pending", "failed_retries"]:
+    # Reset rows a later processing job is allowed to re-attempt. A
+    # failed_permanent status is terminal only for the job that made the bad
+    # request; keeping it forever would make every future job surface the old
+    # provider error without issuing a new model call after configuration or
+    # provider support has been fixed.
+    if model_call.status in [
+        "pending",
+        "retrying",
+        "failed_retries",
+        "failed_permanent",
+        "cancelled",
+    ]:
         model_call.status = "pending"
         model_call.prompt = str(prompt)
         model_call.retry_attempts = 0

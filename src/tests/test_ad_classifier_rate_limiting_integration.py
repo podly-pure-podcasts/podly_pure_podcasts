@@ -81,9 +81,9 @@ class TestAdClassifierRateLimiting:
             for error in non_retryable_errors:
                 assert classifier._is_retryable_error(error) is False
 
-    @patch("podcast_processor.ad_classifier.litellm")
+    @patch("litellm.completion")
     @patch("podcast_processor.ad_classifier.isinstance")
-    def test_call_model_with_rate_limiter(self, mock_isinstance, mock_litellm):
+    def test_call_model_with_rate_limiter(self, mock_isinstance, mock_completion):
         """Test that _call_model uses rate limiter when available."""
         # Make isinstance return True for our mock objects
         mock_isinstance.return_value = True
@@ -109,7 +109,7 @@ class TestAdClassifierRateLimiting:
             mock_choice = Mock()
             mock_choice.message.content = '{"ad_segments": []}'
             mock_response.choices = [mock_choice]
-            mock_litellm.completion.return_value = mock_response
+            mock_completion.return_value = mock_response
 
             # Create a test ModelCall using actual ModelCall class
             from app.models import ModelCall
@@ -129,8 +129,8 @@ class TestAdClassifierRateLimiting:
             classifier.rate_limiter.get_usage_stats.assert_called_once()
 
             # Verify API was called with correct parameters
-            mock_litellm.completion.assert_called_once()
-            call_args = mock_litellm.completion.call_args
+            mock_completion.assert_called_once()
+            call_args = mock_completion.call_args
             assert call_args[1]["model"] == "anthropic/claude-3-5-sonnet-20240620"
             assert len(call_args[1]["messages"]) == 2
             assert call_args[1]["messages"][0]["role"] == "system"
@@ -157,7 +157,7 @@ class TestAdClassifierRateLimiting:
             classifier._handle_retryable_error(
                 model_call_obj=model_call, error=error, attempt=0, current_attempt_num=1
             )
-            mock_sleep.assert_called_with(60)  # 60 * (2^0) = 60 seconds
+            mock_sleep.assert_called_with(30)  # 30 * (2^0) = 30 seconds
 
     def test_rate_limiter_model_specific_configs(self):
         """Test that different models get appropriate rate limits."""
@@ -183,3 +183,52 @@ class TestAdClassifierRateLimiting:
 
                 assert classifier.rate_limiter is not None
                 assert classifier.rate_limiter.tokens_per_minute == expected_limit
+
+    def test_retries_wait_for_the_token_budget_but_the_first_attempt_does_not(self):
+        """The first request was already paced by _prepare_api_call; each later
+        provider request (Flex retry, standard fallback) paces itself against the
+        model the call actually uses."""
+        config = create_test_config()
+
+        with patch("podcast_processor.ad_classifier.db.session") as mock_session:
+            classifier = AdClassifier(config=config, db_session=mock_session)
+            classifier.rate_limiter = Mock(spec=TokenRateLimiter)
+            args = {
+                "model": "per-call/model",
+                "messages": [{"role": "user", "content": "hi"}],
+            }
+
+            before_attempt = classifier._pace_retries(args)
+            assert before_attempt is not None
+
+            before_attempt()
+            classifier.rate_limiter.wait_if_needed.assert_not_called()
+
+            before_attempt()
+            before_attempt()
+            assert classifier.rate_limiter.wait_if_needed.call_count == 2
+            classifier.rate_limiter.wait_if_needed.assert_called_with(
+                args["messages"], "per-call/model"
+            )
+
+    def test_complete_passes_the_pacing_hook_to_the_tier_retry(self):
+        config = create_test_config()
+
+        with patch("podcast_processor.ad_classifier.db.session") as mock_session:
+            classifier = AdClassifier(config=config, db_session=mock_session)
+
+            with patch(
+                "podcast_processor.ad_classifier.call_litellm_with_tier_retry"
+            ) as tier_retry:
+                classifier._complete({"messages": []}, model_call_id=7)
+
+            assert callable(tier_retry.call_args.kwargs["before_attempt"])
+
+    def test_no_pacing_hook_without_a_rate_limiter(self):
+        config = create_test_config()
+
+        with patch("podcast_processor.ad_classifier.db.session") as mock_session:
+            classifier = AdClassifier(config=config, db_session=mock_session)
+            classifier.rate_limiter = None
+
+            assert classifier._pace_retries({"messages": []}) is None

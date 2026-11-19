@@ -10,6 +10,7 @@ import {
   formatBackendDateTime,
   formatDuration,
 } from '../../utils/datetime';
+import { ServiceTierChip } from '../EpisodeProcessingStatus';
 import { buildProcessingProgressModel } from '../../utils/processingProgress';
 import { useNow } from './useNow';
 
@@ -76,6 +77,7 @@ function JobCardBase({ job, isCancelling, onCancel }: JobCardProps) {
           {job.post_title || 'Untitled episode'}
         </div>
         <div className="flex items-center gap-1.5">
+          {job.service_tier ? <ServiceTierChip tier={job.service_tier} /> : null}
           <StatusBadge status={job.status} />
         </div>
       </div>

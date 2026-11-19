@@ -145,7 +145,7 @@ class TestRateLimitingEdgeCases:
             # Test rate limit error backoff progression
             rate_limit_error = Exception("rate_limit_error: too many requests")
 
-            # First attempt (attempt=0): 60 * (2^0) = 60
+            # First attempt (attempt=0): 30 * (2^0) = 30
             classifier._handle_retryable_error(
                 model_call_obj=model_call,
                 error=rate_limit_error,
@@ -153,7 +153,7 @@ class TestRateLimitingEdgeCases:
                 current_attempt_num=1,
             )
 
-            # Second attempt (attempt=1): 60 * (2^1) = 120
+            # Second attempt (attempt=1): 30 * (2^1) = 60
             classifier._handle_retryable_error(
                 model_call_obj=model_call,
                 error=rate_limit_error,
@@ -161,7 +161,7 @@ class TestRateLimitingEdgeCases:
                 current_attempt_num=2,
             )
 
-            # Third attempt (attempt=2): 60 * (2^2) = 240
+            # Third attempt (attempt=2): 30 * (2^2) = 120
             classifier._handle_retryable_error(
                 model_call_obj=model_call,
                 error=rate_limit_error,
@@ -170,7 +170,7 @@ class TestRateLimitingEdgeCases:
             )
 
             # Check the sleep calls
-            expected_calls = [60, 120, 240]
+            expected_calls = [30, 60, 120]
             actual_calls = [call[0][0] for call in mock_sleep.call_args_list]
             assert actual_calls == expected_calls
 

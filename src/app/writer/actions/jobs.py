@@ -3,7 +3,7 @@ from typing import Any
 
 from app.extensions import db
 from app.jobs_manager_run_service import recalculate_run_counts
-from app.models import ProcessingJob
+from app.models import ModelCall, Post, ProcessingJob
 
 
 def dequeue_job_action(params: dict[str, Any]) -> dict[str, Any] | None:
@@ -124,7 +124,27 @@ def cancel_existing_jobs_action(params: dict[str, Any]) -> int:
     for existing_job in existing_jobs:
         db.session.delete(existing_job)
 
+    # Mark any non-terminal ModelCall rows for this post as cancelled. The
+    # processing worker we just cancelled may have been mid-LLM-call (e.g.
+    # mid-retry-backoff), leaving a row in `pending` forever. That dangling
+    # row also collides with the next run's upsert against the
+    # (post_id, first_seq, last_seq, model_name) unique index.
     if count > 0:
+        post = Post.query.filter_by(guid=post_guid).first()
+        if post is not None:
+            # Anything not terminal-success / terminal-failed / already-cancelled.
+            # Catches "pending" (never started or mid-call), "retrying" (mid-backoff),
+            # and "failed_retries" (transient failure waiting to be picked up).
+            ModelCall.query.filter(
+                ModelCall.post_id == post.id,
+                ModelCall.status.notin_(("success", "failed_permanent", "cancelled")),
+            ).update(
+                {
+                    "status": "cancelled",
+                    "error_message": "Superseded by a new processing job",
+                },
+                synchronize_session=False,
+            )
         recalculate_run_counts(db.session)
 
     return count

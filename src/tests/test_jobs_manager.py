@@ -390,3 +390,59 @@ def test_one_failing_feed_does_not_stop_the_refresh_pass(refresh_manager, monkey
     assert result["feeds_refreshed"] == 2
     assert ("cleanup", None) in calls
     assert calls[-1][0] == "enqueue"
+
+
+def test_service_tier_summary_reports_flex_fallback_as_mixed(app) -> None:
+    from app.jobs_manager import _summarize_service_tiers_for_posts
+    from app.models import ModelCall
+
+    feed = _create_feed()
+    flex_then_default = _create_post(
+        feed_id=feed.id,
+        guid="tier-mixed",
+        download_url="https://example.com/mixed.mp3",
+        whitelisted=True,
+        processed_audio_path=None,
+    )
+    default_only = _create_post(
+        feed_id=feed.id,
+        guid="tier-default",
+        download_url="https://example.com/default.mp3",
+        whitelisted=True,
+        processed_audio_path=None,
+    )
+    rows = [
+        (flex_then_default.id, 0, "flex", "success"),
+        (flex_then_default.id, 1, None, "success"),
+        (default_only.id, 0, None, "success"),
+    ]
+    for post_id, index, tier, status in rows:
+        db.session.add(
+            ModelCall(
+                post_id=post_id,
+                first_segment_sequence_num=index,
+                last_segment_sequence_num=index,
+                model_name="gpt-5-mini",
+                prompt="classify",
+                status=status,
+                service_tier=tier,
+            )
+        )
+    db.session.add(
+        ModelCall(
+            post_id=default_only.id,
+            first_segment_sequence_num=0,
+            last_segment_sequence_num=-1,
+            model_name="whisper-1",
+            prompt="Whisper transcription job",
+            status="success",
+        )
+    )
+    db.session.commit()
+
+    summary = _summarize_service_tiers_for_posts(
+        [flex_then_default.id, default_only.id]
+    )
+
+    assert summary[flex_then_default.id]["mixed"] is True
+    assert default_only.id not in summary
