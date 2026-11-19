@@ -59,8 +59,8 @@ export default function DefaultTab() {
 
   return (
     <div className="space-y-6">
-      <Section title="Connection Status">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <Section title="Connection status">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <ConnectionStatusCard
             title="LLM"
             status={llmStatus.status}
@@ -69,7 +69,7 @@ export default function DefaultTab() {
             onRetry={() => void probeConnections()}
           />
           <ConnectionStatusCard
-            title="Whisper"
+            title="Transcription"
             status={whisperStatus.status}
             message={whisperStatus.message}
             error={whisperStatus.error}
@@ -78,151 +78,108 @@ export default function DefaultTab() {
         </div>
       </Section>
 
-      <Section title="Quick Setup">
-        <div className="text-sm text-gray-700 mb-2 flex items-center gap-2 flex-wrap">
-          <span>Enter your Groq API key to use the recommended setup.</span>
+      <Section
+        title="Quick setup"
+        description="One Groq API key sets up both transcription and ad detection."
+      >
+        <Field label="Groq API key" envMeta={getEnvHint('groq.api_key')}>
+          <input
+            className="input"
+            type="text"
+            placeholder={groqKeyPlaceholder}
+            value={currentGroqKey}
+            onChange={(e) => handleGroqKeyChange(e.target.value)}
+            onBlur={(e) => handleGroqKeyApply(e.target.value)}
+            onPaste={(e) => {
+              const text = e.clipboardData.getData('text').trim();
+              if (text) handleGroqKeyApply(text);
+            }}
+          />
+        </Field>
+
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
           <button
             type="button"
-            className="text-indigo-600 hover:underline"
+            className="text-blue-700 hover:text-blue-800 hover:underline"
             onClick={() => setShowGroqHelp((v) => !v)}
+            aria-expanded={showGroqHelp}
           >
-            {showGroqHelp ? 'Hide help' : '(need help getting a key?)'}
+            {showGroqHelp ? 'Hide key instructions' : 'How to get a key'}
           </button>
           <button
             type="button"
-            className="text-indigo-600 hover:underline"
+            className="text-blue-700 hover:text-blue-800 hover:underline"
             onClick={() => setShowGroqPricing((v) => !v)}
+            aria-expanded={showGroqPricing}
           >
-            {showGroqPricing ? 'Hide pricing' : '(pricing guide)'}
+            {showGroqPricing ? 'Hide pricing' : 'Pricing estimate'}
           </button>
         </div>
 
         {showGroqHelp && <GroqHelpBox />}
         {showGroqPricing && <GroqPricingBox />}
-
-        <Field label="Groq API Key" envMeta={getEnvHint('groq.api_key')}>
-          <div className="flex gap-2">
-            <input
-              className="input"
-              type="text"
-              placeholder={groqKeyPlaceholder}
-              value={currentGroqKey}
-              onChange={(e) => handleGroqKeyChange(e.target.value)}
-              onBlur={(e) => handleGroqKeyApply(e.target.value)}
-              onPaste={(e) => {
-                const text = e.clipboardData.getData('text').trim();
-                if (text) handleGroqKeyApply(text);
-              }}
-            />
-          </div>
-        </Field>
       </Section>
-
-      {/* Input styling */}
-      <style>{`.input{width:100%;padding:0.5rem;border:1px solid #e5e7eb;border-radius:0.375rem;font-size:0.875rem}`}</style>
     </div>
   );
 }
 
 function GroqHelpBox() {
   return (
-    <div className="text-sm text-gray-700 mb-2 bg-indigo-50 border border-indigo-200 rounded p-3 space-y-2">
-      <ol className="list-decimal pl-5 space-y-1">
-        <li>
-          Visit the{' '}
-          <a
-            className="text-indigo-700 underline"
-            href="https://console.groq.com/keys"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Groq Console
-          </a>{' '}
-          and sign in or create an account.
-        </li>
-        <li>Open the Keys page and click "Create API Key".</li>
-        <li>
-          Copy the key (it starts with <code>gsk_</code>) and paste it below.
-        </li>
-        <li>
-          <strong>Recommended:</strong> Set a billing limit at{' '}
-          <a
-            className="text-indigo-700 underline"
-            href="https://console.groq.com/settings/billing"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Settings → Billing → Limits
-          </a>{' '}
-          to control costs and receive usage alerts.
-        </li>
-      </ol>
-    </div>
+    <ol className="list-decimal space-y-1 pl-5 text-sm text-gray-700">
+      <li>
+        Sign in to the{' '}
+        <a
+          className="text-blue-700 underline hover:text-blue-800"
+          href="https://console.groq.com/keys"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Groq Console
+        </a>{' '}
+        (or create an account) and click &ldquo;Create API Key&rdquo;.
+      </li>
+      <li>
+        Copy the key (it starts with <code>gsk_</code>) and paste it above.
+      </li>
+      <li>
+        Recommended: set a limit under{' '}
+        <a
+          className="text-blue-700 underline hover:text-blue-800"
+          href="https://console.groq.com/settings/billing"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Settings → Billing → Limits
+        </a>{' '}
+        to control costs and get usage alerts.
+      </li>
+    </ol>
   );
 }
 
 function GroqPricingBox() {
   return (
-    <div className="text-sm text-gray-700 mb-2 bg-green-50 border border-green-200 rounded p-3 space-y-3">
-      <div>
-        <h4 className="font-semibold text-green-800 mb-2">Groq Pricing Guide</h4>
-        <p className="text-green-700 mb-3">
-          Based on the recommended models: <code>whisper-large-v3-turbo</code> and{' '}
-          <code>llama-3.3-70b-versatile</code>
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-white border border-green-300 rounded p-3">
-          <h5 className="font-medium text-green-800 mb-2">Whisper (Transcription)</h5>
-          <ul className="space-y-1 text-green-700">
-            <li>
-              • <strong>whisper-large-v3-turbo:</strong> $0.04/hour
-            </li>
-            <li>• Speed: 216x real-time</li>
-            <li>• Minimum charge: 10 seconds per request</li>
-          </ul>
-        </div>
-
-        <div className="bg-white border border-green-300 rounded p-3">
-          <h5 className="font-medium text-green-800 mb-2">LLM (Ad Detection)</h5>
-          <ul className="space-y-1 text-green-700">
-            <li>
-              • <strong>llama-3.3-70b-versatile:</strong>
-            </li>
-            <li>• Input: $0.59/1M tokens</li>
-            <li>• Output: $0.79/1M tokens</li>
-            <li>• ~1M tokens ≈ 750,000 words</li>
-          </ul>
-        </div>
-      </div>
-
-      <div className="bg-white border border-green-300 rounded p-3">
-        <h5 className="font-medium text-green-800 mb-2">
-          Estimated Monthly Cost (6 podcasts, 6 hours/week)
-        </h5>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-green-700">
-          <div>
-            <strong>Transcription:</strong>
-            <br />
-            24 hours/month × $0.04 = <span className="font-semibold">$0.96/month</span>
-          </div>
-          <div>
-            <strong>Ad Detection:</strong>
-            <br />
-            ~2M tokens × $0.69 avg = <span className="font-semibold">$1.38/month</span>
-          </div>
-          <div className="md:col-span-1">
-            <strong>Total Estimate:</strong>
-            <br />
-            <span className="font-semibold text-lg">~$2.34/month</span>
-          </div>
-        </div>
-        <p className="text-xs text-green-600 mt-2">
-          * Actual costs may vary based on podcast length, complexity, and token usage. Consider
-          setting a $5-10/month billing limit for safety.
-        </p>
-      </div>
+    <div className="space-y-2 text-sm text-gray-700">
+      <p>
+        Prices for the recommended models, <code>whisper-large-v3-turbo</code> and{' '}
+        <code>llama-3.3-70b-versatile</code>:
+      </p>
+      <ul className="list-disc space-y-1 pl-5">
+        <li>
+          Transcription: $0.04 per hour of audio, 216x real-time, 10-second minimum per
+          request.
+        </li>
+        <li>
+          Ad detection: $0.59 per 1M input tokens and $0.79 per 1M output tokens (1M tokens
+          is about 750,000 words).
+        </li>
+      </ul>
+      <p>
+        Example, 6 podcasts at 6 hours per week: 24 hours/month of transcription is about
+        $0.96, and about 2M tokens of ad detection is about $1.38, for roughly{' '}
+        <strong>$2.34 per month</strong>. Actual cost varies with episode length and token
+        use; a $5-10 monthly billing limit is a safe cap.
+      </p>
     </div>
   );
 }

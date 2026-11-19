@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { feedsApi } from '../services/api';
+import ModalShell from './ModalShell';
+import { CloseIcon, RefreshIcon } from './icons';
 
 type ReprocessMode = 'full' | 'keep-transcript';
 
@@ -91,20 +93,20 @@ export default function ReprocessButton({
       <button
         onClick={handleReprocessClick}
         disabled={isReprocessing}
-        className={`px-3 py-1 text-xs rounded font-medium transition-colors border ${
-          isReprocessing
-            ? 'bg-gray-500 text-white cursor-wait border-gray-500'
-            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 hover:text-gray-900'
-        }`}
+        className={`btn btn-secondary btn-sm ${isReprocessing ? 'cursor-wait' : ''}`}
         title={buttonTitle}
       >
         {isReprocessing && activeMode === 'keep-transcript' ? (
           <>
-            <span className="sm:hidden">⏳ Reusing...</span>
-            <span className="hidden sm:inline">⏳ Reprocessing (Transcript)...</span>
+            <RefreshIcon className="h-3.5 w-3.5 animate-spin" />
+            <span className="sm:hidden">Reusing...</span>
+            <span className="hidden sm:inline">Reprocessing (Transcript)...</span>
           </>
         ) : isReprocessing ? (
-          '⏳ Reprocessing...'
+          <>
+            <RefreshIcon className="h-3.5 w-3.5 animate-spin" />
+            Reprocessing...
+          </>
         ) : (
           'Reprocess'
         )}
@@ -117,19 +119,20 @@ export default function ReprocessButton({
       )}
 
       {/* Confirmation Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full overflow-hidden">
+      <ModalShell
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        panelClassName="bg-surface rounded-lg max-w-md w-full overflow-hidden"
+      >
             {/* Header */}
             <div className="flex items-center justify-between p-6 border-b">
-              <h2 className="text-xl font-bold text-gray-900">Confirm Reprocess</h2>
+              <h2 className="text-xl font-semibold text-gray-900">Confirm Reprocess</h2>
               <button
                 onClick={() => setShowModal(false)}
-                className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+                aria-label="Close"
+                className="btn btn-ghost btn-icon"
               >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <CloseIcon className="h-5 w-5" />
               </button>
             </div>
 
@@ -162,27 +165,21 @@ export default function ReprocessButton({
               <div className="flex gap-3 justify-end">
                 <button
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 hover:border-gray-400 transition-colors"
+                  className="btn btn-secondary"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleConfirmReprocess}
-                  className={`px-4 py-2 text-sm font-medium text-white rounded-md transition-colors ${
-                    keepTranscript
-                      ? 'bg-blue-600 hover:bg-blue-700'
-                      : 'bg-orange-600 hover:bg-orange-700'
-                  }`}
+                  className={`btn ${keepTranscript ? 'btn-primary' : 'btn-danger'}`}
                 >
                   {keepTranscript
-                    ? 'Reprocess Episode (Keep Transcript)'
-                    : 'Reprocess Episode'}
+                    ? 'Reprocess episode (keep transcript)'
+                    : 'Reprocess episode'}
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+      </ModalShell>
     </div>
   );
 }

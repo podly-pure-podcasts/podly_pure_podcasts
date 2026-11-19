@@ -1,10 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { feedsApi } from '../services/api';
+import ModalShell from './ModalShell';
 import type { FeedSubscriber } from '../types';
+import { CloseIcon } from './icons';
 
 interface FeedSubscribersModalProps {
   feedId: number;
   feedTitle: string;
+  isOpen: boolean;
   onClose: () => void;
 }
 
@@ -14,8 +17,8 @@ function StatusBadge({ status }: { status: string }) {
     <span
       className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
         isActive
-          ? 'bg-green-100 text-green-700'
-          : 'bg-gray-100 text-gray-500'
+          ? 'bg-green-100 text-green-800'
+          : 'bg-gray-100 text-gray-700'
       }`}
     >
       {status}
@@ -26,20 +29,23 @@ function StatusBadge({ status }: { status: string }) {
 export default function FeedSubscribersModal({
   feedId,
   feedTitle,
+  isOpen,
   onClose,
 }: FeedSubscribersModalProps) {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['feed-subscribers', feedId],
     queryFn: () => feedsApi.getSubscribers(feedId),
+    enabled: isOpen,
   });
 
   const subscribers: FeedSubscriber[] = data?.subscribers ?? [];
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-
-      <div className="relative w-full max-w-md bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden">
+    <ModalShell
+      isOpen={isOpen}
+      onClose={onClose}
+      panelClassName="w-full max-w-md bg-surface rounded-lg border border-gray-200 shadow-lg overflow-hidden"
+    >
         {/* Header */}
         <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-gray-200">
           <div>
@@ -49,11 +55,10 @@ export default function FeedSubscribersModal({
           <button
             type="button"
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 shrink-0"
+            aria-label="Close"
+            className="btn btn-ghost btn-icon btn-sm shrink-0"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <CloseIcon className="h-5 w-5" />
           </button>
         </div>
 
@@ -79,7 +84,7 @@ export default function FeedSubscribersModal({
                     <td className="py-2 pr-4 text-gray-800">
                       {sub.username}
                       {sub.role === 'admin' && (
-                        <span className="ml-1.5 text-xs text-indigo-500 font-medium">admin</span>
+                        <span className="ml-1.5 text-xs text-gray-600 font-medium">admin</span>
                       )}
                     </td>
                     <td className="py-2">
@@ -96,7 +101,6 @@ export default function FeedSubscribersModal({
         <div className="px-5 py-3 border-t border-gray-200 bg-gray-50 text-xs text-gray-500">
           {subscribers.length} subscriber{subscribers.length !== 1 ? 's' : ''}
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }

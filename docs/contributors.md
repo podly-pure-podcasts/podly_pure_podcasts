@@ -259,7 +259,8 @@ We welcome contributions to Podly! Here's how you can help:
    ```bash
    git checkout -b feature/your-feature-name
    ```
-4. Create a pull request with a target branch of Preview
+4. Before opening a pull request, run the [automated smoke tests](automated_smoke_testing.md) against a fresh instance of your branch.
+5. Create a pull request with a target branch of Preview
 
 #### Application Ports
 

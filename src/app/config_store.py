@@ -107,6 +107,7 @@ def ensure_defaults() -> None:
             "enable_boundary_refinement": DEFAULTS.ENABLE_BOUNDARY_REFINEMENT,
             "enable_word_level_boundary_refinder": DEFAULTS.ENABLE_WORD_LEVEL_BOUNDARY_REFINDER,
             "enable_llm_chapter_fallback_tagging": DEFAULTS.ENABLE_LLM_CHAPTER_FALLBACK_TAGGING,
+            "llm_service_tier": DEFAULTS.LLM_SERVICE_TIER,
         },
     )
 
@@ -154,6 +155,7 @@ def ensure_defaults() -> None:
             "user_limit_total": DEFAULTS.APP_USER_LIMIT_TOTAL,
             "autoprocess_on_download": DEFAULTS.APP_AUTOPROCESS_ON_DOWNLOAD,
             "cost_rate_per_hour": DEFAULTS.APP_COST_RATE_PER_HOUR,
+            "whisper_cost_rate_per_hour": DEFAULTS.APP_WHISPER_COST_RATE_PER_HOUR,
         },
     )
 
@@ -210,6 +212,7 @@ def read_combined() -> dict[str, Any]:
             "enable_boundary_refinement": llm.enable_boundary_refinement,
             "enable_word_level_boundary_refinder": llm.enable_word_level_boundary_refinder,
             "enable_llm_chapter_fallback_tagging": llm.enable_llm_chapter_fallback_tagging,
+            "llm_service_tier": llm.llm_service_tier,
         },
         "whisper": whisper_payload,
         "processing": {
@@ -230,6 +233,7 @@ def read_combined() -> dict[str, Any]:
             "user_limit_total": app_s.user_limit_total,
             "autoprocess_on_download": app_s.autoprocess_on_download,
             "cost_rate_per_hour": app_s.cost_rate_per_hour,
+            "whisper_cost_rate_per_hour": app_s.whisper_cost_rate_per_hour,
         },
     }
 
@@ -251,6 +255,7 @@ def _update_section_llm(data: dict[str, Any]) -> None:
         "enable_boundary_refinement",
         "enable_word_level_boundary_refinder",
         "enable_llm_chapter_fallback_tagging",
+        "llm_service_tier",
     ]:
         if key in data:
             new_val = data[key]
@@ -366,6 +371,7 @@ def _update_section_app(data: dict[str, Any]) -> tuple[int | None, int | None]:
         "user_limit_total",
         "autoprocess_on_download",
         "cost_rate_per_hour",
+        "whisper_cost_rate_per_hour",
     ]:
         if key in data:
             setattr(row, key, data[key])
@@ -532,6 +538,13 @@ def to_pydantic_config() -> PydanticConfig:
                 DEFAULTS.ENABLE_LLM_CHAPTER_FALLBACK_TAGGING,
             )
         ),
+        llm_service_tier=str(
+            data["llm"].get(
+                "llm_service_tier",
+                DEFAULTS.LLM_SERVICE_TIER,
+            )
+            or DEFAULTS.LLM_SERVICE_TIER
+        ),
         output=data["output"],
         processing=data["processing"],
         background_update_interval_minute=data["app"].get(
@@ -571,6 +584,12 @@ def to_pydantic_config() -> PydanticConfig:
             data["app"].get(
                 "cost_rate_per_hour",
                 DEFAULTS.APP_COST_RATE_PER_HOUR,
+            )
+        ),
+        whisper_cost_rate_per_hour=float(
+            data["app"].get(
+                "whisper_cost_rate_per_hour",
+                DEFAULTS.APP_WHISPER_COST_RATE_PER_HOUR,
             )
         ),
     )
@@ -666,6 +685,18 @@ def _apply_top_level_env_overrides(cfg: PydanticConfig) -> None:
     )
     if env_llm_max_input_per_min is not None:
         cfg.llm_max_input_tokens_per_minute = env_llm_max_input_per_min
+
+    env_service_tier = os.environ.get("LLM_SERVICE_TIER")
+    if env_service_tier:
+        env_service_tier = env_service_tier.strip().lower()
+        if env_service_tier in {"default", "flex", "priority", "auto"}:
+            cfg.llm_service_tier = env_service_tier
+        else:
+            logger.warning(
+                "Ignoring invalid LLM_SERVICE_TIER=%r (expected one of "
+                "default|flex|priority|auto)",
+                env_service_tier,
+            )
 
 
 def _apply_remote_whisper_runtime_overrides(whisper: RemoteWhisperConfig) -> None:

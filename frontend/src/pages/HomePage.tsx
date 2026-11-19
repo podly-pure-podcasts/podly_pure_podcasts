@@ -1,10 +1,10 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
-import { feedsApi, configApi, billingApi } from '../services/api';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { feedsApi, billingApi } from '../services/api';
 import FeedList from '../components/FeedList';
 import FeedDetail from '../components/FeedDetail';
 import AddFeedForm from '../components/AddFeedForm';
-import type { Feed, ConfigResponse } from '../types';
+import ModalShell from '../components/ModalShell';
 import {
   loadFeedListSortPreference,
   persistFeedListSortPreference,
@@ -12,37 +12,67 @@ import {
 import type { FeedSortOption } from '../utils/feedListSort';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
-import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { copyToClipboard } from '../utils/clipboard';
 import { emitDiagnosticError } from '../utils/diagnostics';
 import { getHttpErrorInfo } from '../utils/httpError';
+import { useDelayedFlag } from '../hooks/useDelayedFlag';
+import { gsap, prefersFullMotion } from '../utils/gsap';
+import { EASE } from '../utils/nativeMotion';
+import { LinkIcon, PlusIcon, RefreshIcon, RssIcon, SlidersIcon, CheckIcon, CloseIcon } from '../components/icons';
+
+const HOME_ROUTE_QUERY_GC_TIME_MS = 5 * 60 * 1000;
+
+const MOBILE_FEED_QUERY = '(max-width: 1023px)';
+const SHEET_OPEN_MS = 420;
+const SHEET_CLOSE_MS = 300;
+
+function isMobileFeedViewport(): boolean {
+  return typeof window !== 'undefined' && window.matchMedia(MOBILE_FEED_QUERY).matches;
+}
+
+function subscribeMobileFeedViewport(onChange: () => void): () => void {
+  const query = window.matchMedia(MOBILE_FEED_QUERY);
+  query.addEventListener('change', onChange);
+  return () => query.removeEventListener('change', onChange);
+}
 
 export default function HomePage() {
   const navigate = useNavigate();
   const { feedId } = useParams();
-  const location = useLocation();
   const [showAddForm, setShowAddForm] = useState(false);
-  const [selectedFeed, setSelectedFeed] = useState<Feed | null>(null);
+  const [showSortMenu, setShowSortMenu] = useState(false);
+  const sortMenuRef = useRef<HTMLDivElement>(null);
   const [feedSortBy, setFeedSortBy] = useState<FeedSortOption>(() =>
     loadFeedListSortPreference()
   );
+  const isMobileViewport = useSyncExternalStore(subscribeMobileFeedViewport, isMobileFeedViewport, () => false);
+  // Phone detail panel: a tap in the list slides it in over the list (which keeps
+  // its scroll), and the episode rows wait until the slide settles so no heavy
+  // render lands mid-animation. A feed opened from its URL appears in place.
+  const listPaneRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [panelSlides, setPanelSlides] = useState(false);
+  const [panelSettled, setPanelSettled] = useState(true);
+  const closingRef = useRef(false);
+  const settleCallRef = useRef<gsap.core.Tween | null>(null);
+  const slideStartedRef = useRef(false);
+  const panelAnimRef = useRef<Animation | null>(null);
+  const listAnimRef = useRef<Animation | null>(null);
   const { requireAuth, user } = useAuth();
 
   const { data: feeds, isLoading, error, refetch } = useQuery({
     queryKey: ['feeds'],
     queryFn: feedsApi.getFeeds,
+    gcTime: HOME_ROUTE_QUERY_GC_TIME_MS,
   });
+  const showSkeleton = useDelayedFlag(isLoading);
 
   const { data: billingSummary, refetch: refetchBilling } = useQuery({
     queryKey: ['billing', 'summary'],
     queryFn: billingApi.getSummary,
     enabled: requireAuth && !!user,
-  });
-
-  useQuery<ConfigResponse>({
-    queryKey: ['config'],
-    queryFn: configApi.getConfig,
-    enabled: !requireAuth || user?.role === 'admin',
+    gcTime: HOME_ROUTE_QUERY_GC_TIME_MS,
   });
   const canRefreshAll = !requireAuth || user?.role === 'admin';
   const refreshAllMutation = useMutation({
@@ -68,55 +98,19 @@ export default function HomePage() {
     },
   });
 
-  useEffect(() => {
-    if (!showAddForm || typeof document === 'undefined') {
-      return;
-    }
 
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = originalOverflow;
+
+
+  useEffect(() => {
+    if (!showSortMenu) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!sortMenuRef.current?.contains(event.target as Node)) {
+        setShowSortMenu(false);
+      }
     };
-  }, [showAddForm]);
-
-  useEffect(() => {
-    if (!feeds || !feedId) {
-      if (location.pathname === '/' && selectedFeed !== null) {
-        setSelectedFeed(null);
-      }
-      return;
-    }
-
-    const parsedId = Number(feedId);
-    if (!Number.isFinite(parsedId)) {
-      if (selectedFeed !== null) {
-        setSelectedFeed(null);
-      }
-      return;
-    }
-
-    const matchingFeed = feeds.find((feed) => feed.id === parsedId) || null;
-    if (matchingFeed?.id !== selectedFeed?.id) {
-      setSelectedFeed(matchingFeed);
-    }
-  }, [feeds, feedId, location.pathname, selectedFeed]);
-
-  if (isLoading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="bg-red-50 border border-red-200 rounded-md p-4">
-        <p className="text-red-800">Error loading feeds. Please try again.</p>
-      </div>
-    );
-  }
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, [showSortMenu]);
 
   const planLimitReached =
     !!billingSummary &&
@@ -129,7 +123,99 @@ export default function HomePage() {
 
   const parsedFeedId = feedId ? Number(feedId) : null;
   const feedIdIsValid = parsedFeedId !== null && Number.isFinite(parsedFeedId);
-  const feedNotFound = feedIdIsValid && !selectedFeed;
+  // The URL is the only source of the open feed: a second copy in state lags
+  // the router by a render and fights it, remounting the panel mid-animation.
+  const selectedFeed = useMemo(
+    () => (feedIdIsValid && feeds ? feeds.find((feed) => feed.id === parsedFeedId) ?? null : null),
+    [feeds, feedIdIsValid, parsedFeedId]
+  );
+  const feedNotFound = feedIdIsValid && !!feeds && !selectedFeed;
+  const detailFeed = selectedFeed;
+  const panelWasOpenRef = useRef(false);
+
+  useLayoutEffect(() => {
+    const panel = panelRef.current;
+    const list = listPaneRef.current;
+    if (!selectedFeed) {
+      // A tap sets the slide flags a render before the URL opens the panel,
+      // so they only reset once a panel that was open has closed.
+      slideStartedRef.current = false;
+      if (panelWasOpenRef.current) {
+        listAnimRef.current?.cancel();
+        listAnimRef.current = null;
+        setPanelSlides(false);
+        setPanelSettled(true);
+      }
+      panelWasOpenRef.current = false;
+      return;
+    }
+    panelWasOpenRef.current = true;
+    // A feeds refetch gives the selected feed a new identity and re-runs this
+    // effect; the slide for an opening starts only once.
+    if (!panel || !panelSlides || panelSettled || slideStartedRef.current) return;
+    slideStartedRef.current = true;
+    // The sheet slide runs as a Web Animation on the compositor, so a busy main
+    // thread can't freeze or skip it. Created before paint with fill 'both', its
+    // first frame is already off screen; its clock starts once that frame is
+    // committed, so a slow first paint doesn't make it jump.
+    panelAnimRef.current?.cancel();
+    panelAnimRef.current = panel.animate(
+      [{ transform: 'translateX(100%)' }, { transform: 'translateX(0)' }],
+      { duration: SHEET_OPEN_MS, easing: EASE.settle, fill: 'both' }
+    );
+    if (list) {
+      listAnimRef.current?.cancel();
+      listAnimRef.current = list.animate(
+        [{ transform: 'none', opacity: 1 }, { transform: 'translateX(-18%)', opacity: 0.45 }],
+        { duration: SHEET_OPEN_MS, easing: EASE.settle, fill: 'forwards' }
+      );
+    }
+    // The ease has covered ~98.5% of the distance by 80% of the duration; the
+    // rows' render lands there, where the remaining movement is a few px.
+    settleCallRef.current?.kill();
+    settleCallRef.current = gsap.delayedCall((SHEET_OPEN_MS * 0.8) / 1000, () => setPanelSettled(true));
+  }, [selectedFeed, panelSlides, panelSettled]);
+
+  useEffect(() => {
+    if (!isMobileViewport) {
+      panelAnimRef.current?.cancel();
+      listAnimRef.current?.cancel();
+    }
+  }, [isMobileViewport]);
+
+  // The slide-out runs first and the route changes after it, so nothing heavy
+  // renders while the panel moves.
+  const closePanel = () => {
+    const panel = panelRef.current;
+    const list = listPaneRef.current;
+    const finish = () => {
+      closingRef.current = false;
+      navigate('/');
+    };
+    if (!panel || closingRef.current || !isMobileFeedViewport() || !prefersFullMotion()) {
+      finish();
+      return;
+    }
+    closingRef.current = true;
+    settleCallRef.current?.kill();
+    // Start from wherever the sheet and list are, so closing mid-open doesn't jump.
+    const panelFrom = getComputedStyle(panel).transform;
+    panelAnimRef.current?.cancel();
+    panelAnimRef.current = panel.animate(
+      [{ transform: panelFrom }, { transform: 'translateX(100%)' }],
+      { duration: SHEET_CLOSE_MS, easing: EASE.in, fill: 'forwards' }
+    );
+    panelAnimRef.current.finished.then(finish, () => {});
+    if (list) {
+      const listStyle = getComputedStyle(list);
+      const listFrom = { transform: listStyle.transform, opacity: listStyle.opacity };
+      listAnimRef.current?.cancel();
+      listAnimRef.current = list.animate(
+        [listFrom, { transform: 'none', opacity: 1 }],
+        { duration: SHEET_CLOSE_MS, easing: EASE.out, fill: 'forwards' }
+      );
+    }
+  };
 
   const handleCopyAggregateLink = async () => {
     try {
@@ -141,126 +227,181 @@ export default function HomePage() {
     }
   };
 
+  const handleAddFeedClick = () => {
+    if (planLimitReached) {
+      navigate('/billing');
+    } else {
+      setShowAddForm((prev) => !prev);
+    }
+  };
+
   const handleFeedSortChange = (nextSort: FeedSortOption) => {
     setFeedSortBy(nextSort);
     persistFeedListSortPreference(nextSort);
+    setShowSortMenu(false);
   };
 
+  const feedSortOptions: { value: FeedSortOption; label: string }[] = [
+    { value: 'newest', label: 'Newest episode' },
+    { value: 'oldest', label: 'Oldest episode' },
+    { value: 'title-asc', label: 'Title A–Z' },
+    { value: 'title-desc', label: 'Title Z–A' },
+    { value: 'feed-added-oldest', label: 'Feed Added (Oldest)' },
+    { value: 'feed-added-newest', label: 'Feed Added (Newest)' },
+  ];
+
   return (
-    <div className="h-full flex flex-col lg:flex-row gap-6">
-      {/* Left Panel - Feed List (hidden on mobile when feed is selected) */}
-      <div className={`flex-1 lg:max-w-md xl:max-w-lg flex flex-col ${
-        selectedFeed ? 'hidden lg:flex' : 'flex'
-      }`}>
-        <div className="mb-6 flex min-w-0 items-center gap-3">
-          <h2 className="shrink-0 text-2xl font-bold text-gray-900">
-            Podcast Feeds
-          </h2>
-          <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
-            <div className="min-w-0 flex-1">
-              <label htmlFor="feed-sort" className="sr-only">
-                Sort feeds
-              </label>
-              <select
-                id="feed-sort"
-                value={feedSortBy}
-                onChange={(event) =>
-                  handleFeedSortChange(event.target.value as FeedSortOption)
-                }
-                className="h-10 w-full rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-700 transition-colors hover:bg-gray-50 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+    <div className="relative h-full flex flex-col lg:flex-row gap-6">
+      {/* Left Panel - Feed List (behind the detail panel on phones) */}
+      <div
+        ref={listPaneRef}
+        inert={isMobileViewport && !!selectedFeed}
+        className={`flex-1 lg:max-w-md xl:max-w-lg flex flex-col ${
+          feedIdIsValid && isLoading ? 'hidden lg:flex' : 'flex'
+        }`}
+      >
+        <div className="mb-6 flex flex-wrap items-center gap-x-3 gap-y-3">
+          <h1 className="w-full text-2xl font-semibold text-gray-900 sm:w-auto sm:flex-1">
+            Podcast feeds
+          </h1>
+          <div className="flex items-center gap-2">
+            <div ref={sortMenuRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setShowSortMenu((prev) => !prev)}
                 title="Sort podcast feeds"
+                aria-label="Sort feeds"
+                aria-haspopup="menu"
+                aria-expanded={showSortMenu}
+                className="btn btn-secondary btn-icon"
               >
-                <option value="newest">Newest Episode</option>
-                <option value="oldest">Oldest Episode</option>
-                <option value="title-asc">Title A-Z</option>
-                <option value="title-desc">Title Z-A</option>
-                <option value="feed-added-oldest">Feed Added (Oldest)</option>
-                <option value="feed-added-newest">Feed Added (Newest)</option>
-              </select>
+                <SlidersIcon className="w-4 h-4" />
+              </button>
+              {showSortMenu && (
+                <div
+                  role="menu"
+                  className="absolute right-0 top-full mt-1 w-48 origin-top-right animate-pop-in rounded-md border border-gray-200 bg-surface py-1 shadow-lg z-20 max-w-[calc(100vw-2rem)]"
+                >
+                  {feedSortOptions.map((option) => {
+                    const isActive = option.value === feedSortBy;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={isActive}
+                        onClick={() => handleFeedSortChange(option.value)}
+                        className={`flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-sm leading-5 transition-colors ${
+                          isActive
+                            ? 'font-medium text-blue-700'
+                            : 'text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        <span>{option.label}</span>
+                        {isActive && <CheckIcon className="h-3.5 w-3.5 shrink-0 text-blue-700" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
             {canRefreshAll && (
               <button
+                type="button"
                 onClick={() => refreshAllMutation.mutate()}
                 disabled={refreshAllMutation.isPending}
                 title="Refresh all feeds"
-                className={`h-10 w-10 shrink-0 flex items-center justify-center rounded-md border transition-colors ${
-                  refreshAllMutation.isPending
-                    ? 'border-gray-200 text-gray-400 cursor-not-allowed'
-                    : 'border-gray-200 text-gray-600 hover:bg-gray-100'
-                }`}
+                aria-label="Refresh all feeds"
+                className="btn btn-secondary btn-icon"
               >
-                <svg
+                <RefreshIcon
                   className={`w-4 h-4 ${refreshAllMutation.isPending ? 'animate-spin' : ''}`}
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-                  <path d="M21 3v6h-6" />
-                </svg>
-                <span className="sr-only">Refresh all</span>
+                />
               </button>
             )}
             <button
+              type="button"
               onClick={handleCopyAggregateLink}
-              className="h-10 w-10 shrink-0 flex items-center justify-center rounded-md border border-gray-200 text-gray-600 hover:bg-gray-100 transition-colors"
+              className="btn btn-secondary btn-icon"
+              aria-label="Copy aggregate feed link"
               title="Copy your aggregate feed URL (last 3 episodes from each feed)"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-              </svg>
+              <LinkIcon className="w-4 h-4" />
             </button>
             <button
-              onClick={() => {
-                if (planLimitReached) {
-                  navigate('/billing');
-                } else {
-                  setShowAddForm((prev) => !prev);
-                }
-              }}
-              className={`h-10 shrink-0 inline-flex items-center justify-center rounded-md px-4 font-medium transition-colors ${
-                planLimitReached
-                  ? 'bg-amber-600 hover:bg-amber-700 text-white'
-                  : 'bg-blue-600 hover:bg-blue-700 text-white'
-              }`}
+              type="button"
+              onClick={handleAddFeedClick}
+              className="btn btn-primary"
               title={planLimitReached ? 'Your plan is full. Click to upgrade.' : undefined}
             >
-              {planLimitReached ? 'Plan full' : showAddForm ? 'Close' : 'Add Feed'}
+              <PlusIcon className="w-4 h-4" />
+              {planLimitReached ? 'Plan full' : showAddForm ? 'Close' : 'Add feed'}
             </button>
           </div>
         </div>
 
         <div className="flex-1 min-h-0 overflow-hidden">
-          <FeedList 
+          {isLoading ? (
+            showSkeleton && (
+            <div className="space-y-2" aria-hidden="true">
+              {Array.from({ length: 6 }, (_, index) => (
+                <div
+                  key={index}
+                  className="flex items-start gap-3 rounded-lg border border-gray-200 bg-surface p-4"
+                >
+                  <div className="h-12 w-12 shrink-0 rounded-md bg-gray-200" />
+                  <div className="flex-1 space-y-2 pt-1">
+                    <div className="h-4 w-3/4 rounded bg-gray-200" />
+                    <div className="h-3 w-1/2 rounded bg-gray-200" />
+                  </div>
+                </div>
+              ))}
+            </div>
+            )
+          ) : error ? (
+            <div
+              role="alert"
+              className="flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 p-4"
+            >
+              <p className="text-sm text-red-800">Error loading feeds.</p>
+              <button
+                type="button"
+                onClick={() => refetch()}
+                className="btn btn-ghost btn-sm"
+              >
+                Retry
+              </button>
+            </div>
+          ) : (
+            <FeedList 
             feeds={feeds || []} 
             onFeedDeleted={refetch}
             onFeedSelected={(feed) => {
-              setSelectedFeed(feed);
+              if (isMobileFeedViewport() && prefersFullMotion()) {
+                setPanelSlides(true);
+                setPanelSettled(false);
+              }
               navigate(`/feeds/${feed.id}`);
             }}
             selectedFeedId={selectedFeed?.id}
             sortBy={feedSortBy}
           />
+          )}
         </div>
       </div>
 
       {/* Right Panel - Feed Detail */}
-      {selectedFeed && (
-        <div className={`flex-1 lg:flex-[2] ${
-          selectedFeed ? 'flex' : 'hidden lg:flex'
-        } flex-col bg-white rounded-lg shadow border overflow-hidden`}>
+      {detailFeed && (
+        <div
+          ref={panelRef}
+          className="fixed inset-x-0 top-[49px] bottom-0 z-30 flex flex-col overflow-hidden bg-surface shadow-[-12px_0_32px_rgba(0,0,0,0.28)] lg:static lg:inset-auto lg:z-auto lg:flex-1 lg:flex-[2] lg:rounded-lg lg:border lg:border-gray-200 lg:shadow-sm"
+        >
           <FeedDetail 
-            feed={selectedFeed} 
-            onClose={() => {
-              setSelectedFeed(null);
-              navigate('/');
-            }}
+            feed={detailFeed}
+            slidesIn={panelSlides}
+            holdContent={!panelSettled}
+            onClose={closePanel}
             onFeedDeleted={() => {
-              setSelectedFeed(null);
               navigate('/');
               refetch();
             }}
@@ -269,42 +410,56 @@ export default function HomePage() {
       )}
 
       {/* Empty State for Desktop */}
-      {!selectedFeed && !feedNotFound && (
-        <div className="hidden lg:flex flex-[2] items-center justify-center bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-          <div className="text-center">
-            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-            </svg>
-            <h3 className="mt-2 text-sm font-medium text-gray-900">No podcast selected</h3>
-            <p className="mt-1 text-sm text-gray-500">Select a podcast from the list to view details and episodes.</p>
-          </div>
+      {!selectedFeed && !feedNotFound && feeds && (
+        <div className="hidden lg:flex flex-[2] flex-col items-start gap-4 self-start rounded-lg border border-gray-200 bg-surface p-6 shadow-sm">
+          {feeds.length === 0 ? (
+            <>
+              <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-sky-50 to-sky-100 text-sky-700" aria-hidden="true">
+                <RssIcon className="h-5 w-5" />
+              </span>
+              <h2 className="text-lg font-semibold text-gray-900">No podcasts yet</h2>
+              <p className="text-sm text-gray-600">Add a feed to start removing ads from your shows.</p>
+              <button type="button" onClick={handleAddFeedClick} className="btn btn-primary">
+                <PlusIcon className="w-4 h-4" />
+                Add feed
+              </button>
+            </>
+          ) : (
+            <>
+              <h2 className="text-lg font-semibold text-gray-900">Select a podcast to see its episodes</h2>
+              <p className="text-sm text-gray-600">
+                <span className="tabular-nums">{feeds.length}</span>{' '}
+                {feeds.length === 1 ? 'podcast' : 'podcasts'},{' '}
+                <span className="tabular-nums">
+                  {feeds.reduce((sum, feed) => sum + (feed.posts_count ?? 0), 0).toLocaleString()}
+                </span>{' '}
+                episodes in total
+              </p>
+              <button type="button" onClick={handleCopyAggregateLink} className="btn btn-secondary">
+                <LinkIcon className="w-4 h-4" />
+                Copy combined RSS link
+              </button>
+            </>
+          )}
         </div>
       )}
 
       {feedNotFound && (
-        <div className="hidden lg:flex flex-[2] items-center justify-center bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-          <div className="text-center">
-            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <h3 className="mt-2 text-sm font-medium text-gray-900">Feed not found</h3>
-            <p className="mt-1 text-sm text-gray-500">Pick a feed from the list to continue.</p>
-          </div>
+        <div className="hidden lg:flex flex-[2] flex-col items-start gap-1 self-start rounded-lg border border-gray-200 bg-surface p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-gray-900">Feed not found</h2>
+          <p className="text-sm text-gray-600">Pick a feed from the list to continue.</p>
         </div>
       )}
 
-      {showAddForm && (
-        <div
-          className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4 sm:p-6"
-          onClick={() => setShowAddForm(false)}
-        >
-          <div
-            className="w-full max-w-3xl bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col max-h-[90vh]"
-            onClick={(event) => event.stopPropagation()}
-          >
+      <ModalShell
+        isOpen={showAddForm}
+        onClose={() => setShowAddForm(false)}
+        containerClassName="items-start p-4 sm:items-center sm:p-6"
+        panelClassName="w-full max-w-3xl bg-surface rounded-lg shadow-2xl border border-gray-200 flex flex-col max-h-[90vh]"
+      >
             <div className="flex items-center justify-between border-b border-gray-200 px-4 sm:px-6 py-4">
               <div>
-                <h2 className="text-xl sm:text-2xl font-semibold text-gray-900">Add a Podcast Feed</h2>
+                <h2 className="text-xl sm:text-2xl font-semibold text-gray-900">Add a podcast feed</h2>
                 <p className="text-sm text-gray-500 mt-1">
                   Paste an RSS URL or search the catalog to find shows to follow.
                 </p>
@@ -314,9 +469,7 @@ export default function HomePage() {
                 className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
                 aria-label="Close add feed modal"
               >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <CloseIcon className="w-6 h-6" />
               </button>
             </div>
 
@@ -331,9 +484,7 @@ export default function HomePage() {
                 planLimitReached={planLimitReached}
               />
             </div>
-          </div>
-        </div>
-      )}
+      </ModalShell>
     </div>
   );
 }

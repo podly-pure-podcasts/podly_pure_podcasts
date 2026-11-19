@@ -104,7 +104,7 @@ export default function DownloadButton({
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={handleDownloadClick}
-            className="shrink-0 px-3 py-1 text-xs rounded font-medium transition-colors bg-blue-600 text-white hover:bg-blue-700"
+            className="btn btn-primary btn-sm shrink-0"
             title="Download processed episode"
           >
             Download
@@ -142,7 +142,7 @@ export default function DownloadButton({
     <div className={`space-y-2 ${className}`}>
       <button
         onClick={handleDownloadClick}
-        className="px-3 py-1 text-xs rounded font-medium transition-colors border bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 hover:text-gray-900"
+        className="btn btn-primary btn-sm"
         title="Start processing episode"
       >
         Process

@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { feedsApi } from '../services/api';
 import { WHISPER_LANGUAGES } from '../constants/whisperLanguages';
+import ModalShell from './ModalShell';
+import { CloseIcon } from './icons';
 import type { Feed, FeedSettingsUpdate } from '../types';
 
 interface FeedSettingsModalProps {
@@ -148,13 +150,12 @@ export default function FeedSettingsModal({
         : 'Off';
   const isChapterFallbackLocked = strategy === 'chapter_insert';
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-
-      <div className="relative w-full max-w-md bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden">
+    <ModalShell
+      isOpen={isOpen}
+      onClose={onClose}
+      panelClassName="flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col bg-surface rounded-lg border border-gray-200 shadow-lg overflow-hidden"
+    >
         <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-gray-200">
           <div>
             <h2 className="text-base font-semibold text-gray-900">Feed Settings</h2>
@@ -165,15 +166,14 @@ export default function FeedSettingsModal({
           <button
             type="button"
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            aria-label="Close"
+            className="btn btn-ghost btn-icon btn-sm"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <CloseIcon className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="px-5 py-4 space-y-4">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Ad Detection Strategy
@@ -183,7 +183,7 @@ export default function FeedSettingsModal({
               onChange={(e) =>
                 setStrategy(e.target.value as 'llm' | 'chapter' | 'chapter_insert')
               }
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              className="w-full rounded-lg border border-gray-300 bg-surface px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
             >
               <option value="llm">LLM (AI-based)</option>
               <option value="chapter">Chapter-based</option>
@@ -209,7 +209,7 @@ export default function FeedSettingsModal({
                   onChange={(e) => setFilterStrings(e.target.value)}
                   placeholder="sponsor,advertisement,ad break"
                   rows={3}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  className="w-full rounded-lg border border-gray-300 bg-surface px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   Comma-separated list. Chapters containing any of these will be removed (case-insensitive).
@@ -225,7 +225,7 @@ export default function FeedSettingsModal({
             <select
               value={languageOverride}
               onChange={(e) => setLanguageOverride(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              className="w-full rounded-lg border border-gray-300 bg-surface px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
             >
               <option value="">Use global setting</option>
               {WHISPER_LANGUAGES.map((lang) => (
@@ -248,7 +248,7 @@ export default function FeedSettingsModal({
               onChange={(e) =>
                 setAutoWhitelistOverride(e.target.value as 'inherit' | 'on' | 'off')
               }
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
+              className="w-full rounded-lg border border-gray-300 bg-surface px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
             >
               <option value="inherit">
                 Use global setting ({autoWhitelistDefaultLabel})
@@ -273,7 +273,7 @@ export default function FeedSettingsModal({
                   e.target.value as 'inherit' | 'on' | 'off'
                 )
               }
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
+              className="w-full rounded-lg border border-gray-300 bg-surface px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
             >
               <option value="inherit">
                 Use global setting ({chapterFallbackGlobalDefaultLabel})
@@ -307,7 +307,7 @@ export default function FeedSettingsModal({
                   e.target.value as 'source' | 'podly'
                 )
               }
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              className="w-full rounded-lg border border-gray-300 bg-surface px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
             >
               <option value="source">Source description</option>
               <option value="podly">Podly description preview</option>
@@ -332,7 +332,7 @@ export default function FeedSettingsModal({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+            className="btn btn-secondary"
           >
             Cancel
           </button>
@@ -340,12 +340,11 @@ export default function FeedSettingsModal({
             type="button"
             onClick={handleSave}
             disabled={updateMutation.isPending}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            className="btn btn-primary"
           >
             {updateMutation.isPending ? 'Saving...' : 'Save'}
           </button>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }

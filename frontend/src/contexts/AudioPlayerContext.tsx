@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useReducer, useRef, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useReducer, useRef, useEffect, useCallback, useMemo } from 'react';
 import type { Episode } from '../types';
 import { feedsApi } from '../services/api';
+import { AudioTimeContext } from './AudioTimeContext';
 
 interface AudioPlayerState {
   currentEpisode: Episode | null;
@@ -12,7 +13,7 @@ interface AudioPlayerState {
   error: string | null;
 }
 
-interface AudioPlayerContextType extends AudioPlayerState {
+interface AudioPlayerContextType extends Omit<AudioPlayerState, 'currentTime'> {
   playEpisode: (episode: Episode) => void;
   togglePlayPause: () => void;
   seekTo: (time: number) => void;
@@ -66,30 +67,23 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   const [state, dispatch] = useReducer(audioPlayerReducer, initialState);
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  const playEpisode = (episode: Episode) => {
-    console.log('playEpisode called with:', episode);
-    console.log('Episode audio flags:', {
-      has_processed_audio: episode.has_processed_audio,
-      has_unprocessed_audio: episode.has_unprocessed_audio,
-      download_url: episode.download_url
-    });
+  // Lets stable callbacks and the keyboard handler read current state without re-binding.
+  const stateRef = useRef(state);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
+  const playEpisode = useCallback((episode: Episode) => {
     if (!episode.has_processed_audio) {
-      console.log('No processed audio available for episode');
       dispatch({ type: 'SET_ERROR', payload: 'Post needs to be processed first' });
       return;
     }
 
-    console.log('Setting episode and loading state');
     dispatch({ type: 'SET_EPISODE', payload: episode });
     dispatch({ type: 'SET_LOADING', payload: true });
-    
+
     if (audioRef.current) {
-      // Use the new API endpoint for audio
-      const audioUrl = feedsApi.getPostAudioUrl(episode.guid);
-      console.log('Using API audio URL:', audioUrl);
-      
-      audioRef.current.src = audioUrl;
+      audioRef.current.src = feedsApi.getPostAudioUrl(episode.guid);
       audioRef.current.load();
 
       // Start playback immediately so the first click both opens the player and plays audio.
@@ -97,15 +91,14 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
         dispatch({ type: 'SET_ERROR', payload: 'Failed to play audio' });
         console.error('Audio play error:', error);
       });
-    } else {
-      console.log('audioRef.current is null');
     }
-  };
+  }, []);
 
   const togglePlayPause = useCallback(() => {
-    if (!audioRef.current || !state.currentEpisode) return;
+    const { currentEpisode, isPlaying } = stateRef.current;
+    if (!audioRef.current || !currentEpisode) return;
 
-    if (state.isPlaying) {
+    if (isPlaying) {
       audioRef.current.pause();
     } else {
       audioRef.current.play().catch((error) => {
@@ -113,12 +106,13 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
         console.error('Audio play error:', error);
       });
     }
-  }, [state.isPlaying, state.currentEpisode]);
+  }, []);
 
   const seekTo = useCallback((time: number) => {
     if (audioRef.current) {
-      audioRef.current.currentTime = time;
-      dispatch({ type: 'SET_CURRENT_TIME', payload: time });
+      const targetTime = Math.max(0, Math.min(time, stateRef.current.duration || time));
+      audioRef.current.currentTime = targetTime;
+      dispatch({ type: 'SET_CURRENT_TIME', payload: targetTime });
     }
   }, []);
 
@@ -227,9 +221,10 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      const { currentEpisode, currentTime, duration, volume } = stateRef.current;
       // Only handle shortcuts when there's a current episode and not typing in an input
-      if (!state.currentEpisode || 
-          event.target instanceof HTMLInputElement || 
+      if (!currentEpisode ||
+          event.target instanceof HTMLInputElement ||
           event.target instanceof HTMLTextAreaElement) {
         return;
       }
@@ -241,39 +236,47 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
           break;
         case 'ArrowLeft':
           event.preventDefault();
-          seekTo(Math.max(0, state.currentTime - 10)); // Seek back 10 seconds
+          seekTo(Math.max(0, currentTime - 10));
           break;
         case 'ArrowRight':
           event.preventDefault();
-          seekTo(Math.min(state.duration, state.currentTime + 10)); // Seek forward 10 seconds
+          seekTo(Math.min(duration, currentTime + 10));
           break;
         case 'ArrowUp':
           event.preventDefault();
-          setVolume(Math.min(1, state.volume + 0.1)); // Volume up
+          setVolume(Math.min(1, volume + 0.1));
           break;
         case 'ArrowDown':
           event.preventDefault();
-          setVolume(Math.max(0, state.volume - 0.1)); // Volume down
+          setVolume(Math.max(0, volume - 0.1));
           break;
       }
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [state.currentEpisode, state.currentTime, state.duration, state.volume, togglePlayPause, seekTo, setVolume]);
+  }, [togglePlayPause, seekTo, setVolume]);
 
-  const contextValue: AudioPlayerContextType = {
-    ...state,
+  const { currentEpisode, isPlaying, duration, volume, isLoading, error, currentTime } = state;
+  const contextValue = useMemo<AudioPlayerContextType>(() => ({
+    currentEpisode,
+    isPlaying,
+    duration,
+    volume,
+    isLoading,
+    error,
     playEpisode,
     togglePlayPause,
     seekTo,
     setVolume,
     audioRef,
-  };
+  }), [currentEpisode, isPlaying, duration, volume, isLoading, error, playEpisode, togglePlayPause, seekTo, setVolume]);
 
   return (
     <AudioPlayerContext.Provider value={contextValue}>
-      {children}
+      <AudioTimeContext.Provider value={currentTime}>
+        {children}
+      </AudioTimeContext.Provider>
       <audio ref={audioRef} preload="metadata" />
     </AudioPlayerContext.Provider>
   );

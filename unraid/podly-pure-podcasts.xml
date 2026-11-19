@@ -1,0 +1,45 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>podly-pure-podcasts</Name>
+  <Repository>ghcr.io/podly-pure-podcasts/podly-pure-podcasts:latest</Repository>
+  <Registry>https://github.com/podly-pure-podcasts/podly_pure_podcasts/pkgs/container/podly-pure-podcasts</Registry>
+  <Network>bridge</Network>
+  <Shell>bash</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/podly-pure-podcasts/podly_pure_podcasts/issues</Support>
+  <Project>https://github.com/podly-pure-podcasts/podly_pure_podcasts</Project>
+  <ReadMe>https://github.com/podly-pure-podcasts/podly_pure_podcasts#readme</ReadMe>
+  <Discord>https://discord.gg/FRB98GtF6N</Discord>
+  <Overview>Podly removes ads from podcasts. For each new episode of a feed you add, it transcribes the audio with Whisper, has an LLM find the ad segments, cuts them out, and serves an ad-free RSS feed you can subscribe to in any podcast app.
+
+After the first start, open the web UI and choose your LLM and transcription providers on the Config page. A Groq API key is enough for both. The default image can also transcribe locally on the CPU; the lite tag leaves local Whisper out.
+
+With REQUIRE_AUTH=true (the default here), the admin account is created on first start from PODLY_ADMIN_USERNAME and PODLY_ADMIN_PASSWORD. Podcast apps then subscribe with the link from each feed's "Subscribe to Podly RSS" button, which carries its own token.
+
+NVIDIA GPU: change the tag to gpu-nvidia-amd64 and add --runtime=nvidia to Extra Parameters (needs the Nvidia Driver plugin).</Overview>
+  <Category>MediaServer:Other MediaApp:Other Downloaders: AI:</Category>
+  <WebUI>http://[IP]:[PORT:5001]/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/podly-pure-podcasts/podly_pure_podcasts/main/unraid/podly-pure-podcasts.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/podly-pure-podcasts/podly_pure_podcasts/main/frontend/public/images/logos/manifest-icon-512.maskable.png</Icon>
+  <ExtraSearchTerms>podcast ads adblock sponsor whisper llm rss</ExtraSearchTerms>
+  <Requires>An API key for an LLM provider (Groq, OpenAI, Anthropic, Gemini, or any OpenAI-compatible endpoint). Transcription can use the same Groq key, a remote Whisper API, or local Whisper on the CPU (default image only).</Requires>
+  <DonateText>Support Podly's development</DonateText>
+  <DonateLink>https://github.com/sponsors/jdrbc</DonateLink>
+  <Screenshot>https://raw.githubusercontent.com/podly-pure-podcasts/podly_pure_podcasts/main/docs/images/screenshot.png</Screenshot>
+  <License>MIT</License>
+  <DefaultTagDescription>Full image, including local Whisper (CPU)</DefaultTagDescription>
+  <Branch>
+    <Tag>lite</Tag>
+    <TagDescription>Smaller image without local Whisper. Transcribe with Groq or a remote Whisper API.</TagDescription>
+  </Branch>
+  <Config Name="WebUI" Target="5001" Default="5001" Mode="tcp" Description="Web UI and RSS feeds." Type="Port" Display="always" Required="true" Mask="false">5001</Config>
+  <Config Name="Appdata" Target="/app/src/instance" Default="/mnt/user/appdata/podly-pure-podcasts" Mode="rw" Description="Database, settings, custom prompts, logs and processed audio." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/podly-pure-podcasts</Config>
+  <Config Name="REQUIRE_AUTH" Target="REQUIRE_AUTH" Default="true|false" Mode="" Description="Require a login for the web UI. Podcast apps then use the tokenised link from each feed's Subscribe to Podly RSS button." Type="Variable" Display="always" Required="true" Mask="false">true</Config>
+  <Config Name="PODLY_ADMIN_USERNAME" Target="PODLY_ADMIN_USERNAME" Default="podly_admin" Mode="" Description="Admin account created on first start when REQUIRE_AUTH is true." Type="Variable" Display="always" Required="true" Mask="false">podly_admin</Config>
+  <Config Name="PODLY_ADMIN_PASSWORD" Target="PODLY_ADMIN_PASSWORD" Default="" Mode="" Description="Password for that admin. Required when REQUIRE_AUTH is true: the container will not start without it. It is only used to create the admin on an empty database; change it later in the web UI." Type="Variable" Display="always" Required="true" Mask="true"></Config>
+  <Config Name="PODLY_SECRET_KEY" Target="PODLY_SECRET_KEY" Default="" Mode="" Description="Session signing key. Set a long random string (for example from: openssl rand -hex 32). Left empty, a new key is generated at every start and everyone is logged out." Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
+  <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="User ID the app runs as." Type="Variable" Display="advanced" Required="false" Mask="false">99</Config>
+  <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="Group ID the app runs as." Type="Variable" Display="advanced" Required="false" Mask="false">100</Config>
+  <Config Name="SERVER_THREADS" Target="SERVER_THREADS" Default="1" Mode="" Description="Web server worker threads." Type="Variable" Display="advanced" Required="false" Mask="false">1</Config>
+  <Config Name="PODLY_TRUSTED_PROXY" Target="PODLY_TRUSTED_PROXY" Default="" Mode="" Description="Behind an HTTPS reverse proxy: the proxy's exact IPv4 address as Podly sees it, so feed links use https. Leave empty otherwise. Never use a Docker bridge gateway address that clients of a published port also appear as." Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
+</Container>

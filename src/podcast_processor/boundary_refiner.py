@@ -6,15 +6,24 @@ Note: We intentionally share some call-setup patterns with WordBoundaryRefiner.
 import json
 import logging
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import litellm
 from jinja2 import Template
 
 from app.writer.client import writer_client
+from podcast_processor.llm_model_call_utils import (
+    apply_service_tier,
+    call_litellm_with_tier_retry,
+    extract_litellm_usage,
+    record_service_tier_on_model_call,
+    try_update_model_call,
+)
+from podcast_processor.token_rate_limiter import TokenRateLimiter
 from shared.config import Config
+from shared.llm_utils import normalize_completion_args_for_model
 
 # Internal defaults for boundary expansion; not user-configurable.
 MAX_START_EXTENSION_SECONDS = 30.0
@@ -30,10 +39,28 @@ class BoundaryRefinement:
 
 
 class BoundaryRefiner:
-    def __init__(self, config: Config, logger: logging.Logger | None = None):
+    def __init__(
+        self,
+        config: Config,
+        logger: logging.Logger | None = None,
+        token_limiter: TokenRateLimiter | None = None,
+    ):
         self.config = config
         self.logger = logger or logging.getLogger(__name__)
+        self.token_limiter = token_limiter
         self.template = self._load_template()
+
+    def _pace_request(
+        self, completion_args: dict[str, Any]
+    ) -> Callable[[], None] | None:
+        """Wait for the classifier's token budget before each provider request."""
+        limiter = self.token_limiter
+        if limiter is None:
+            return None
+        return lambda: limiter.wait_if_needed(
+            completion_args["messages"],
+            completion_args.get("model", self.config.llm_model),
+        )
 
     def _load_template(self) -> Template:
         path = (
@@ -90,6 +117,8 @@ Return JSON: {"refined_start": {{ad_start}}, "refined_end": {{ad_end}}, "start_r
 
         model_call_id: int | None = None
         raw_response: str | None = None
+        usage: dict[str, int | None] | None = None
+        effective_service_tier: str | None = None
 
         # Record the intent to call the LLM when we have enough context to do so
         if (
@@ -119,15 +148,32 @@ Return JSON: {"refined_start": {{ad_start}}, "refined_end": {{ad_end}}, "start_r
                 )
 
         try:
-            response = litellm.completion(
-                model=self.config.llm_model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.1,
-                max_tokens=4096,
-                timeout=self.config.openai_timeout,
-                api_key=self.config.llm_api_key,
-                base_url=self.config.openai_base_url,
+            completion_args: dict[str, Any] = {
+                "model": self.config.llm_model,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.1,
+                "max_tokens": 4096,
+                "timeout": self.config.openai_timeout,
+                "api_key": self.config.llm_api_key,
+                "base_url": self.config.openai_base_url,
+            }
+            normalize_completion_args_for_model(completion_args)
+            apply_service_tier(completion_args, self.config)
+            record_service_tier_on_model_call(
+                model_call_id,
+                completion_args,
+                logger=self.logger,
+                log_prefix="Boundary refine",
             )
+            response = call_litellm_with_tier_retry(
+                completion_args,
+                config=self.config,
+                logger=self.logger,
+                model_call_id=model_call_id,
+                before_attempt=self._pace_request(completion_args),
+            )
+            effective_service_tier = completion_args.get("service_tier")
+            usage = extract_litellm_usage(response)
 
             choice = response.choices[0] if response.choices else None
             content = ""
@@ -173,6 +219,8 @@ Return JSON: {"refined_start": {{ad_start}}, "refined_end": {{ad_end}}, "start_r
                 status="received_response",
                 response=raw_response,
                 error_message=None,
+                usage=usage,
+                service_tier=effective_service_tier,
             )
             # Parse JSON (strip markdown fences). Log parse diagnostics so failures are actionable.
             cleaned = re.sub(r"```json|```", "", content.strip())
@@ -189,11 +237,10 @@ Return JSON: {"refined_start": {{ad_start}}, "refined_end": {{ad_end}}, "start_r
                 ) as exc:  # capture the last parse error for logging
                     parse_error = str(exc)
 
+            proposal: BoundaryRefinement | None = None
             if parsed:
-                refined = self._validate(
-                    ad_start,
-                    ad_end,
-                    BoundaryRefinement(
+                try:
+                    proposal = BoundaryRefinement(
                         refined_start=float(parsed["refined_start"]),
                         refined_end=float(parsed["refined_end"]),
                         start_adjustment_reason=parsed.get(
@@ -202,13 +249,21 @@ Return JSON: {"refined_start": {{ad_start}}, "refined_end": {{ad_end}}, "start_r
                         end_adjustment_reason=parsed.get(
                             "end_adjustment_reason", parsed.get("end_reason", "")
                         ),
-                    ),
-                )
+                    )
+                except (KeyError, TypeError, ValueError) as exc:
+                    # Valid JSON without usable fields is still a paid reply:
+                    # take the heuristic path below so its usage is recorded.
+                    parse_error = f"invalid refinement fields: {exc!r}"
+
+            if proposal is not None:
+                refined = self._validate(ad_start, ad_end, proposal)
                 self._update_model_call(
                     model_call_id,
                     status="success",
                     response=raw_response,
                     error_message=None,
+                    usage=usage,
+                    service_tier=effective_service_tier,
                 )
                 self.logger.info(
                     "LLM refinement applied",
@@ -247,6 +302,8 @@ Return JSON: {"refined_start": {{ad_start}}, "refined_end": {{ad_end}}, "start_r
                 status="success_heuristic",
                 response=raw_response,
                 error_message=parse_error or "parse_failed",
+                usage=usage,
+                service_tier=effective_service_tier,
             )
         except Exception as e:  # noqa: BLE001
             self._update_model_call(
@@ -254,6 +311,8 @@ Return JSON: {"refined_start": {{ad_start}}, "refined_end": {{ad_end}}, "start_r
                 status="failed_permanent",
                 response=raw_response,
                 error_message=str(e),
+                usage=usage,
+                service_tier=effective_service_tier,
             )
             self.logger.warning(f"LLM refinement failed: {e}, using heuristic")
 
@@ -267,28 +326,21 @@ Return JSON: {"refined_start": {{ad_start}}, "refined_end": {{ad_end}}, "start_r
         status: str,
         response: str | None,
         error_message: str | None,
+        usage: dict[str, int | None] | None = None,
+        service_tier: str | None = None,
     ) -> None:
-        """Best-effort ModelCall updater; no-op if call creation failed."""
-        if model_call_id is None:
-            return
-        try:
-            writer_client.update(
-                "ModelCall",
-                int(model_call_id),
-                {
-                    "status": status,
-                    "response": response,
-                    "error_message": error_message,
-                    "retry_attempts": 1,
-                },
-                wait=True,
-            )
-        except Exception as exc:  # best-effort; do not block refinement  # noqa: BLE001
-            self.logger.warning(
-                "Boundary refine: failed to update ModelCall %s: %s",
-                model_call_id,
-                exc,
-            )
+        try_update_model_call(
+            model_call_id,
+            status=status,
+            response=response,
+            error_message=error_message,
+            logger=self.logger,
+            log_prefix="Boundary refine",
+            usage=usage,
+            model_name=getattr(self.config, "llm_model", None),
+            service_tier=service_tier,
+            prompt="boundary_refine",
+        )
 
     def _get_context(
         self, ad_start: float, ad_end: float, all_segments: list[dict[str, Any]]

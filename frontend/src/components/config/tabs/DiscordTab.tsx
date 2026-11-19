@@ -2,11 +2,11 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { discordApi } from '../../../services/api';
-import { Section } from '../shared';
+import { Section, Field, ToggleField } from '../shared';
 
 export default function DiscordTab() {
   const queryClient = useQueryClient();
-  
+
   const { data, isLoading, error } = useQuery({
     queryKey: ['discord-config'],
     queryFn: discordApi.getConfig,
@@ -22,12 +22,11 @@ export default function DiscordTab() {
 
   const [hasSecretChange, setHasSecretChange] = useState(false);
 
-  // Initialize form when data loads
   useEffect(() => {
     if (data?.config) {
       setForm({
         client_id: data.config.client_id || '',
-        client_secret: '', // Don't prefill secret
+        client_secret: '', // never prefilled
         redirect_uri: data.config.redirect_uri || '',
         guild_ids: data.config.guild_ids || '',
         allow_registration: data.config.allow_registration,
@@ -45,13 +44,15 @@ export default function DiscordTab() {
       setHasSecretChange(false);
     },
     onError: (err: Error) => {
-      toast.error(`Failed to save: ${err.message}`);
+      toast.error(
+        `Could not save Discord settings: ${err.message}. Check the values and try again.`
+      );
     },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const payload: Record<string, unknown> = {
       client_id: form.client_id,
       redirect_uri: form.redirect_uri,
@@ -70,28 +71,25 @@ export default function DiscordTab() {
   const envOverrides = data?.env_overrides || {};
 
   if (isLoading) {
-    return <div className="text-sm text-gray-600">Loading Discord configuration...</div>;
+    return <div className="text-sm text-gray-600">Loading Discord settings…</div>;
   }
 
   if (error) {
-    return <div className="text-sm text-red-600">Failed to load Discord configuration</div>;
+    return (
+      <div className="text-sm text-red-600">
+        Could not load Discord settings. Reload the page, or check the server log if it keeps
+        failing.
+      </div>
+    );
   }
 
   return (
     <div className="space-y-6">
-      <Section title="Discord SSO Configuration">
+      <Section title="Sign-in with Discord">
         <StatusIndicator enabled={data?.config.enabled ?? false} />
-        
-        <form onSubmit={handleSubmit} className="mt-6 space-y-4 max-w-xl">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Client ID
-              {envOverrides.client_id && (
-                <span className="ml-2 text-xs text-amber-600">
-                  (Overridden by {envOverrides.client_id.env_var})
-                </span>
-              )}
-            </label>
+
+        <form onSubmit={handleSubmit} className="max-w-xl space-y-5">
+          <Field label="Client ID" envMeta={envOverrides.client_id}>
             <input
               type="text"
               className="input"
@@ -100,21 +98,17 @@ export default function DiscordTab() {
               placeholder="Your Discord application Client ID"
               disabled={!!envOverrides.client_id}
             />
-          </div>
+          </Field>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Client Secret
-              {envOverrides.client_secret ? (
-                <span className="ml-2 text-xs text-amber-600">
-                  (Overridden by {envOverrides.client_secret.env_var})
-                </span>
-              ) : data?.config.client_secret_preview ? (
-                <span className="ml-2 text-xs text-gray-500">
-                  (Current: {data.config.client_secret_preview})
-                </span>
-              ) : null}
-            </label>
+          <Field
+            label="Client secret"
+            hint={
+              data?.config.client_secret_preview
+                ? `Current secret: ${data.config.client_secret_preview}. Leave blank to keep it.`
+                : undefined
+            }
+            envMeta={envOverrides.client_secret}
+          >
             <input
               type="password"
               className="input"
@@ -123,20 +117,20 @@ export default function DiscordTab() {
                 setForm({ ...form, client_secret: e.target.value });
                 setHasSecretChange(true);
               }}
-              placeholder={data?.config.client_secret_preview ? '••••••••' : 'Your Discord application Client Secret'}
+              placeholder={
+                data?.config.client_secret_preview
+                  ? '••••••••'
+                  : 'Your Discord application Client Secret'
+              }
               disabled={!!envOverrides.client_secret}
             />
-          </div>
+          </Field>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Redirect URI
-              {envOverrides.redirect_uri && (
-                <span className="ml-2 text-xs text-amber-600">
-                  (Overridden by {envOverrides.redirect_uri.env_var})
-                </span>
-              )}
-            </label>
+          <Field
+            label="Redirect URI"
+            hint="Must match the redirect URI in the Discord Developer Portal."
+            envMeta={envOverrides.redirect_uri}
+          >
             <input
               type="url"
               className="input"
@@ -145,20 +139,13 @@ export default function DiscordTab() {
               placeholder="https://your-domain.com/api/auth/discord/callback"
               disabled={!!envOverrides.redirect_uri}
             />
-            <p className="text-xs text-gray-500 mt-1">
-              Must match the URI configured in Discord Developer Portal
-            </p>
-          </div>
+          </Field>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Guild IDs (optional)
-              {envOverrides.guild_ids && (
-                <span className="ml-2 text-xs text-amber-600">
-                  (Overridden by {envOverrides.guild_ids.env_var})
-                </span>
-              )}
-            </label>
+          <Field
+            label="Guild IDs (optional)"
+            hint="Comma-separated Discord server IDs to restrict access to."
+            envMeta={envOverrides.guild_ids}
+          >
             <input
               type="text"
               className="input"
@@ -167,48 +154,27 @@ export default function DiscordTab() {
               placeholder="123456789,987654321"
               disabled={!!envOverrides.guild_ids}
             />
-            <p className="text-xs text-gray-500 mt-1">
-              Comma-separated Discord server IDs to restrict access
-            </p>
-          </div>
+          </Field>
+
+          <ToggleField
+            label="Allow new users to register with Discord"
+            checked={form.allow_registration}
+            onChange={(checked) => setForm({ ...form, allow_registration: checked })}
+            disabled={!!envOverrides.allow_registration}
+            envMeta={envOverrides.allow_registration}
+          />
 
           <div>
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={form.allow_registration}
-                onChange={(e) => setForm({ ...form, allow_registration: e.target.checked })}
-                disabled={!!envOverrides.allow_registration}
-                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-              />
-              <span className="text-sm text-gray-700">
-                Allow new users to register via Discord
-              </span>
-            </label>
-            {envOverrides.allow_registration && (
-              <p className="text-xs text-amber-600 mt-1 ml-6">
-                Overridden by {envOverrides.allow_registration.env_var}
-              </p>
-            )}
-          </div>
-
-          <div className="pt-4">
-            <button
-              type="submit"
-              disabled={mutation.isPending}
-              className="px-4 py-2 rounded bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-60"
-            >
-              {mutation.isPending ? 'Saving...' : 'Save Discord Settings'}
+            <button type="submit" disabled={mutation.isPending} className="btn btn-primary">
+              {mutation.isPending ? 'Saving…' : 'Save changes'}
             </button>
           </div>
         </form>
       </Section>
 
-      <Section title="Setup Instructions">
+      <Section title="Setup steps">
         <SetupInstructions />
       </Section>
-      
-      <style>{`.input{width:100%;padding:0.5rem;border:1px solid #e5e7eb;border-radius:0.375rem;font-size:0.875rem}`}</style>
     </div>
   );
 }
@@ -216,13 +182,9 @@ export default function DiscordTab() {
 function StatusIndicator({ enabled }: { enabled: boolean }) {
   return (
     <div className="flex items-center gap-3">
-      <div
-        className={`w-3 h-3 rounded-full ${
-          enabled ? 'bg-green-500' : 'bg-gray-300'
-        }`}
-      />
+      <div className={`h-3 w-3 rounded-full ${enabled ? 'bg-green-500' : 'bg-gray-300'}`} />
       <span className="text-sm font-medium text-gray-900">
-        {enabled ? 'Discord SSO is enabled' : 'Discord SSO is not configured'}
+        {enabled ? 'Discord sign-in is enabled' : 'Discord sign-in is not configured'}
       </span>
     </div>
   );
@@ -230,35 +192,33 @@ function StatusIndicator({ enabled }: { enabled: boolean }) {
 
 function SetupInstructions() {
   return (
-    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-4">
-      <h4 className="text-sm font-medium text-gray-900">
-        Discord Developer Portal Setup
-      </h4>
-      <ol className="text-sm text-gray-600 list-decimal list-inside space-y-2">
+    <div className="space-y-3 text-sm text-gray-700">
+      <ol className="list-decimal space-y-1.5 pl-5">
         <li>
-          Go to{' '}
+          Open the{' '}
           <a
             href="https://discord.com/developers/applications"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-indigo-600 hover:text-indigo-800 underline"
+            className="text-blue-700 underline hover:text-blue-800"
           >
             Discord Developer Portal
-          </a>
+          </a>{' '}
+          and create an application, or pick an existing one.
         </li>
-        <li>Create a new application or select an existing one</li>
-        <li>Navigate to <strong>OAuth2 → General</strong></li>
-        <li>Copy the <strong>Client ID</strong> and <strong>Client Secret</strong></li>
-        <li>Add your redirect URI to the list of allowed redirects</li>
-        <li>The redirect URI should be: <code className="bg-gray-100 px-1 rounded text-xs">https://your-domain/api/auth/discord/callback</code></li>
+        <li>
+          Go to <strong>OAuth2 → General</strong> and copy the <strong>Client ID</strong> and{' '}
+          <strong>Client Secret</strong> into the form above.
+        </li>
+        <li>
+          Add <code>https://your-domain/api/auth/discord/callback</code> (with your own
+          domain) as a redirect, and enter the same URI above.
+        </li>
       </ol>
-      
-      <div className="pt-2 border-t border-gray-200">
-        <p className="text-xs text-gray-500">
-          <strong>Note:</strong> Environment variables (DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET, etc.) 
-          take precedence over values configured here.
-        </p>
-      </div>
+      <p className="text-xs text-gray-600">
+        Environment variables (DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET and so on) take
+        precedence over values saved here.
+      </p>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 export { default as Section } from './Section';
 export { default as Field } from './Field';
+export { default as ToggleField } from './ToggleField';
 export { default as EnvVarHint } from './EnvVarHint';
 export { default as EnvOverrideWarningModal } from './EnvOverrideWarningModal';
 export { default as ConnectionStatusCard } from './ConnectionStatusCard';

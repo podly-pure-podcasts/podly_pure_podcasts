@@ -1,0 +1,159 @@
+name: Smoke Test
+
+# Runs only when the "smoke-test" label is added to a pull request, or by hand.
+# Podly runs directly on the runner against frontend/smoke/mock-providers.mjs,
+# so no secrets are needed and fork pull requests work.
+on:
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: smoke-test-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'smoke-test'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      LLM_API_KEY: smoke-mock
+      LLM_MODEL: gpt-4o-mini
+      OPENAI_BASE_URL: http://127.0.0.1:5098/v1
+      WHISPER_TYPE: remote
+      WHISPER_REMOTE_API_KEY: smoke-mock
+      WHISPER_REMOTE_BASE_URL: http://127.0.0.1:5098/v1
+      WHISPER_REMOTE_MODEL: whisper-1
+      REQUIRE_AUTH: "true"
+      PODLY_ADMIN_USERNAME: admin
+      # Throwaway instance reachable only from the runner.
+      PODLY_ADMIN_PASSWORD: smoke-test-password
+      PODLY_SECRET_KEY: smoke-test-secret-key
+      PODLY_INSTANCE_DIR: ${{ github.workspace }}/src/instance
+      PORT: "5001"
+      # Podly's URL check rejects "localhost".
+      SMOKE_FEED_URL: http://127.0.0.1:5098/feed.xml
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lite.lock"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Python dependencies (lite)
+        run: |
+          cp pyproject.lite.toml pyproject.toml
+          cp uv.lite.lock uv.lock
+          uv sync --frozen --no-dev --no-install-project
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+          cp -r dist/. ../src/app/static/
+
+      - name: Install Chromium and ffmpeg
+        working-directory: frontend
+        run: |
+          npx playwright install --with-deps --only-shell chromium
+          sudo apt-get install -y --no-install-recommends ffmpeg
+
+      - name: Start mock providers
+        working-directory: frontend
+        run: |
+          nohup node smoke/mock-providers.mjs > ../mock.log 2>&1 &
+          timeout 30 bash -c 'until curl -sf -o /dev/null http://127.0.0.1:5098/feed.xml; do sleep 1; done'
+
+      - name: Start Podly
+        run: |
+          mkdir -p src/instance/logs
+          export PATH="$PWD/.venv/bin:$PATH"
+          PYTHONPATH=src nohup python -u -m app.writer > writer.log 2>&1 &
+          timeout 120 bash -c 'until (echo > /dev/tcp/127.0.0.1/50001) 2>/dev/null; do sleep 0.5; done'
+          nohup python -u src/main.py > app.log 2>&1 &
+          timeout 120 bash -c 'until curl -sf -o /dev/null http://127.0.0.1:5001/; do sleep 1; done'
+
+      - name: Walkthrough
+        working-directory: frontend
+        run: npm run smoke -- http://127.0.0.1:5001 ../smoke-output
+
+      - name: Enable and process
+        working-directory: frontend
+        run: npm run smoke:enable -- http://127.0.0.1:5001 ../smoke-output
+
+      - name: Check the cuts
+        run: |
+          expected='Joined ad segments into: [(88.0, 132.0), (242.0, 275.0)]'
+          grep 'Joined ad segments into' src/instance/logs/app.log
+          test "$(grep -cF "$expected" src/instance/logs/app.log)" -eq 2
+
+      # A fixed set of files for smoke-report.yml, which posts them on the PR.
+      # That workflow treats everything here as untrusted.
+      - name: Prepare PR report
+        if: always() && github.event_name == 'pull_request'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          mkdir -p smoke-report
+          echo "$PR_NUMBER" > smoke-report/pr-number
+          pick() { f=$(compgen -G "smoke-output/$1" | head -1); if [ -n "$f" ]; then cp "$f" "smoke-report/$2"; fi; }
+          pick 'video/*.webm' walkthrough.webm
+          pick 'video-manual/*.webm' enable-and-process.webm
+          pick '*-episode-processed.jpg' feed.jpg
+          pick '*-stats-overview.jpg' stats-overview.jpg
+          pick '*-stats-model.jpg' stats-model-calls.jpg
+          pick '*-settings-llm.jpg' settings.jpg
+          pick 'manual-*-enable-confirm.jpg' enable-confirm.jpg
+          pick '*-phone-feed.jpg' phone.jpg
+          pick '[0-9][0-9]-failure.jpg' walkthrough-failure.jpg
+          pick '*-phone-failure.jpg' phone-failure.jpg
+          pick 'manual-*-failure.jpg' enable-failure.jpg
+          grep -h 'Joined ad segments into' src/instance/logs/app.log > smoke-report/cuts.txt || true
+          if [ -f smoke-report/walkthrough.webm ]; then
+            ffmpeg -v error -i smoke-report/walkthrough.webm \
+              -vf "setpts=PTS/4,fps=8,scale=640:-1:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" \
+              smoke-report/walkthrough.gif || true
+          fi
+          ls -la smoke-report
+
+      - name: Upload PR report
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-report
+          path: smoke-report/
+          retention-days: 3
+
+      - name: Upload screenshots, video and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-output
+          path: |
+            smoke-output/
+            src/instance/logs/app.log
+            writer.log
+            app.log
+            mock.log
+          retention-days: 7

@@ -12,7 +12,8 @@ from app.extensions import scheduler
 from app.feeds import refresh_feed
 from app.guid_urls import post_download_api_path
 from app.job_manager import JobManager as SingleJobManager
-from app.models import Feed, JobsManagerRun, Post, ProcessingJob
+from app.model_call_utils import whisper_model_call_filter
+from app.models import Feed, JobsManagerRun, ModelCall, Post, ProcessingJob
 from app.processor import get_processor
 from app.writer.client import writer_client
 from podcast_processor.podcast_processor import ProcessorException
@@ -27,6 +28,55 @@ def _scheduler_app_context() -> Any:
     if scheduler_app is None:
         raise RuntimeError("Scheduler app is not initialized")
     return scheduler_app.app_context()
+
+
+def _summarize_service_tiers_for_posts(
+    post_ids: list[int],
+) -> dict[int, dict[str, Any]]:
+    """Return {post_id: {label, latest, mixed}} for posts with LLM calls at a
+    non-default tier.
+
+    Standard-tier calls store a NULL tier, so a finished NULL-tier call counts
+    as "default"; that is what lets a Flex call followed by a standard fallback
+    show as mixed. Whisper rows are not LLM calls and are ignored.
+    """
+    if not post_ids:
+        return {}
+    rows = (
+        ModelCall.query.with_entities(
+            ModelCall.post_id,
+            ModelCall.service_tier,
+            ModelCall.status,
+        )
+        .filter(ModelCall.post_id.in_(post_ids), ~whisper_model_call_filter())
+        .order_by(ModelCall.timestamp.desc(), ModelCall.id.desc())
+        .all()
+    )
+    tiers_by_post: dict[int, list[str]] = {}
+    for post_id, tier, status in rows:
+        if tier is not None:
+            effective_tier = tier
+        elif (status or "").startswith("success"):
+            effective_tier = "default"
+        else:
+            continue
+        tiers_by_post.setdefault(post_id, []).append(effective_tier)
+
+    summaries: dict[int, dict[str, Any]] = {}
+    for post_id, tiers in tiers_by_post.items():
+        distinct = set(tiers)
+        if distinct == {"default"}:
+            continue
+        summaries[post_id] = {
+            "label": tiers[0],
+            "latest": tiers[0],
+            "mixed": len(distinct) > 1,
+        }
+    return summaries
+
+
+def _summarize_service_tier_for_post(post_id: int) -> dict[str, Any] | None:
+    return _summarize_service_tiers_for_posts([post_id]).get(post_id)
 
 
 class JobsManager:
@@ -265,6 +315,9 @@ class JobsManager:
                 "message": job.step_name
                 or f"Step {job.current_step} of {job.total_steps}",
             }
+            tier_info = _summarize_service_tier_for_post(post.id)
+            if tier_info is not None:
+                response["service_tier"] = tier_info
             if job.started_at:
                 response["started_at"] = job.started_at.isoformat()
             if job.status in {
@@ -326,32 +379,36 @@ class JobsManager:
                 .all()
             )
 
+            tier_by_post = _summarize_service_tiers_for_posts(
+                [post.id for _job, post, _prio in rows if post is not None]
+            )
             results: list[dict[str, Any]] = []
             for job, post, prio in rows:
-                results.append(
-                    {
-                        "job_id": job.id,
-                        "post_guid": job.post_guid,
-                        "post_title": post.title if post else None,
-                        "feed_title": post.feed.title if post and post.feed else None,
-                        "status": job.status,
-                        "priority": int(prio) if prio is not None else 0,
-                        "step": job.current_step,
-                        "step_name": job.step_name,
-                        "total_steps": job.total_steps,
-                        "progress_percentage": job.progress_percentage,
-                        "created_at": (
-                            job.created_at.isoformat() if job.created_at else None
-                        ),
-                        "started_at": (
-                            job.started_at.isoformat() if job.started_at else None
-                        ),
-                        "completed_at": (
-                            job.completed_at.isoformat() if job.completed_at else None
-                        ),
-                        "error_message": job.error_message,
-                    }
-                )
+                entry: dict[str, Any] = {
+                    "job_id": job.id,
+                    "post_guid": job.post_guid,
+                    "post_title": post.title if post else None,
+                    "feed_title": post.feed.title if post and post.feed else None,
+                    "status": job.status,
+                    "priority": int(prio) if prio is not None else 0,
+                    "step": job.current_step,
+                    "step_name": job.step_name,
+                    "total_steps": job.total_steps,
+                    "progress_percentage": job.progress_percentage,
+                    "created_at": (
+                        job.created_at.isoformat() if job.created_at else None
+                    ),
+                    "started_at": (
+                        job.started_at.isoformat() if job.started_at else None
+                    ),
+                    "completed_at": (
+                        job.completed_at.isoformat() if job.completed_at else None
+                    ),
+                    "error_message": job.error_message,
+                }
+                if post is not None and post.id in tier_by_post:
+                    entry["service_tier"] = tier_by_post[post.id]
+                results.append(entry)
 
             return results
 
@@ -372,32 +429,36 @@ class JobsManager:
                 .all()
             )
 
+            tier_by_post = _summarize_service_tiers_for_posts(
+                [post.id for _job, post, _prio in rows if post is not None]
+            )
             results: list[dict[str, Any]] = []
             for job, post, prio in rows:
-                results.append(
-                    {
-                        "job_id": job.id,
-                        "post_guid": job.post_guid,
-                        "post_title": post.title if post else None,
-                        "feed_title": post.feed.title if post and post.feed else None,
-                        "status": job.status,
-                        "priority": int(prio) if prio is not None else 0,
-                        "step": job.current_step,
-                        "step_name": job.step_name,
-                        "total_steps": job.total_steps,
-                        "progress_percentage": job.progress_percentage,
-                        "created_at": (
-                            job.created_at.isoformat() if job.created_at else None
-                        ),
-                        "started_at": (
-                            job.started_at.isoformat() if job.started_at else None
-                        ),
-                        "completed_at": (
-                            job.completed_at.isoformat() if job.completed_at else None
-                        ),
-                        "error_message": job.error_message,
-                    }
-                )
+                entry: dict[str, Any] = {
+                    "job_id": job.id,
+                    "post_guid": job.post_guid,
+                    "post_title": post.title if post else None,
+                    "feed_title": post.feed.title if post and post.feed else None,
+                    "status": job.status,
+                    "priority": int(prio) if prio is not None else 0,
+                    "step": job.current_step,
+                    "step_name": job.step_name,
+                    "total_steps": job.total_steps,
+                    "progress_percentage": job.progress_percentage,
+                    "created_at": (
+                        job.created_at.isoformat() if job.created_at else None
+                    ),
+                    "started_at": (
+                        job.started_at.isoformat() if job.started_at else None
+                    ),
+                    "completed_at": (
+                        job.completed_at.isoformat() if job.completed_at else None
+                    ),
+                    "error_message": job.error_message,
+                }
+                if post is not None and post.id in tier_by_post:
+                    entry["service_tier"] = tier_by_post[post.id]
+                results.append(entry)
 
             return results
 
@@ -633,22 +694,29 @@ class JobsManager:
         to prevent race conditions where multiple jobs could be dequeued before
         any is marked as running.
         """
+        # writer_client.action requires an active Flask app context. The
+        # worker loop runs in a daemon thread that has none by default, and
+        # every other writer_client.action call site in this file wraps in
+        # _scheduler_app_context() -- wrap here too so callers don't have to.
         try:
-            run_id = self._get_run_id()
-            result = writer_client.action("dequeue_job", {"run_id": run_id}, wait=True)
-
-            if result and result.success and result.data:
-                job_id = result.data["job_id"]
-                post_guid = result.data["post_guid"]
-
-                logger.info(
-                    "[JOB_DEQUEUE] Successfully dequeued and marked running: job_id=%s post_guid=%s",
-                    job_id,
-                    post_guid,
+            with _scheduler_app_context():
+                run_id = self._get_run_id()
+                result = writer_client.action(
+                    "dequeue_job", {"run_id": run_id}, wait=True
                 )
-                return job_id, post_guid
 
-            return None
+                if result and result.success and result.data:
+                    job_id = result.data["job_id"]
+                    post_guid = result.data["post_guid"]
+
+                    logger.info(
+                        "[JOB_DEQUEUE] Successfully dequeued and marked running: job_id=%s post_guid=%s",
+                        job_id,
+                        post_guid,
+                    )
+                    return job_id, post_guid
+
+                return None
         except Exception as e:  # noqa: BLE001
             logger.error(f"Error dequeuing job: {e}")
             return None

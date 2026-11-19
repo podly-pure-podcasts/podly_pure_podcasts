@@ -58,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           user: me.user,
           landingPageEnabled,
         });
-      } catch (error) {
+      } catch {
         setState({
           status: 'ready',
           requireAuth: true,

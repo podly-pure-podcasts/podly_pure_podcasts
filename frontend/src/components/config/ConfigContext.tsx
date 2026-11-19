@@ -4,6 +4,14 @@ import type { UseConfigStateReturn } from '../../hooks/useConfigState';
 export type ConfigTabId = 'default' | 'advanced' | 'users' | 'discord' | 'costs';
 export type AdvancedSubtab = 'llm' | 'whisper' | 'processing' | 'output' | 'app';
 
+export const ADVANCED_SUBTABS: { id: AdvancedSubtab; label: string }[] = [
+  { id: 'llm', label: 'LLM' },
+  { id: 'whisper', label: 'Transcription' },
+  { id: 'processing', label: 'Processing' },
+  { id: 'output', label: 'Audio output' },
+  { id: 'app', label: 'General' },
+];
+
 export interface ConfigContextValue extends UseConfigStateReturn {
   activeTab: ConfigTabId;
   setActiveTab: (tab: ConfigTabId) => void;

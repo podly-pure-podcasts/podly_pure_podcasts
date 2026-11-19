@@ -2,490 +2,258 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Palette variables (--canvas, --surface, --gray-*, status hues) are generated
+   by the plugin in tailwind.config.js for :root and html.dark. */
+
 @layer base {
   :root {
     color-scheme: light;
-    --podly-bg: rgb(249 250 251);
-    --podly-surface: rgb(255 255 255);
-    --podly-surface-muted: rgb(249 250 251);
-    --podly-surface-subtle: rgb(243 244 246);
-    --podly-surface-strong: rgb(229 231 235);
-    --podly-border-subtle: rgb(229 231 235);
-    --podly-border-strong: rgb(209 213 219);
-    --podly-text-strong: rgb(17 24 39);
-    --podly-text: rgb(55 65 81);
-    --podly-text-soft: rgb(75 85 99);
-    --podly-text-muted: rgb(107 114 128);
-    --podly-red-surface: rgb(127 29 29 / 0.28);
-    --podly-red-surface-strong: rgb(127 29 29 / 0.45);
-    --podly-red-border: rgb(220 38 38);
-    --podly-red-text: rgb(254 202 202);
-    --podly-amber-surface: rgb(120 53 15 / 0.32);
-    --podly-amber-surface-strong: rgb(120 53 15 / 0.45);
-    --podly-amber-border: rgb(217 119 6);
-    --podly-amber-text: rgb(253 230 138);
-    --podly-blue-surface: rgb(30 64 175 / 0.28);
-    --podly-blue-surface-strong: rgb(30 64 175 / 0.42);
-    --podly-blue-border: rgb(59 130 246);
-    --podly-blue-text: rgb(191 219 254);
-    --podly-green-surface: rgb(20 83 45 / 0.28);
-    --podly-green-surface-strong: rgb(20 83 45 / 0.42);
-    --podly-green-border: rgb(34 197 94);
-    --podly-green-text: rgb(187 247 208);
-    --podly-indigo-surface: rgb(67 56 202 / 0.25);
-    --podly-indigo-border: rgb(129 140 248);
-    --podly-indigo-text: rgb(224 231 255);
-    --podly-yellow-surface-strong: rgb(133 77 14 / 0.42);
-    --podly-yellow-border: rgb(234 179 8);
-    --podly-yellow-text: rgb(254 240 138);
-    --podly-purple-surface-strong: rgb(88 28 135 / 0.42);
-    --podly-purple-border: rgb(168 85 247);
-    --podly-purple-text: rgb(233 213 255);
   }
 
   html.dark {
     color-scheme: dark;
-    --podly-bg: rgb(4 10 24);
-    --podly-surface: rgb(15 23 42);
-    --podly-surface-muted: rgb(19 28 47);
-    --podly-surface-subtle: rgb(35 48 69);
-    --podly-surface-strong: rgb(49 63 86);
-    --podly-border-subtle: rgb(33 46 67);
-    --podly-border-strong: rgb(48 62 84);
-    --podly-text-strong: rgb(248 250 252);
-    --podly-text: rgb(226 232 240);
-    --podly-text-soft: rgb(214 223 236);
-    --podly-text-muted: rgb(167 180 198);
   }
 
   body {
-    background-color: var(--podly-bg);
-    color: var(--podly-text-strong);
-    transition: background-color 150ms ease, color 150ms ease;
+    background-color: rgb(var(--canvas));
+    color: rgb(var(--gray-900));
+    accent-color: theme('colors.accent.DEFAULT');
+  }
+
+  ::selection {
+    background-color: rgb(var(--blue-200));
+    color: rgb(var(--gray-900));
   }
 
   #root {
     background-color: inherit;
   }
 
-  html.dark *,
-  html.dark ::before,
-  html.dark ::after {
-    border-color: var(--podly-border-subtle);
+  /* Swapping the palette must not animate every surface separately. */
+  html.theme-switching *,
+  html.theme-switching *::before,
+  html.theme-switching *::after {
+    transition: none !important;
   }
 
-  html.dark input::placeholder,
-  html.dark textarea::placeholder {
-    color: var(--podly-text-muted);
+  ::-webkit-scrollbar {
+    width: 6px;
   }
 
-  html.dark select,
-  html.dark option {
-    color: var(--podly-text-strong);
+  ::-webkit-scrollbar-track {
+    background: rgb(var(--gray-100));
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgb(var(--gray-300));
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgb(var(--gray-400));
   }
 }
 
 @layer components {
-  html.dark [class~="border-transparent"] {
-    border-color: transparent !important;
+  /* Buttons: accent primary, near-black dark, bordered secondary, text-only ghost. Sizes: default 36px, .btn-sm 30px, .btn-icon square. */
+  .btn {
+    @apply inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2;
+    @apply disabled:cursor-not-allowed;
   }
 
-  html.dark [class~="bg-white"] {
-    background-color: var(--podly-surface) !important;
-  }
-
-  html.dark [class~="bg-white/80"] {
-    background-color: rgb(15 23 42 / 0.82) !important;
-  }
-
-  html.dark [class~="bg-gray-50"] {
-    background-color: var(--podly-surface-muted) !important;
-  }
-
-  html.dark [class~="bg-gray-50/60"] {
-    background-color: rgb(15 23 42 / 0.72) !important;
-  }
-
-  html.dark [class~="bg-gray-50/70"] {
-    background-color: rgb(15 23 42 / 0.82) !important;
-  }
-
-  html.dark [class~="bg-gray-100"] {
-    background-color: var(--podly-surface-subtle) !important;
-  }
-
-  html.dark [class~="bg-gray-200"] {
-    background-color: var(--podly-surface-strong) !important;
-  }
-
-  html.dark [class~="bg-gray-300"] {
-    background-color: rgb(71 85 105) !important;
-  }
-
-  html.dark [class~="from-gray-50"] {
-    --tw-gradient-from: rgb(2 6 23) var(--tw-gradient-from-position) !important;
-    --tw-gradient-to: rgb(2 6 23 / 0) var(--tw-gradient-to-position) !important;
-    --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
-  }
-
-  html.dark [class~="to-white"] {
-    --tw-gradient-to: rgb(15 23 42) var(--tw-gradient-to-position) !important;
-  }
-
-  html.dark [class~="border-gray-100"] {
-    border-color: var(--podly-border-subtle) !important;
-  }
-
-  html.dark [class~="border-gray-200"] {
-    border-color: var(--podly-border-strong) !important;
-  }
-
-  html.dark [class~="border-gray-300"] {
-    border-color: rgb(100 116 139) !important;
-  }
-
-  html.dark [class~="border-gray-400"] {
-    border-color: rgb(148 163 184) !important;
-  }
-
-  html.dark [class~="divide-gray-200"] > :not([hidden]) ~ :not([hidden]) {
-    border-color: var(--podly-border-strong) !important;
-  }
-
-  html.dark [class~="text-gray-900"] {
-    color: var(--podly-text-strong) !important;
-  }
-
-  html.dark [class~="text-gray-800"] {
-    color: var(--podly-text) !important;
-  }
-
-  html.dark [class~="text-gray-700"] {
-    color: var(--podly-text) !important;
-  }
-
-  html.dark [class~="text-gray-600"] {
-    color: var(--podly-text-soft) !important;
-  }
-
-  html.dark [class~="text-gray-500"] {
-    color: var(--podly-text-muted) !important;
-  }
-
-  html.dark [class~="text-gray-400"] {
-    color: var(--podly-text-muted) !important;
-  }
-
-  html.dark [class~="hover:text-gray-900"]:hover {
-    color: var(--podly-text-strong) !important;
-  }
-
-  html.dark [class~="hover:text-gray-800"]:hover {
-    color: var(--podly-text-strong) !important;
-  }
-
-  html.dark [class~="hover:text-gray-700"]:hover {
-    color: var(--podly-text) !important;
-  }
-
-  html.dark [class~="hover:text-gray-600"]:hover {
-    color: var(--podly-text-soft) !important;
-  }
-
-  html.dark [class~="hover:bg-gray-50"]:hover {
-    background-color: var(--podly-surface-subtle) !important;
-  }
-
-  html.dark [class~="hover:bg-gray-100"]:hover {
-    background-color: var(--podly-surface-subtle) !important;
-  }
-
-  html.dark [class~="hover:bg-gray-200"]:hover {
-    background-color: var(--podly-surface-strong) !important;
-  }
-
-  html.dark [class~="hover:bg-gray-300"]:hover {
-    background-color: rgb(100 116 139) !important;
-  }
-
-  html.dark [class~="hover:border-gray-300"]:hover {
-    border-color: rgb(100 116 139) !important;
-  }
-
-  html.dark [class~="hover:border-gray-400"]:hover {
-    border-color: rgb(148 163 184) !important;
-  }
-
-  html.dark [class~="disabled:bg-gray-100"]:disabled,
-  html.dark [class~="disabled:bg-gray-300"]:disabled {
-    background-color: var(--podly-surface-subtle) !important;
-  }
-
-  html.dark [class~="disabled:text-gray-500"]:disabled,
-  html.dark [class~="disabled:text-gray-400"]:disabled {
-    color: var(--podly-text-muted) !important;
-  }
-
-  html.dark [class~="disabled:border-gray-200"]:disabled {
-    border-color: var(--podly-border-strong) !important;
-  }
-
-  html.dark [class~="focus:border-blue-500"]:focus {
-    border-color: rgb(96 165 250) !important;
-  }
-
-  html.dark [class~="focus:ring-blue-200"]:focus {
-    --tw-ring-color: rgb(96 165 250 / 0.2) !important;
-  }
-
-  html.dark [class~="focus:ring-blue-500"]:focus {
-    --tw-ring-color: rgb(96 165 250 / 0.35) !important;
-  }
-
-  html.dark [class~="focus:ring-offset-2"]:focus,
-  html.dark [class~="focus-visible:ring-offset-2"]:focus-visible {
-    --tw-ring-offset-color: var(--podly-bg) !important;
-  }
-
-  html.dark [class~="placeholder:text-gray-500"]::placeholder {
-    color: var(--podly-text-muted) !important;
-  }
-
-  html.dark [class~="bg-red-50"] {
-    background-color: var(--podly-red-surface) !important;
-  }
-
-  html.dark [class~="bg-red-100"] {
-    background-color: var(--podly-red-surface-strong) !important;
-  }
-
-  html.dark [class~="border-red-200"] {
-    border-color: var(--podly-red-border) !important;
-  }
-
-  html.dark [class~="border-red-300"] {
-    border-color: rgb(248 113 113) !important;
-  }
-
-  html.dark [class~="text-red-800"],
-  html.dark [class~="text-red-700"],
-  html.dark [class~="text-red-600"] {
-    color: var(--podly-red-text) !important;
-  }
-
-  html.dark [class~="text-red-500"] {
-    color: rgb(252 165 165) !important;
-  }
-
-  html.dark [class~="hover:bg-red-50"]:hover {
-    background-color: var(--podly-red-surface-strong) !important;
-  }
-
-  html.dark [class~="hover:bg-red-100"]:hover {
-    background-color: rgb(127 29 29 / 0.56) !important;
-  }
-
-  html.dark [class~="bg-amber-50"] {
-    background-color: var(--podly-amber-surface) !important;
-  }
-
-  html.dark [class~="bg-amber-50/70"] {
-    background-color: var(--podly-amber-surface-strong) !important;
-  }
-
-  html.dark [class~="bg-amber-100"] {
-    background-color: var(--podly-amber-surface-strong) !important;
-  }
-
-  html.dark [class~="border-amber-100"] {
-    border-color: var(--podly-amber-border) !important;
-  }
-
-  html.dark [class~="border-amber-200"],
-  html.dark [class~="border-amber-300"] {
-    border-color: var(--podly-amber-border) !important;
-  }
-
-  html.dark [class~="text-amber-900"],
-  html.dark [class~="text-amber-800"],
-  html.dark [class~="text-amber-700"] {
-    color: var(--podly-amber-text) !important;
-  }
-
-  html.dark [class~="bg-blue-50"] {
-    background-color: var(--podly-blue-surface) !important;
-  }
-
-  html.dark [class~="bg-blue-50/60"] {
-    background-color: var(--podly-blue-surface-strong) !important;
-  }
-
-  html.dark [class~="bg-blue-100"] {
-    background-color: var(--podly-blue-surface-strong) !important;
-  }
-
-  html.dark [class~="border-blue-100"],
-  html.dark [class~="border-blue-200"],
-  html.dark [class~="border-blue-300"] {
-    border-color: var(--podly-blue-border) !important;
-  }
-
-  html.dark [class~="border-blue-400"] {
-    border-color: rgb(96 165 250) !important;
-  }
-
-  html.dark [class~="border-blue-500"] {
-    border-color: rgb(59 130 246) !important;
-  }
-
-  html.dark [class~="text-blue-900/90"],
-  html.dark [class~="text-blue-900"],
-  html.dark [class~="text-blue-800"],
-  html.dark [class~="text-blue-700"] {
-    color: var(--podly-blue-text) !important;
-  }
-
-  html.dark [class~="hover:bg-blue-50"]:hover {
-    background-color: var(--podly-blue-surface-strong) !important;
-  }
-
-  html.dark [class~="hover:border-blue-400"]:hover {
-    border-color: rgb(96 165 250) !important;
-  }
-
-  html.dark [class~="bg-green-50"] {
-    background-color: var(--podly-green-surface) !important;
-  }
-
-  html.dark [class~="bg-green-100"] {
-    background-color: var(--podly-green-surface-strong) !important;
-  }
+  /* On touch screens, controls drawn smaller than 44px get an invisible 44px
+     hit area centered on them; their drawn size is unchanged. Utilities such as
+     `absolute` still win over the `position` set here. */
+  @media (pointer: coarse) {
+    .btn,
+    .touch-target {
+      position: relative;
+    }
 
-  html.dark [class~="border-green-200"],
-  html.dark [class~="border-green-300"] {
-    border-color: var(--podly-green-border) !important;
+    .btn::after,
+    .touch-target::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: max(100%, 44px);
+      height: max(100%, 44px);
+      transform: translate(-50%, -50%);
+    }
   }
 
-  html.dark [class~="text-green-800"],
-  html.dark [class~="text-green-700"],
-  html.dark [class~="text-green-600"] {
-    color: var(--podly-green-text) !important;
+  .btn-sm {
+    @apply h-[30px] px-2.5 text-xs;
   }
 
-  html.dark [class~="bg-indigo-50"] {
-    background-color: var(--podly-indigo-surface) !important;
+  .btn-icon {
+    @apply w-9 px-0;
   }
 
-  html.dark [class~="border-indigo-200"] {
-    border-color: var(--podly-indigo-border) !important;
+  .btn-sm.btn-icon {
+    @apply w-[30px];
   }
 
-  html.dark [class~="text-indigo-900"],
-  html.dark [class~="text-indigo-800"],
-  html.dark [class~="text-indigo-700"] {
-    color: var(--podly-indigo-text) !important;
+  .btn-primary {
+    @apply bg-accent text-white hover:bg-accent-hover;
+    @apply disabled:bg-gray-200 disabled:text-gray-600;
   }
 
-  html.dark [class~="bg-yellow-100"] {
-    background-color: var(--podly-yellow-surface-strong) !important;
+  .btn-secondary {
+    @apply border border-gray-300 bg-surface text-gray-800 hover:bg-gray-50;
+    @apply disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-600;
   }
 
-  html.dark [class~="text-yellow-800"] {
-    color: var(--podly-yellow-text) !important;
+  .btn-ghost {
+    @apply text-gray-700 hover:bg-gray-100 hover:text-gray-900;
+    @apply disabled:text-gray-500 disabled:hover:bg-transparent;
   }
 
-  html.dark [class~="bg-purple-100"] {
-    background-color: var(--podly-purple-surface-strong) !important;
+  /* Near-black in both themes: the feed's Subscribe action. */
+  .btn-dark {
+    @apply bg-black text-white hover:bg-black/80;
+    @apply disabled:bg-gray-200 disabled:text-gray-600;
   }
 
-  html.dark [class~="text-purple-800"] {
-    color: var(--podly-purple-text) !important;
+  .btn-danger {
+    @apply bg-danger text-white hover:bg-danger-hover;
+    @apply disabled:bg-gray-200 disabled:text-gray-600;
   }
 
-  input.input,
-  select.input,
-  textarea.input {
-    width: 100%;
-    border-radius: 0.5rem;
-    border: 1px solid rgb(203 213 225);
-    background-color: rgb(255 255 255);
-    color: rgb(17 24 39);
-    padding: 0.625rem 0.75rem;
-    font-size: 0.875rem;
-    line-height: 1.25rem;
+  /* Single-class selector so utilities such as `pl-7` (currency adornments) win.
+     16px text below `sm` stops iOS Safari zooming the page on focus. */
+  .input {
+    @apply w-full rounded-md border border-gray-300 bg-surface px-3 py-2.5 text-base text-gray-900 sm:text-sm;
+    @apply placeholder:text-gray-500;
+    @apply focus:border-blue-500 focus:outline-none focus:ring-[3px] focus:ring-blue-500/20;
+    @apply disabled:cursor-not-allowed disabled:border-gray-300 disabled:bg-gray-100 disabled:text-gray-700 disabled:opacity-100;
     transition:
       border-color 150ms ease,
-      background-color 150ms ease,
-      color 150ms ease,
       box-shadow 150ms ease;
-  }
-
-  input.input::placeholder,
-  select.input::placeholder,
-  textarea.input::placeholder {
-    color: rgb(107 114 128);
-  }
-
-  input.input:focus,
-  select.input:focus,
-  textarea.input:focus {
-    outline: none;
-    border-color: rgb(59 130 246);
-    box-shadow: 0 0 0 3px rgb(59 130 246 / 0.18);
-  }
-
-  html.dark input.input,
-  html.dark select.input,
-  html.dark textarea.input {
-    border-color: rgb(71 85 105);
-    background-color: rgb(15 23 42);
-    color: rgb(241 245 249);
-  }
-
-  html.dark input.input::placeholder,
-  html.dark select.input::placeholder,
-  html.dark textarea.input::placeholder {
-    color: rgb(148 163 184);
-  }
-
-  html.dark input.input:focus,
-  html.dark select.input:focus,
-  html.dark textarea.input:focus {
-    border-color: rgb(96 165 250);
-    box-shadow: 0 0 0 3px rgb(96 165 250 / 0.2);
-  }
-
-  input.input:disabled,
-  select.input:disabled,
-  textarea.input:disabled {
-    cursor: not-allowed;
-    border-color: rgb(203 213 225);
-    background-color: rgb(241 245 249);
-    color: rgb(71 85 105);
     -webkit-text-fill-color: currentColor;
+  }
+
+  .podly-modal-backdrop {
+    opacity: 0;
+    background:
+      radial-gradient(circle at top, rgb(15 23 42 / 0.1), transparent 42%),
+      rgb(2 6 23 / 0.46);
+    backdrop-filter: blur(0px);
+    transition:
+      opacity 340ms ease,
+      backdrop-filter 380ms ease;
+  }
+
+  .podly-modal-backdrop[data-state='open'] {
     opacity: 1;
+    backdrop-filter: blur(4px);
   }
 
-  html.dark input.input:disabled,
-  html.dark select.input:disabled,
-  html.dark textarea.input:disabled {
-    border-color: rgb(71 85 105);
-    background-color: rgb(30 41 59);
-    color: rgb(203 213 225);
-    -webkit-text-fill-color: currentColor;
-    box-shadow: inset 0 0 0 1px rgb(51 65 85 / 0.75);
+  /* Opening pops with a slight overshoot; closing shrinks away without one.
+     Each state carries the transition used to arrive in it. */
+  .podly-modal-panel {
+    opacity: 0;
+    transform: translate3d(0, 16px, 0) scale(0.94);
+    transform-origin: center;
+    will-change: transform, opacity;
+    transition:
+      opacity 180ms ease,
+      transform 200ms cubic-bezier(0.4, 0, 1, 1);
+  }
+
+  .podly-modal-panel[data-state='open'] {
     opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    transition:
+      opacity 240ms ease,
+      transform 480ms cubic-bezier(0.34, 1.45, 0.64, 1);
   }
 
-  input.input:disabled::placeholder,
-  select.input:disabled::placeholder,
-  textarea.input:disabled::placeholder {
-    color: rgb(100 116 139);
+  .podly-tab-panel-enter {
+    animation: podly-tab-panel-enter 180ms ease-out;
   }
 
-  html.dark input.input:disabled::placeholder,
-  html.dark select.input:disabled::placeholder,
-  html.dark textarea.input:disabled::placeholder {
-    color: rgb(148 163 184);
+  /* The slide-and-unblur also covers the moment the page's data lands. */
+  .podly-page-transition {
+    opacity: 0;
+    transform: translate3d(22px, 0, 0);
+    filter: blur(10px);
+    will-change: opacity, transform, filter;
+    transition-property: opacity, transform, filter;
+    transition-duration: 320ms;
+    transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* A settled page carries no transform, filter or will-change: any of them
+     makes it the containing block for position:fixed descendants, which would
+     pin the phone feed panel to the scrolled page instead of the viewport. */
+  .podly-page-transition[data-state='open'] {
+    opacity: 1;
+    transform: none;
+    filter: none;
+    will-change: auto;
+  }
+
+  @keyframes podly-tab-panel-enter {
+    0% {
+      opacity: 0;
+      transform: translate3d(0, 6px, 0);
+    }
+
+    100% {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+}
+
+/* Press feedback on every control. Unlayered so per-button transition
+   utilities can't shorten it. A click holds :active for only ~50-80ms, so the
+   press is quick enough to finish within it and the release carries the
+   motion. `scale` composes with any transform utility on the element. */
+@media (prefers-reduced-motion: no-preference) {
+  button,
+  [role='button'] {
+    transition-property: color, background-color, border-color, text-decoration-color, fill,
+      stroke, opacity, box-shadow, transform, scale;
+    transition-duration: 360ms;
+    transition-timing-function: cubic-bezier(0.33, 1, 0.68, 1);
+  }
+
+  button:not(:disabled):active,
+  [role='button']:not([aria-disabled='true']):active {
+    scale: 0.96;
+    transition-duration: 80ms;
+    transition-timing-function: cubic-bezier(0.25, 0.1, 0.25, 1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .podly-modal-panel,
+  .podly-modal-panel[data-state='open'] {
+    transform: none;
+  }
+
+  .podly-tab-panel-enter {
+    animation: none;
+  }
+
+  .podly-modal-backdrop,
+  .podly-page-transition {
+    transition: none;
+    filter: none;
+  }
+
+  .animate-ping,
+  .animate-pulse,
+  .animate-digit-tick,
+  .animate-pop-in {
+    animation: none;
+  }
+
+  button:not(:disabled):active,
+  [role='button']:not([aria-disabled='true']):active {
+    scale: none;
   }
 }

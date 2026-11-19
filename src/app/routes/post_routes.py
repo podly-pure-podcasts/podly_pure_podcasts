@@ -58,6 +58,103 @@ logger = logging.getLogger("global_logger")
 post_bp = Blueprint("post", __name__)
 
 
+def _current_user_is_admin() -> bool:
+    current_user = getattr(g, "current_user", None)
+    if current_user is None:
+        return False
+
+    role = getattr(current_user, "role", None)
+    if role == "admin":
+        return True
+
+    user_id = getattr(current_user, "id", None)
+    if user_id is None:
+        return False
+
+    from app.models import User
+
+    user = db.session.get(User, int(user_id))
+    return bool(user and user.role == "admin")
+
+
+def _llm_costs_by_call_id(post_id: int) -> dict[int, float]:
+    """Map of ``ModelCall.id`` → persisted ``estimated_cost_usd`` for a post.
+
+    Whisper rows are priced by audio duration (computed elsewhere) and keep a
+    NULL column. Pure SQL, so it never imports litellm.
+    """
+    rows = (
+        db.session.query(ModelCall.id, ModelCall.estimated_cost_usd)
+        .filter(
+            ModelCall.post_id == post_id,
+            ModelCall.status.like("success%"),
+            ModelCall.estimated_cost_usd.isnot(None),
+        )
+        .all()
+    )
+    return {int(call_id): float(cost) for call_id, cost in rows}
+
+
+def _maybe_add_admin_cost_estimate(stats_data: dict[str, Any], post: Post) -> None:
+    """Populate ``processing_stats.estimated_cost`` and per-call costs.
+
+    Billable LLM rows use the persisted ``estimated_cost_usd``. Whisper rows
+    share ``whisper_cost_rate_per_hour * hours`` evenly across the post's
+    successful Whisper calls.
+    """
+    if not _current_user_is_admin():
+        return
+    processing_stats = stats_data.get("processing_stats")
+    if not isinstance(processing_stats, dict):
+        return
+
+    from app.config_store import read_combined
+    from app.llm_pricing import is_whisper_call
+
+    whisper_rate = float(
+        read_combined()
+        .get("app", {})
+        .get("whisper_cost_rate_per_hour", DEFAULTS.APP_WHISPER_COST_RATE_PER_HOUR)
+        or 0.0
+    )
+    transcript_end = (
+        db.session.query(db.func.max(TranscriptSegment.end_time))
+        .filter(TranscriptSegment.post_id == post.id)
+        .scalar()
+    )
+    # post.duration is the cut length; the transcript covers the full audio.
+    duration_hours = (
+        max(float(post.duration or 0.0), float(transcript_end or 0.0)) / 3600.0
+    )
+
+    calls = [c for c in stats_data.get("model_calls") or [] if isinstance(c, dict)]
+    whisper_success_count = sum(
+        1
+        for c in calls
+        if (c.get("status") or "").startswith("success")
+        and is_whisper_call(c.get("model_name") or "", c.get("prompt"))
+    )
+    whisper_total = whisper_rate * duration_hours if whisper_success_count else 0.0
+    whisper_per_call = (
+        whisper_total / whisper_success_count if whisper_success_count else 0.0
+    )
+
+    llm_costs = _llm_costs_by_call_id(int(post.id))
+
+    llm_total = 0.0
+    for call in calls:
+        if not (call.get("status") or "").startswith("success"):
+            call["estimated_cost_usd"] = 0.0
+        elif is_whisper_call(call.get("model_name") or "", call.get("prompt")):
+            call["estimated_cost_usd"] = round(whisper_per_call, 6)
+        else:
+            cost = float(llm_costs.get(int(call.get("id", 0)), 0.0))
+            call["estimated_cost_usd"] = round(cost, 6)
+            llm_total += cost
+
+    processing_stats["estimated_cost"] = round(llm_total + whisper_total, 4)
+
+
 def _env_bool(name: str, default: bool = False) -> bool:
     raw = os.environ.get(name)
     if raw is None:
@@ -259,6 +356,7 @@ def get_post_json(p_guid: str) -> flask.Response:
                     else model_call.response
                 ),
                 "error": model_call.error_message,
+                "service_tier": model_call.service_tier,
             }
         )
 
@@ -460,6 +558,11 @@ def api_post_stats(p_guid: str) -> flask.Response:
                 "error_message": call.error_message,
                 "prompt": call.prompt,
                 "response": call.response,
+                "service_tier": call.service_tier,
+                "prompt_tokens": call.prompt_tokens,
+                "cached_prompt_tokens": call.cached_prompt_tokens,
+                "completion_tokens": call.completion_tokens,
+                "total_tokens": call.total_tokens,
             }
         )
 
@@ -625,6 +728,7 @@ def api_post_stats(p_guid: str) -> flask.Response:
             },
         }
 
+    _maybe_add_admin_cost_estimate(stats_data, post)
     return flask.jsonify(stats_data)
 
 

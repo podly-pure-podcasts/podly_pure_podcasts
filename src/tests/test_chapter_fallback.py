@@ -175,7 +175,7 @@ def test_refine_generated_chapter_titles_with_llm_updates_titles() -> None:
     )
 
     with patch(
-        "podcast_processor.chapter_fallback.litellm.completion",
+        "litellm.completion",
         return_value=response,
     ) as completion_mock:
         refined = refine_generated_chapter_titles_with_llm(
@@ -225,7 +225,7 @@ def test_generate_topic_chapters_from_transcript_with_llm_uses_llm_boundaries() 
     )
 
     with patch(
-        "podcast_processor.chapter_fallback.litellm.completion",
+        "litellm.completion",
         return_value=response,
     ) as completion_mock:
         chapters = generate_topic_chapters_from_transcript_with_llm(
@@ -303,7 +303,7 @@ def test_generate_topic_chapters_from_transcript_with_llm_retries_remaining_bloc
         return second_response
 
     with patch(
-        "podcast_processor.chapter_fallback.litellm.completion",
+        "litellm.completion",
         side_effect=_completion_side_effect,
     ) as completion_mock:
         chapters = generate_topic_chapters_from_transcript_with_llm(
@@ -450,3 +450,49 @@ def test_topic_chapter_count_cap_for_duration_matches_configured_policy() -> Non
         (TOPIC_CHAPTER_SHORT_EPISODE_SECONDS + TOPIC_CHAPTER_CAP_WINDOW_SECONDS - 1)
         // TOPIC_CHAPTER_CAP_WINDOW_SECONDS
     )
+
+
+def test_chapter_title_refine_records_effective_tier_and_cost_inputs() -> None:
+    chapters = [Chapter("gen0", "Hello everybody", 0, 300_000)]
+    transcript_segments = [
+        SimpleNamespace(start_time=0.0, end_time=20.0, text="Hello everybody")
+    ]
+    response = SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(
+                    content='{"titles":[{"index":0,"title":"Episode intro"}]}'
+                )
+            )
+        ],
+        usage=SimpleNamespace(prompt_tokens=10, completion_tokens=5, total_tokens=15),
+    )
+
+    with (
+        patch(
+            "podcast_processor.chapter_fallback._try_upsert_model_call",
+            return_value=9,
+        ),
+        patch("podcast_processor.chapter_fallback._record_service_tier_on_model_call"),
+        patch(
+            "podcast_processor.chapter_fallback._call_litellm_with_tier_retry",
+            return_value=response,
+        ) as retry_mock,
+        patch(
+            "podcast_processor.chapter_fallback._try_update_model_call"
+        ) as update_mock,
+    ):
+        refine_generated_chapter_titles_with_llm(
+            chapters,
+            transcript_segments,
+            llm_model="test-model",
+            llm_api_key="test-key",
+            openai_base_url=None,
+            openai_timeout_sec=30,
+            post_id=1,
+        )
+
+    assert retry_mock.call_args.kwargs["model_call_id"] == 9
+    update_kwargs = update_mock.call_args.kwargs
+    assert update_kwargs["model_name"] == "test-model"
+    assert update_kwargs["usage"]["prompt_tokens"] == 10

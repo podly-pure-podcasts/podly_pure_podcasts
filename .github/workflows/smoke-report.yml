@@ -1,0 +1,86 @@
+name: Smoke Test Report
+
+# Posts smoke-test results on the pull request. "Smoke Test" runs pull request
+# code with a read-only token, so it can't comment; this workflow runs the
+# default branch's code with write access and only reads that run's artifact.
+# Screenshots, a GIF and the videos are hosted on the smoke-media prerelease.
+on:
+  workflow_run:
+    workflows: ["Smoke Test"]
+    types: [completed]
+  pull_request_target:
+    types: [closed]
+
+permissions: {}
+
+jobs:
+  report:
+    if: >
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion != 'skipped' &&
+      github.event.workflow_run.conclusion != 'cancelled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+      pull-requests: write
+    concurrency:
+      group: smoke-report-${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Checkout default branch
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+
+      - name: Find report artifact
+        id: artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          count=$(gh api "repos/$GH_REPO/actions/runs/$RUN_ID/artifacts" --jq '[.artifacts[] | select(.name == "smoke-report")] | length')
+          echo "found=$([ "$count" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Download report artifact
+        if: steps.artifact.outputs.found == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: smoke-report
+          path: ${{ runner.temp }}/smoke-report
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Post comment
+        if: steps.artifact.outputs.found == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REPORT_DIR: ${{ runner.temp }}/smoke-report
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          STARTED_AT: ${{ github.event.workflow_run.run_started_at }}
+          UPDATED_AT: ${{ github.event.workflow_run.updated_at }}
+        run: bash .github/scripts/smoke-report.sh
+
+  # Deletes a closed PR's files from the smoke-media release. Runs no PR code.
+  cleanup:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+    steps:
+      - name: Delete release files
+        run: |
+          release_id=$(gh api "repos/$GH_REPO/releases/tags/smoke-media" --jq .id 2>/dev/null) || exit 0
+          gh api --paginate "repos/$GH_REPO/releases/$release_id/assets" --jq ".[] | select(.name | startswith(\"pr$PR_NUMBER-\")) | .id" |
+            while read -r id; do gh api -X DELETE "repos/$GH_REPO/releases/assets/$id"; done

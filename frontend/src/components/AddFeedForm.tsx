@@ -3,6 +3,7 @@ import { feedsApi } from '../services/api';
 import type { PodcastSearchResult } from '../types';
 import { diagnostics, emitDiagnosticError } from '../utils/diagnostics';
 import { getHttpErrorInfo } from '../utils/httpError';
+import { PlusIcon } from './icons';
 import { WHISPER_LANGUAGES } from '../constants/whisperLanguages';
 
 interface AddFeedFormProps {
@@ -167,7 +168,7 @@ export default function AddFeedForm({ onSuccess, onUpgradePlan, planLimitReached
   );
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-6">
+    <div className="bg-surface rounded-lg border border-gray-200 p-4 sm:p-6">
       <h3 className="text-lg font-medium text-gray-900 mb-4">Add New Podcast Feed</h3>
       {planLimitReached && (
         <div className="mb-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
@@ -210,7 +211,7 @@ export default function AddFeedForm({ onSuccess, onUpgradePlan, planLimitReached
         <label htmlFor="new-feed-language" className="block text-sm font-medium text-gray-700 mb-1">
           Transcription language (optional)
         </label>
-        <p className="text-xs text-gray-500 mb-1">
+        <p className="text-xs text-gray-600 mb-1.5">
           Applies to whichever feed you add below.
         </p>
         <select
@@ -218,7 +219,7 @@ export default function AddFeedForm({ onSuccess, onUpgradePlan, planLimitReached
           value={language}
           onChange={(e) => setLanguage(e.target.value)}
           disabled={!!planLimitReached}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="input"
         >
           <option value="">Use global setting</option>
           {WHISPER_LANGUAGES.map((lang) => (
@@ -241,14 +242,14 @@ export default function AddFeedForm({ onSuccess, onUpgradePlan, planLimitReached
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://example.com/podcast/feed.xml"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="input"
               required
               disabled={!!planLimitReached}
             />
           </div>
 
       {error && (
-        <div className="text-red-600 text-sm">{error}</div>
+        <div className="text-red-700 text-sm">{error}</div>
       )}
       {upgradePrompt && (
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 p-3 border border-amber-200 bg-amber-50 rounded-md text-sm text-amber-800">
@@ -257,7 +258,7 @@ export default function AddFeedForm({ onSuccess, onUpgradePlan, planLimitReached
             <button
               type="button"
               onClick={onUpgradePlan}
-              className="inline-flex items-center justify-center px-3 py-2 rounded-md bg-blue-600 text-white text-xs font-medium hover:bg-blue-700"
+              className="btn btn-secondary btn-sm"
             >
               Increase plan
             </button>
@@ -269,9 +270,10 @@ export default function AddFeedForm({ onSuccess, onUpgradePlan, planLimitReached
           <button
             type="submit"
             disabled={isSubmitting || !url.trim() || !!planLimitReached}
-            className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-md font-medium transition-colors sm:w-auto w-full"
+            className="btn btn-primary w-full sm:w-auto"
           >
-            {isSubmitting && addingFeedUrl === 'manual' ? 'Adding...' : 'Add Feed'}
+            <PlusIcon />
+            {isSubmitting && addingFeedUrl === 'manual' ? 'Adding...' : 'Add feed'}
           </button>
         </div>
         </form>
@@ -290,7 +292,7 @@ export default function AddFeedForm({ onSuccess, onUpgradePlan, planLimitReached
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="e.g. history, space, entrepreneurship"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="input"
                 disabled={!!planLimitReached}
               />
             </div>
@@ -299,7 +301,7 @@ export default function AddFeedForm({ onSuccess, onUpgradePlan, planLimitReached
               <button
                 type="submit"
                 disabled={isSearching || !!planLimitReached}
-                className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-md font-medium transition-colors w-full md:w-auto"
+                className="btn btn-primary w-full md:w-auto"
               >
                 {isSearching ? 'Searching...' : 'Search'}
               </button>
@@ -307,7 +309,7 @@ export default function AddFeedForm({ onSuccess, onUpgradePlan, planLimitReached
           </form>
 
           {searchError && (
-            <div className="text-red-600 text-sm">{searchError}</div>
+            <div className="text-red-700 text-sm">{searchError}</div>
           )}
 
           {isSearching && searchResults.length === 0 && (
@@ -331,7 +333,7 @@ export default function AddFeedForm({ onSuccess, onUpgradePlan, planLimitReached
                       setSearchPage((prev) => Math.max(prev - 1, 1))
                     }
                     disabled={isSearching || searchPage <= 1}
-                    className="px-3 py-1 border border-gray-200 rounded-md disabled:text-gray-400 disabled:border-gray-200 hover:bg-gray-100 transition-colors"
+                    className="btn btn-secondary btn-sm"
                   >
                     Previous
                   </button>
@@ -341,7 +343,7 @@ export default function AddFeedForm({ onSuccess, onUpgradePlan, planLimitReached
                       setSearchPage((prev) => Math.min(prev + 1, totalPages))
                     }
                     disabled={isSearching || searchPage >= totalPages}
-                    className="px-3 py-1 border border-gray-200 rounded-md disabled:text-gray-400 disabled:border-gray-200 hover:bg-gray-100 transition-colors"
+                    className="btn btn-secondary btn-sm"
                   >
                     Next
                   </button>
@@ -382,8 +384,9 @@ export default function AddFeedForm({ onSuccess, onUpgradePlan, planLimitReached
                         type="button"
                         onClick={() => handleAddFromSearch(result)}
                         disabled={planLimitReached || (isSubmitting && addingFeedUrl === result.feedUrl)}
-                        className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-3 py-2 rounded-md text-sm transition-colors"
+                        className="btn btn-secondary btn-sm"
                       >
+                        <PlusIcon />
                         {isSubmitting && addingFeedUrl === result.feedUrl ? 'Adding...' : 'Add'}
                       </button>
                     </div>

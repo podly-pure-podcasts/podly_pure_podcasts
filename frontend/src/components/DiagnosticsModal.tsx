@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useDiagnostics } from '../contexts/DiagnosticsContext';
 import { DIAGNOSTIC_UPDATED_EVENT, diagnostics, type DiagnosticsEntry } from '../utils/diagnostics';
+import ModalShell from './ModalShell';
+import { CloseIcon } from './icons';
 
 const GITHUB_NEW_ISSUE_URL = 'https://github.com/podly-pure-podcasts/podly_pure_podcasts/issues/new';
 
@@ -71,13 +73,13 @@ export default function DiagnosticsModal() {
 
   const issueUrl = useMemo(() => buildIssueUrl(issueTitle, issueBody), [issueTitle, issueBody]);
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={close} />
-
-      <div className="relative w-full max-w-3xl bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden">
+    <ModalShell
+      isOpen={isOpen}
+      onClose={close}
+      panelClassName="w-full max-w-3xl bg-surface border border-gray-200 rounded-lg overflow-hidden"
+    >
+      <div>
         <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-gray-200">
           <div>
             <h2 className="text-base font-semibold text-gray-900">Troubleshooting</h2>
@@ -90,9 +92,11 @@ export default function DiagnosticsModal() {
           <button
             type="button"
             onClick={close}
-            className="px-3 py-1.5 text-sm border border-gray-200 rounded-md hover:bg-gray-100"
+            aria-label="Close"
+            title="Close"
+            className="btn btn-ghost btn-icon btn-sm"
           >
-            Dismiss
+            <CloseIcon />
           </button>
         </div>
 
@@ -113,7 +117,7 @@ export default function DiagnosticsModal() {
                 href={issueUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center justify-center px-3 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
+                className="btn btn-primary"
               >
                 Report on GitHub
               </a>
@@ -126,7 +130,7 @@ export default function DiagnosticsModal() {
                     // ignore
                   }
                 }}
-                className="inline-flex items-center justify-center px-3 py-2 rounded-md border border-gray-200 text-sm font-medium hover:bg-gray-100"
+                className="btn btn-secondary"
               >
                 Copy logs
               </button>
@@ -135,7 +139,7 @@ export default function DiagnosticsModal() {
                 onClick={() => {
                   clear();
                 }}
-                className="inline-flex items-center justify-center px-3 py-2 rounded-md border border-gray-200 text-sm font-medium hover:bg-gray-100"
+                className="btn btn-secondary"
               >
                 Clear
               </button>
@@ -165,6 +169,6 @@ export default function DiagnosticsModal() {
           </div>
         </div>
       </div>
-    </div>
+    </ModalShell>
   );
 }

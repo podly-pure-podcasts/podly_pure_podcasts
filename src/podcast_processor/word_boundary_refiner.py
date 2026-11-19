@@ -6,21 +6,26 @@ Note: We intentionally share some call-setup patterns with BoundaryRefiner.
 import json
 import logging
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
-import litellm
 from jinja2 import Template
 
 from podcast_processor.llm_model_call_utils import (
+    apply_service_tier,
+    call_litellm_with_tier_retry,
     extract_litellm_content,
     extract_litellm_finish_reason,
     extract_litellm_usage,
+    record_service_tier_on_model_call,
     render_prompt_and_upsert_model_call,
     try_update_model_call,
 )
+from podcast_processor.token_rate_limiter import TokenRateLimiter
 from shared.config import Config
+from shared.llm_utils import normalize_completion_args_for_model
 
 # Keep the same internal bounds as the existing BoundaryRefiner.
 MAX_START_EXTENSION_SECONDS = 30.0
@@ -42,10 +47,28 @@ class WordBoundaryRefiner:
     timestamps today.
     """
 
-    def __init__(self, config: Config, logger: logging.Logger | None = None):
+    def __init__(
+        self,
+        config: Config,
+        logger: logging.Logger | None = None,
+        token_limiter: TokenRateLimiter | None = None,
+    ):
         self.config = config
         self.logger = logger or logging.getLogger(__name__)
+        self.token_limiter = token_limiter
         self.template = self._load_template()
+
+    def _pace_request(
+        self, completion_args: dict[str, Any]
+    ) -> Callable[[], None] | None:
+        """Wait for the classifier's token budget before each provider request."""
+        limiter = self.token_limiter
+        if limiter is None:
+            return None
+        return lambda: limiter.wait_if_needed(
+            completion_args["messages"],
+            completion_args.get("model", self.config.llm_model),
+        )
 
     def _load_template(self) -> Template:
         path = (
@@ -98,17 +121,35 @@ Return only one JSON object (no markdown/code fences, no analysis text) with:
         )
 
         raw_response: str | None = None
+        usage: dict[str, int | None] | None = None
+        effective_service_tier: str | None = None
 
         try:
-            response = litellm.completion(
-                model=self.config.llm_model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.1,
-                max_tokens=4096,
-                timeout=self.config.openai_timeout,
-                api_key=self.config.llm_api_key,
-                base_url=self.config.openai_base_url,
+            completion_args: dict[str, Any] = {
+                "model": self.config.llm_model,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.1,
+                "max_tokens": 4096,
+                "timeout": self.config.openai_timeout,
+                "api_key": self.config.llm_api_key,
+                "base_url": self.config.openai_base_url,
+            }
+            normalize_completion_args_for_model(completion_args)
+            apply_service_tier(completion_args, self.config)
+            record_service_tier_on_model_call(
+                model_call_id,
+                completion_args,
+                logger=self.logger,
+                log_prefix="Word boundary refine",
             )
+            response = call_litellm_with_tier_retry(
+                completion_args,
+                config=self.config,
+                logger=self.logger,
+                model_call_id=model_call_id,
+                before_attempt=self._pace_request(completion_args),
+            )
+            effective_service_tier = completion_args.get("service_tier")
 
             content = extract_litellm_content(response)
             finish_reason = extract_litellm_finish_reason(response)
@@ -121,6 +162,7 @@ Return only one JSON object (no markdown/code fences, no analysis text) with:
                 extra={
                     "content_preview": (content or "")[:200],
                     "prompt_tokens": usage.get("prompt_tokens"),
+                    "cached_prompt_tokens": usage.get("cached_prompt_tokens"),
                     "completion_tokens": usage.get("completion_tokens"),
                     "total_tokens": usage.get("total_tokens"),
                 },
@@ -131,6 +173,8 @@ Return only one JSON object (no markdown/code fences, no analysis text) with:
                 status="received_response",
                 response=raw_response,
                 error_message=None,
+                usage=usage,
+                service_tier=effective_service_tier,
             )
 
             parsed = self._parse_json(content)
@@ -152,6 +196,8 @@ Return only one JSON object (no markdown/code fences, no analysis text) with:
                     status="success_heuristic",
                     response=raw_response,
                     error_message=f"parse_failed:{parse_failure_reason}",
+                    usage=usage,
+                    service_tier=effective_service_tier,
                 )
                 return self._fallback(ad_start, ad_end)
 
@@ -190,6 +236,8 @@ Return only one JSON object (no markdown/code fences, no analysis text) with:
                     status="success_heuristic",
                     response=raw_response,
                     error_message="invalid_refined_window",
+                    usage=usage,
+                    service_tier=effective_service_tier,
                 )
                 return self._fallback(ad_start, ad_end)
 
@@ -198,6 +246,8 @@ Return only one JSON object (no markdown/code fences, no analysis text) with:
                 status=self._result_status(start_changed, end_changed, partial_errors),
                 response=raw_response,
                 error_message=(",".join(partial_errors) if partial_errors else None),
+                usage=usage,
+                service_tier=effective_service_tier,
             )
 
             result = WordBoundaryRefinement(
@@ -212,6 +262,8 @@ Return only one JSON object (no markdown/code fences, no analysis text) with:
                 status="success",
                 response=raw_response,
                 error_message=None,
+                usage=usage,
+                service_tier=effective_service_tier,
             )
             return result
 
@@ -221,6 +273,8 @@ Return only one JSON object (no markdown/code fences, no analysis text) with:
                 status="failed_permanent",
                 response=raw_response,
                 error_message=str(exc),
+                usage=usage,
+                service_tier=effective_service_tier,
             )
             self.logger.warning("Word boundary refine failed: %s", exc)
             return self._fallback(ad_start, ad_end)
@@ -943,6 +997,8 @@ Return only one JSON object (no markdown/code fences, no analysis text) with:
         status: str,
         response: str | None,
         error_message: str | None,
+        usage: dict[str, int | None] | None = None,
+        service_tier: str | None = None,
     ) -> None:
         try_update_model_call(
             model_call_id,
@@ -951,4 +1007,8 @@ Return only one JSON object (no markdown/code fences, no analysis text) with:
             error_message=error_message,
             logger=self.logger,
             log_prefix="Word boundary refine",
+            usage=usage,
+            model_name=getattr(self.config, "llm_model", None),
+            service_tier=service_tier,
+            prompt="word_boundary_refine",
         )

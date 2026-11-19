@@ -7,13 +7,19 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:ui": "node smoke/ui-regressions.mjs",
+    "smoke": "node smoke/walkthrough.mjs",
+    "smoke:enable": "node smoke/enable-and-process.mjs",
+    "smoke:mock": "node smoke/mock-providers.mjs"
   },
   "dependencies": {
+    "@gsap/react": "^2.1.2",
     "@tailwindcss/line-clamp": "^0.4.4",
     "@tanstack/react-query": "^5.77.0",
     "axios": "^1.20.0",
     "clsx": "^2.1.1",
+    "gsap": "^3.15.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-hot-toast": "^2.6.0",
@@ -30,6 +36,7 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.19",
     "globals": "^16.0.0",
+    "playwright": "1.64.0",
     "postcss": "^8.5.23",
     "tailwindcss": "^3.4.17",
     "typescript": "~5.8.3",

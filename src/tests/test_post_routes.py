@@ -777,6 +777,178 @@ def test_post_stats_omits_debug_info_when_disabled(app):
     assert "debug_info" not in payload
 
 
+def test_post_stats_includes_estimated_cost_for_admin(app):
+    app.testing = True
+    app.register_blueprint(post_bp)
+
+    @app.before_request
+    def _set_admin_user() -> None:
+        g.current_user = SimpleNamespace(id=1, role="admin")
+
+    with app.app_context():
+        user = User(id=1, username="admin", password_hash="hash", role="admin")
+        feed = Feed(title="Stats Cost Feed", rss_url="https://example.com/feed.xml")
+        db.session.add_all([user, feed])
+        db.session.flush()
+        post = Post(
+            feed_id=feed.id,
+            guid="stats-cost-admin-guid",
+            download_url="https://example.com/audio.mp3",
+            title="Stats Cost Episode",
+            whitelisted=True,
+        )
+        db.session.add(post)
+        db.session.flush()
+        db.session.add(
+            ModelCall(
+                post_id=post.id,
+                first_segment_sequence_num=0,
+                last_segment_sequence_num=1,
+                model_name="gpt-4o-mini",
+                prompt="classify",
+                status="success",
+                prompt_tokens=1_000_000,
+                cached_prompt_tokens=500_000,
+                completion_tokens=250_000,
+                # The writer is responsible for populating this column at
+                # finalize time. Set it directly here so we test the stats
+                # endpoint's read-path (which must NOT import litellm)
+                # rather than the writer's compute-path.
+                estimated_cost_usd=0.3375,
+            )
+        )
+        db.session.commit()
+        guid = post.guid
+
+    with mock.patch(
+        "app.config_store.read_combined",
+        return_value={"app": {"whisper_cost_rate_per_hour": 0.04}},
+    ):
+        response = app.test_client().get(f"/api/posts/{guid}/stats")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload is not None
+    # LLM-only post (no whisper rows) → total equals the persisted
+    # ModelCall.estimated_cost_usd.
+    assert payload["processing_stats"]["estimated_cost"] == 0.3375
+
+
+def test_post_stats_omits_estimated_cost_for_non_admin(app):
+    app.testing = True
+    app.register_blueprint(post_bp)
+
+    @app.before_request
+    def _set_regular_user() -> None:
+        g.current_user = SimpleNamespace(id=1, role="user")
+
+    with app.app_context():
+        user = User(id=1, username="user", password_hash="hash", role="user")
+        feed = Feed(title="Stats Cost Feed", rss_url="https://example.com/feed.xml")
+        db.session.add_all([user, feed])
+        db.session.flush()
+        post = Post(
+            feed_id=feed.id,
+            guid="stats-cost-user-guid",
+            download_url="https://example.com/audio.mp3",
+            title="Stats Cost Episode",
+            whitelisted=True,
+        )
+        db.session.add(post)
+        db.session.flush()
+        db.session.add(
+            ModelCall(
+                post_id=post.id,
+                first_segment_sequence_num=0,
+                last_segment_sequence_num=1,
+                model_name="gpt-4o-mini",
+                prompt="classify",
+                status="success",
+                prompt_tokens=1_000_000,
+                cached_prompt_tokens=500_000,
+                completion_tokens=250_000,
+            )
+        )
+        db.session.commit()
+        guid = post.guid
+
+    response = app.test_client().get(f"/api/posts/{guid}/stats")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload is not None
+    assert "estimated_cost" not in payload["processing_stats"]
+
+
+def test_post_stats_estimated_cost_includes_whisper_rate(app):
+    """Admin per-episode total = LLM cost + Whisper rate * full audio hours."""
+    app.testing = True
+    app.register_blueprint(post_bp)
+
+    @app.before_request
+    def _set_admin_user() -> None:
+        g.current_user = SimpleNamespace(id=1, role="admin")
+
+    with app.app_context():
+        user = User(id=1, username="admin2", password_hash="hash", role="admin")
+        feed = Feed(title="Stats Cost Feed", rss_url="https://example.com/feed.xml")
+        db.session.add_all([user, feed])
+        db.session.flush()
+        post = Post(
+            feed_id=feed.id,
+            guid="stats-cost-whisper-guid",
+            download_url="https://example.com/audio.mp3",
+            title="Stats Cost Episode",
+            whitelisted=True,
+            duration=3000.0,  # processed length after ad cuts
+        )
+        db.session.add(post)
+        db.session.flush()
+        db.session.add(
+            TranscriptSegment(
+                post_id=post.id, sequence_num=0, start_time=0, end_time=3600, text="x"
+            )
+        )
+        db.session.add_all(
+            [
+                ModelCall(
+                    post_id=post.id,
+                    first_segment_sequence_num=0,
+                    last_segment_sequence_num=1,
+                    model_name="gpt-4o-mini",
+                    prompt="classify",
+                    status="success",
+                    estimated_cost_usd=0.3375,
+                ),
+                ModelCall(
+                    post_id=post.id,
+                    first_segment_sequence_num=0,
+                    last_segment_sequence_num=-1,
+                    model_name="whisper-large-v3-turbo",
+                    prompt="Whisper transcription job",
+                    status="success",
+                ),
+            ]
+        )
+        db.session.commit()
+        guid = post.guid
+
+    with mock.patch(
+        "app.config_store.read_combined",
+        return_value={"app": {"whisper_cost_rate_per_hour": 0.04}},
+    ):
+        response = app.test_client().get(f"/api/posts/{guid}/stats")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload is not None
+    assert payload["processing_stats"]["estimated_cost"] == 0.3775
+
+    calls_by_model = {c["model_name"]: c for c in payload["model_calls"]}
+    assert calls_by_model["gpt-4o-mini"]["estimated_cost_usd"] == 0.3375
+    assert calls_by_model["whisper-large-v3-turbo"]["estimated_cost_usd"] == 0.04
+
+
 def test_post_stats_include_chapters_for_chapter_insert_strategy(app):
     app.testing = True
     app.register_blueprint(post_bp)

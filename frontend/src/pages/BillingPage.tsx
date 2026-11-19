@@ -7,9 +7,6 @@ import { Navigate } from 'react-router-dom';
 
 export default function BillingPage() {
   const { user } = useAuth();
-  if (user?.role === 'admin') {
-    return <Navigate to="/" replace />;
-  }
   const { data, refetch, isLoading } = useQuery({
     queryKey: ['billing', 'summary'],
     queryFn: billingApi.getSummary,
@@ -59,6 +56,11 @@ export default function BillingPage() {
     },
   });
 
+  // Hooks above run unconditionally; early returns must come after them.
+  if (user?.role === 'admin') {
+    return <Navigate to="/" replace />;
+  }
+
   if (isLoading || !data) {
     return (
       <div className="p-6">
@@ -77,13 +79,13 @@ export default function BillingPage() {
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Billing</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Billing</h1>
         <p className="text-sm text-gray-600 mt-1">
           Pay what you want for the Starter Bundle (10 feeds).
         </p>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5 space-y-4">
+      <div className="bg-surface border border-gray-200 rounded-lg p-5 space-y-4">
         <div className="flex flex-wrap gap-3 items-center justify-between">
           <div>
             <div className="text-sm text-gray-600">Current plan</div>
@@ -96,7 +98,7 @@ export default function BillingPage() {
           </div>
           <div className="text-right">
             <div className="text-sm text-gray-600">Monthly payment</div>
-            <div className="text-2xl font-bold text-gray-900">
+            <div className="text-2xl font-semibold text-gray-900">
                 {isSubscribed ? `$${currentAmountDollars.toFixed(2)}` : '$0.00'}
             </div>
             <div className="text-xs text-gray-500">
@@ -118,7 +120,7 @@ export default function BillingPage() {
           </div>
           
           <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-            <div className="relative rounded-md shadow-sm w-32">
+            <div className="relative w-32">
               <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
                 <span className="text-gray-500 sm:text-sm">$</span>
               </div>
@@ -128,7 +130,7 @@ export default function BillingPage() {
                 step={0.5}
                 value={amount}
                 onChange={(e) => setAmount(Math.max(0, Number(e.target.value)))}
-                className="block w-full rounded-md border-gray-300 pl-7 pr-3 py-2 focus:border-blue-500 focus:ring-blue-500 sm:text-sm border"
+                className="input pl-7"
                 placeholder="5.00"
               />
             </div>
@@ -143,7 +145,7 @@ export default function BillingPage() {
                   className={`px-2 py-1 rounded-md border text-xs transition-colors ${
                     amount === preset
                       ? 'border-blue-200 bg-blue-50 text-blue-700'
-                      : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                      : 'border-gray-200 bg-surface text-gray-700 hover:bg-gray-50'
                   }`}
                   disabled={updateSubscription.isPending}
                 >
@@ -157,7 +159,7 @@ export default function BillingPage() {
             <button
               onClick={() => updateSubscription.mutate(amount)}
               disabled={updateSubscription.isPending || atCurrentAmount || amount < minAmountDollars}
-              className="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn btn-primary"
             >
               {updateSubscription.isPending 
                 ? 'Processing…' 
@@ -166,7 +168,7 @@ export default function BillingPage() {
                   : 'Subscribe'}
             </button>
             {amount < minAmountDollars && (
-                <span className="text-xs text-red-500">Minimum amount is ${minAmountDollars.toFixed(2)}</span>
+                <span className="text-xs text-red-700">Minimum amount is ${minAmountDollars.toFixed(2)}</span>
             )}
           </div>
         </div>
@@ -178,7 +180,7 @@ export default function BillingPage() {
           <button
             onClick={() => portalSession.mutate()}
             disabled={portalSession.isPending || !data.stripe_customer_id}
-            className="inline-flex items-center justify-center px-3 py-2 rounded-md border border-gray-200 text-gray-700 hover:bg-gray-100 disabled:opacity-50 text-sm"
+            className="btn btn-secondary"
           >
             {portalSession.isPending ? 'Opening…' : 'Manage Billing'}
           </button>

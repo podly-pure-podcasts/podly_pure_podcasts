@@ -1,34 +1,17 @@
 import { useAudioPlayer } from '../contexts/AudioPlayerContext';
 import type { Episode } from '../types';
+import { PauseIcon, PlayIcon } from './icons';
 
 interface PlayButtonProps {
   episode: Episode;
   className?: string;
 }
 
-const PlayIcon = ({ className }: { className: string }) => (
-  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
-    <path d="M8 5v14l11-7z"/>
-  </svg>
-);
-
-const PauseIcon = ({ className }: { className: string }) => (
-  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
-    <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
-  </svg>
-);
-
 export default function PlayButton({ episode, className = '' }: PlayButtonProps) {
   const { currentEpisode, isPlaying, isLoading, playEpisode, togglePlayPause } = useAudioPlayer();
   
   const isCurrentEpisode = currentEpisode?.id === episode.id;
   const canPlay = episode.has_processed_audio;
-
-  console.log(`PlayButton for "${episode.title}":`, {
-    has_processed_audio: episode.has_processed_audio,
-    whitelisted: episode.whitelisted,
-    canPlay
-  });
 
   const getDisabledReason = () => {
     if (!episode.has_processed_audio) {
@@ -38,17 +21,12 @@ export default function PlayButton({ episode, className = '' }: PlayButtonProps)
   };
 
   const handleClick = () => {
-    console.log('PlayButton clicked for episode:', episode.title);
-    console.log('canPlay:', canPlay);
-    console.log('isCurrentEpisode:', isCurrentEpisode);
     
     if (!canPlay) return;
     
     if (isCurrentEpisode) {
-      console.log('Toggling play/pause for current episode');
       togglePlayPause();
     } else {
-      console.log('Playing new episode');
       playEpisode(episode);
     }
   };
@@ -65,12 +43,13 @@ export default function PlayButton({ episode, className = '' }: PlayButtonProps)
     <button
       onClick={handleClick}
       disabled={isDisabled}
-      className={`p-2 rounded-full transition-colors ${
+      className={`touch-target inline-flex h-8 w-8 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
         isDisabled 
-          ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-          : 'bg-blue-600 text-white hover:bg-blue-700'
+          ? 'bg-gray-200 text-gray-600 cursor-not-allowed' 
+          : 'bg-gray-900 text-surface hover:bg-gray-700'
       } ${className}`}
       title={title}
+      aria-label={title}
     >
       {isLoading && isCurrentEpisode ? (
         <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />

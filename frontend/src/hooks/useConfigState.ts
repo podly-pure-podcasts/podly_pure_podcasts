@@ -11,27 +11,6 @@ import type {
   WhisperConfig,
 } from '../types';
 
-const DEFAULT_ENV_HINTS: Record<string, EnvOverrideEntry> = {
-  'groq.api_key': { env_var: 'GROQ_API_KEY' },
-  'llm.llm_api_key': { env_var: 'LLM_API_KEY' },
-  'llm.llm_model': { env_var: 'LLM_MODEL' },
-  'llm.openai_base_url': { env_var: 'OPENAI_BASE_URL' },
-  'llm.openai_timeout': { env_var: 'OPENAI_TIMEOUT' },
-  'llm.openai_max_tokens': { env_var: 'OPENAI_MAX_TOKENS' },
-  'llm.llm_max_concurrent_calls': { env_var: 'LLM_MAX_CONCURRENT_CALLS' },
-  'llm.llm_max_retry_attempts': { env_var: 'LLM_MAX_RETRY_ATTEMPTS' },
-  'llm.llm_enable_token_rate_limiting': { env_var: 'LLM_ENABLE_TOKEN_RATE_LIMITING' },
-  'llm.llm_max_input_tokens_per_call': { env_var: 'LLM_MAX_INPUT_TOKENS_PER_CALL' },
-  'llm.llm_max_input_tokens_per_minute': { env_var: 'LLM_MAX_INPUT_TOKENS_PER_MINUTE' },
-  'whisper.whisper_type': { env_var: 'WHISPER_TYPE' },
-  'whisper.api_key': { env_var: 'WHISPER_REMOTE_API_KEY' },
-  'whisper.base_url': { env_var: 'WHISPER_REMOTE_BASE_URL' },
-  'whisper.model': { env_var: 'WHISPER_REMOTE_MODEL' },
-  'whisper.timeout_sec': { env_var: 'WHISPER_REMOTE_TIMEOUT_SEC' },
-  'whisper.chunksize_mb': { env_var: 'WHISPER_REMOTE_CHUNKSIZE_MB' },
-  'whisper.max_retries': { env_var: 'GROQ_MAX_RETRIES' },
-};
-
 const getValueAtPath = (obj: unknown, path: string): unknown => {
   if (!obj || typeof obj !== 'object') {
     return undefined;
@@ -88,7 +67,7 @@ export interface UseConfigStateReturn {
   setHasEdits: (value: boolean) => void;
 
   // Helpers
-  getEnvHint: (path: string, fallback?: EnvOverrideEntry) => EnvOverrideEntry | undefined;
+  getEnvHint: (path: string) => EnvOverrideEntry | undefined;
   getWhisperApiKey: (w: WhisperConfig | undefined) => string;
   isFieldReadOnly: (path: string) => boolean;
 
@@ -123,8 +102,7 @@ export function useConfigState(): UseConfigStateReturn {
   const envOverrides = useMemo<EnvOverrideMap>(() => data?.env_overrides ?? {}, [data]);
 
   const getEnvHint = useCallback(
-    (path: string, fallback?: EnvOverrideEntry) =>
-      envOverrides[path] ?? fallback ?? DEFAULT_ENV_HINTS[path],
+    (path: string) => envOverrides[path],
     [envOverrides]
   );
 

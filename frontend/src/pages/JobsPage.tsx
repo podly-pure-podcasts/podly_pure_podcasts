@@ -1,68 +1,30 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { jobsApi } from '../services/api';
-import type { CleanupPreview, Job, JobManagerRun, JobManagerStatus } from '../types';
-import { buildProcessingProgressModel } from '../utils/processingProgress';
-
-function getStatusColor(status: string) {
-  switch (status) {
-    case 'running':
-      return 'bg-green-100 text-green-800';
-    case 'pending':
-      return 'bg-yellow-100 text-yellow-800';
-    case 'failed':
-      return 'bg-red-100 text-red-800';
-    case 'completed':
-      return 'bg-blue-100 text-blue-800';
-    case 'skipped':
-      return 'bg-purple-100 text-purple-800';
-    case 'cancelled':
-      return 'bg-gray-100 text-gray-800';
-    default:
-      return 'bg-gray-100 text-gray-800';
-  }
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const color = getStatusColor(status);
-  return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${color}`}>
-      {status}
-    </span>
-  );
-}
-
-function ProgressBar({ value, colorClass = 'bg-indigo-600' }: { value: number; colorClass?: string }) {
-  const clamped = Math.max(0, Math.min(100, Math.round(value)));
-  return (
-    <div className="w-full bg-gray-200 rounded h-2">
-      <div
-        className={`${colorClass} h-2 rounded`}
-        style={{ width: `${clamped}%` }}
-      />
-    </div>
-  );
-}
+import type {
+  CleanupPreview,
+  Job,
+  JobManagerRun,
+  JobManagerStatus,
+} from '../types';
+import { JobProgressBar } from '../components/JobProgress';
+import { formatBackendDateTime } from '../utils/datetime';
+import { useCascade } from '../hooks/useCascade';
+import { JobCard } from '../components/jobs/JobCard';
+import {
+  reconcileJobs,
+  reconcileValue,
+} from '../components/jobs/reconcile';
 
 function RunStat({ label, value }: { label: string; value: number }) {
   return (
     <div>
-      <div className="text-xs uppercase tracking-wide text-gray-500">{label}</div>
-      <div className="mt-1 text-lg font-semibold text-gray-900">{value}</div>
+      <div className="text-xs text-gray-600">{label}</div>
+      <div className="mt-1 text-lg font-semibold tabular-nums text-gray-900">{value}</div>
     </div>
   );
 }
 
-function formatDateTime(value: string | null): string {
-  if (!value) {
-    return '—';
-  }
-  try {
-    return new Date(value).toLocaleString();
-  } catch (err) {
-    console.error('Failed to format date', err);
-    return value;
-  }
-}
+const formatDateTime = formatBackendDateTime;
 
 export default function JobsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -79,11 +41,13 @@ export default function JobsPage() {
   const [cleanupError, setCleanupError] = useState<string | null>(null);
   const [cleanupRunning, setCleanupRunning] = useState(false);
   const [cleanupMessage, setCleanupMessage] = useState<string | null>(null);
+  const jobGridRef = useRef<HTMLDivElement>(null);
+  useCascade(jobGridRef, { playKey: mode, ready: jobs.length > 0, pop: true });
 
   const loadStatus = useCallback(async () => {
     try {
       const data = await jobsApi.getJobManagerStatus();
-      setManagerStatus(data);
+      setManagerStatus(prev => reconcileValue(prev, data));
       setStatusError(null);
     } catch (e) {
       console.error('Failed to load job manager status:', e);
@@ -96,7 +60,7 @@ export default function JobsPage() {
     setError(null);
     try {
       const data = await jobsApi.getActiveJobs(100);
-      setJobs(data);
+      setJobs(prev => reconcileJobs(prev, data));
     } catch (e) {
       console.error('Failed to load active jobs:', e);
       setError('Failed to load jobs');
@@ -110,7 +74,7 @@ export default function JobsPage() {
     setError(null);
     try {
       const data = await jobsApi.getAllJobs(200);
-      setJobs(data);
+      setJobs(prev => reconcileJobs(prev, data));
     } catch (e) {
       console.error('Failed to load all jobs:', e);
       setError('Failed to load jobs');
@@ -118,6 +82,21 @@ export default function JobsPage() {
       setLoading(false);
     }
   }, []);
+
+  // Background refetch of the visible jobs list (no spinner, no error
+  // surfaces) so the polling effect can keep job rows fresh without making
+  // the manual "Refresh" button look like it's in flight.
+  const silentLoadJobs = useCallback(async () => {
+    try {
+      const data =
+        mode === 'active'
+          ? await jobsApi.getActiveJobs(100)
+          : await jobsApi.getAllJobs(200);
+      setJobs(prev => reconcileJobs(prev, data));
+    } catch (e) {
+      console.error('Background jobs refresh failed:', e);
+    }
+  }, [mode]);
 
   const loadCleanupPreview = useCallback(async () => {
     setCleanupLoading(true);
@@ -251,13 +230,20 @@ export default function JobsPage() {
       return undefined;
     }
 
-    // Poll every 15 seconds when jobs are active to reduce database contention
+    // Poll every 15 seconds when jobs are active to reduce database contention.
+    // Jobs and manager counters share one cadence so they stay in sync.
     const interval = setInterval(() => {
+      void silentLoadJobs();
       void loadStatus();
     }, 15000);
 
     return () => clearInterval(interval);
-  }, [managerStatus?.run?.queued_jobs, managerStatus?.run?.running_jobs, loadStatus]);
+  }, [
+    managerStatus?.run?.queued_jobs,
+    managerStatus?.run?.running_jobs,
+    loadStatus,
+    silentLoadJobs,
+  ]);
 
   useEffect(() => {
     const queued = managerStatus?.run?.queued_jobs ?? 0;
@@ -279,7 +265,8 @@ export default function JobsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded border border-gray-200 bg-white p-4 shadow-sm">
+      <h1 className="text-2xl font-semibold text-gray-900">Jobs</h1>
+      <div className="rounded-lg border border-gray-200 bg-surface p-4 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-base font-semibold text-gray-900">Jobs Manager</h2>
@@ -291,13 +278,6 @@ export default function JobsPage() {
                 : 'Jobs Manager has not started yet.'}
             </p>
           </div>
-          {run ? (
-            <StatusBadge status={run.status} />
-          ) : (
-            <span className="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-800">
-              idle
-            </span>
-          )}
         </div>
 
         {statusError && (
@@ -313,17 +293,25 @@ export default function JobsPage() {
               <RunStat label="Skipped" value={run.skipped_jobs} />
               <RunStat label="Failed" value={run.failed_jobs} />
             </div>
-            <div className="mt-4 space-y-1">
-              <ProgressBar value={run.progress_percentage} />
-              <div className="text-xs text-gray-500">
-                {run.completed_jobs} completed · {run.skipped_jobs} skipped · {run.failed_jobs} failed of {run.total_jobs} jobs
+            {run.total_jobs > 0 ? (
+              <div className="mt-4 space-y-1">
+                <JobProgressBar value={run.progress_percentage} />
+                <div className="text-xs text-gray-600">
+                  {run.completed_jobs} completed · {run.skipped_jobs} skipped · {run.failed_jobs} failed of {run.total_jobs} jobs
+                </div>
               </div>
-            </div>
-            <div className="mt-3 text-xs text-gray-500">
+            ) : (
+              <p className="mt-4 text-sm text-gray-600">
+                {run.counters_reset_at
+                  ? `No jobs have run since ${formatDateTime(run.counters_reset_at)}.`
+                  : 'No jobs have run yet.'}
+              </p>
+            )}
+            <div className="mt-3 text-xs text-gray-600">
               Trigger: <span className="font-medium text-gray-700">{run.trigger}</span>
             </div>
-            {run.counters_reset_at ? (
-              <div className="mt-1 text-xs text-gray-500">
+            {run.counters_reset_at && run.total_jobs > 0 ? (
+              <div className="mt-1 text-xs text-gray-600">
                 Stats since {formatDateTime(run.counters_reset_at)}
               </div>
             ) : null}
@@ -331,21 +319,15 @@ export default function JobsPage() {
         ) : null}
       </div>
 
-      <div className="rounded border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="rounded-lg border border-gray-200 bg-surface p-4 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h3 className="text-base font-semibold text-gray-900">Post Cleanup</h3>
+            <h2 className="text-base font-semibold text-gray-900">Post Cleanup</h2>
             <p className="text-xs text-gray-600">
               {cleanupDisabled
                 ? 'Cleanup is disabled while retention days are unset or zero.'
                 : `Episodes older than ${retentionDays} day${retentionDays === 1 ? '' : 's'} will be removed.`}
             </p>
-          </div>
-          <div className="text-right">
-            <div className="text-xs uppercase tracking-wide text-gray-500">Eligible</div>
-            <div className="text-lg font-semibold text-gray-900">
-              {cleanupLoading ? '…' : cleanupEligibleCount}
-            </div>
           </div>
         </div>
 
@@ -358,52 +340,54 @@ export default function JobsPage() {
 
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div>
-            <div className="text-xs uppercase tracking-wide text-gray-500">Retention</div>
+            <div className="text-xs text-gray-600">Retention</div>
             <div className="text-sm font-medium text-gray-900">
               {cleanupDisabled ? 'Disabled' : `${retentionDays} day${retentionDays === 1 ? '' : 's'}`}
             </div>
           </div>
           <div>
-            <div className="text-xs uppercase tracking-wide text-gray-500">Eligible episodes</div>
-            <div className="text-sm font-medium text-gray-900">
+            <div className="text-xs text-gray-600">Eligible episodes</div>
+            <div className="text-sm font-medium tabular-nums text-gray-900">
               {cleanupLoading ? 'Loading…' : cleanupEligibleCount}
             </div>
           </div>
           <div>
-            <div className="text-xs uppercase tracking-wide text-gray-500">Cutoff date</div>
-            <div className="text-sm font-medium text-gray-900">
-              {cleanupPreview?.cutoff_utc ? formatDateTime(cleanupPreview.cutoff_utc) : '—'}
-            </div>
+            <div className="text-xs text-gray-600">Cutoff date</div>
+            {cleanupPreview?.cutoff_utc ? (
+              <div className="text-sm font-medium text-gray-900">{formatDateTime(cleanupPreview.cutoff_utc)}</div>
+            ) : (
+              <div className="text-sm text-gray-600">—</div>
+            )}
           </div>
         </div>
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="text-xs text-gray-500">
+          <div className="text-xs text-gray-600">
             Includes completed jobs and non-whitelisted episodes with release dates older than the retention window.
           </div>
           <button
             onClick={() => { void runCleanupNow(); }}
             disabled={cleanupRunning || cleanupDisabled || cleanupLoading}
-            className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed"
+            className="btn btn-secondary"
           >
             {cleanupRunning ? 'Running cleanup…' : 'Run cleanup now'}
           </button>
         </div>
       </div>
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-xl font-semibold text-gray-900">{mode === 'active' ? 'Active Jobs' : 'All Jobs'}</h3>
+          <h2 className="text-xl font-semibold text-gray-900">{mode === 'active' ? 'Active Jobs' : 'All Jobs'}</h2>
           <p className="text-sm text-gray-600">
             {mode === 'active'
               ? 'Queued and running jobs, ordered by priority.'
               : 'All jobs ordered by priority (running/pending first).'}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => { void cancelAllQueuedJobs(); }}
-            className="inline-flex items-center rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            className="btn btn-secondary text-red-700 disabled:text-gray-600"
             disabled={loading || cancellingQueued || queuedJobsCount <= 0}
           >
             {cancellingQueued
@@ -412,7 +396,7 @@ export default function JobsPage() {
           </button>
           <button
             onClick={() => { void refresh(); }}
-            className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="btn btn-secondary"
             disabled={loading}
           >
             {loading ? 'Refreshing…' : 'Refresh'}
@@ -420,7 +404,7 @@ export default function JobsPage() {
           {mode === 'active' ? (
             <button
               onClick={async () => { setMode('all'); await loadStatus(); await loadAll(); await loadCleanupPreview(); }}
-              className="inline-flex items-center rounded-md bg-gray-200 px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400"
+              className="btn btn-secondary"
               disabled={loading}
             >
               Load all jobs
@@ -428,7 +412,7 @@ export default function JobsPage() {
           ) : (
             <button
               onClick={async () => { setMode('active'); await loadStatus(); await loadActive(); await loadCleanupPreview(); }}
-              className="inline-flex items-center rounded-md bg-gray-200 px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400"
+              className="btn btn-secondary"
               disabled={loading}
             >
               Show active only
@@ -445,119 +429,15 @@ export default function JobsPage() {
         <div className="text-sm text-gray-600">No jobs to display.</div>
       ) : null}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {jobs.map((job) => {
-          const progressModel = buildProcessingProgressModel({
-            status: job.status,
-            step: job.step,
-            totalSteps: job.total_steps,
-            stepName: job.step_name,
-            progressPercentage: job.progress_percentage,
-          });
-          const progressColorClass =
-            job.status === 'failed' || job.status === 'cancelled'
-              ? 'bg-red-600'
-              : job.status === 'completed' || job.status === 'skipped'
-                ? 'bg-green-600'
-                : 'bg-indigo-600';
-
-          return (
-            <div key={job.job_id} className="bg-white border rounded shadow-sm p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-medium text-gray-900 truncate">
-                  {job.post_title || 'Untitled episode'}
-                </div>
-                <StatusBadge status={job.status} />
-              </div>
-              <div className="text-xs text-gray-600 truncate">{job.feed_title || 'Unknown feed'}</div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs text-gray-700">
-                  <span>Priority</span>
-                  <span className="font-medium">{job.priority}</span>
-                </div>
-                <div className="flex items-center justify-between text-xs text-gray-700">
-                  <span>Stage</span>
-                  <span className="font-medium">
-                    {progressModel.currentStep}/4 · {progressModel.currentStageLabel}
-                  </span>
-                </div>
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-xs text-gray-700">
-                    <span>Progress</span>
-                    <span className="font-medium">{Math.round(progressModel.progress)}%</span>
-                  </div>
-                  <ProgressBar value={progressModel.progress} colorClass={progressColorClass} />
-                </div>
-                <div className="grid grid-cols-5 gap-1 text-[10px]">
-                  {progressModel.stages.map((stage) => (
-                    <div
-                      key={`${job.job_id}-stage-${stage.index}`}
-                      title={stage.label}
-                      className={`flex flex-col items-center leading-tight ${
-                        stage.state === 'active'
-                          ? 'text-blue-600 font-medium'
-                          : stage.state === 'completed'
-                            ? 'text-green-600'
-                            : stage.state === 'failed'
-                              ? 'text-red-600 font-medium'
-                              : 'text-gray-400'
-                      }`}
-                    >
-                      <span>
-                        {stage.state === 'completed'
-                          ? '✓'
-                          : stage.state === 'active'
-                            ? '●'
-                            : stage.state === 'failed'
-                              ? '!'
-                              : '○'}
-                      </span>
-                      <span>{stage.shortLabel}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
-                <div>
-                  <div className="text-gray-500">Job ID</div>
-                  <div className="truncate" title={job.job_id}>{job.job_id}</div>
-                </div>
-                <div>
-                  <div className="text-gray-500">Post GUID</div>
-                  <div className="truncate" title={job.post_guid}>{job.post_guid}</div>
-                </div>
-                <div>
-                  <div className="text-gray-500">Created</div>
-                  <div>{job.created_at ? formatDateTime(job.created_at) : '—'}</div>
-                </div>
-                <div>
-                  <div className="text-gray-500">Started</div>
-                  <div>{job.started_at ? formatDateTime(job.started_at) : '—'}</div>
-                </div>
-                {job.error_message ? (
-                  <div className="col-span-2">
-                    <div className="text-gray-500">Message</div>
-                    <div className="text-red-700 truncate" title={job.error_message}>{job.error_message}</div>
-                  </div>
-                ) : null}
-              </div>
-
-              {(job.status === 'pending' || job.status === 'running') && (
-                <div className="mt-3 pt-3 border-t border-gray-200">
-                  <button
-                    onClick={() => { void cancelJob(job.job_id); }}
-                    disabled={cancellingJobs.has(job.job_id)}
-                    className="w-full inline-flex items-center justify-center rounded-md bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                  >
-                    {cancellingJobs.has(job.job_id) ? 'Cancelling...' : 'Cancel Job'}
-                  </button>
-                </div>
-              )}
-            </div>
-          );
-        })}
+      <div ref={jobGridRef} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {jobs.map((job) => (
+          <JobCard
+            key={job.job_id}
+            job={job}
+            isCancelling={cancellingJobs.has(job.job_id)}
+            onCancel={cancelJob}
+          />
+        ))}
       </div>
     </div>
   );

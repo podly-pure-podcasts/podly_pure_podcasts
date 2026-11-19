@@ -4,17 +4,15 @@ interface EnvVarHintProps {
   meta?: EnvOverrideEntry;
 }
 
+/** Shown only when an environment variable controls the field, which also locks it. */
 export default function EnvVarHint({ meta }: EnvVarHintProps) {
   if (!meta?.env_var) {
     return null;
   }
 
   return (
-    <div className="mt-1 flex items-center gap-1">
-      <code className="text-xs text-gray-500 font-mono">{meta.env_var}</code>
-      {meta.read_only && (
-        <span className="text-xs text-amber-600 font-medium">(read-only)</span>
-      )}
-    </div>
+    <span className="mt-1 block text-xs text-amber-700">
+      Set by <code className="font-mono">{meta.env_var}</code> in your environment.
+    </span>
   );
 }

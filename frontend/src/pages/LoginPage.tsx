@@ -1,10 +1,11 @@
 import type { FormEvent } from 'react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { discordApi } from '../services/api';
 import ThemeToggle from '../components/ThemeToggle';
+import { gsap, prefersFullMotion, SETTLE_EASE, useGSAP } from '../utils/gsap';
 
 export default function LoginPage() {
   const { login, landingPageEnabled } = useAuth();
@@ -84,17 +85,42 @@ export default function LoginPage() {
     }
   };
 
+  // The card pops in with the logo bouncing after it; a failed sign-in shakes it.
+  const cardRef = useRef<HTMLDivElement>(null);
+  useGSAP(
+    () => {
+      if (!prefersFullMotion()) return;
+      gsap
+        .timeline()
+        .from(cardRef.current, { autoAlpha: 0, scale: 0.94, y: 18, duration: 0.5, ease: 'back.out(1.5)', clearProps: 'transform' })
+        .from('[data-login-logo]', { scale: 0.4, rotate: -12, duration: 0.6, ease: 'back.out(2.4)', clearProps: 'transform' }, 0.12)
+        .from('[data-login-rise]', { autoAlpha: 0, y: 10, duration: 0.35, ease: SETTLE_EASE, stagger: 0.05, clearProps: 'transform' }, 0.18);
+    },
+    { scope: cardRef }
+  );
+  useGSAP(
+    () => {
+      if (!error || !prefersFullMotion()) return;
+      gsap.fromTo(
+        cardRef.current,
+        { x: 0 },
+        { keyframes: { x: [-10, 9, -6, 4, -2, 0] }, duration: 0.42, ease: 'power1.out', clearProps: 'x' }
+      );
+    },
+    { dependencies: [error] }
+  );
+
   return (
     <div className="min-h-dvh bg-gray-50 flex items-center justify-center px-4">
       <div className="fixed right-4 top-4">
         <ThemeToggle />
       </div>
-      <div className="w-full max-w-md bg-white shadow-lg rounded-xl border border-gray-200 p-6">
+      <div ref={cardRef} className="w-full max-w-md bg-surface rounded-lg border border-gray-200 p-6">
         <div className="flex flex-col items-center gap-2 mb-6">
           <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-            <img src="/images/logos/logo.webp" alt="Podly" className="h-10 w-auto" />
+            <img data-login-logo src="/images/logos/logo.webp" alt="Podly" className="h-10 w-auto" />
           </Link>
-          <h1 className="text-xl font-semibold text-gray-900">Sign in to Podly</h1>
+          <h1 data-login-rise className="text-xl font-semibold text-gray-900">Sign in to Podly</h1>
         </div>
 
         {error && (
@@ -109,7 +135,7 @@ export default function LoginPage() {
               type="button"
               onClick={handleDiscordLogin}
               disabled={discordLoading}
-              className="w-full flex justify-center items-center gap-2 rounded-md bg-[#5865F2] px-4 py-3 text-white font-semibold shadow hover:bg-[#4752C4] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full flex justify-center items-center gap-2 rounded-md bg-[#5865F2] px-4 py-3 text-white font-semibold hover:bg-[#4752C4] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {discordLoading ? (
                 <span className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
@@ -133,7 +159,7 @@ export default function LoginPage() {
         )}
 
         {(!discordEnabled || showPasswordLogin) && (
-          <form
+          <form data-login-rise
             className={`space-y-4 ${discordEnabled ? 'pt-4 border-t border-gray-200' : ''}`}
             onSubmit={handleSubmit}
           >
@@ -148,7 +174,7 @@ export default function LoginPage() {
                 autoComplete="username"
                 value={username}
                 onChange={(event) => setUsername(event.target.value)}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 disabled={submitting}
                 required
               />
@@ -165,7 +191,7 @@ export default function LoginPage() {
                 autoComplete="current-password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 disabled={submitting}
                 required
               />
@@ -174,7 +200,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full flex justify-center items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-white font-medium hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              className="btn btn-primary w-full"
             >
               {submitting && <span className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />}
               {submitting ? 'Signing in…' : 'Sign in'}
@@ -187,7 +213,7 @@ export default function LoginPage() {
             <img src="https://img.shields.io/badge/discord-join-blue.svg?logo=discord&logoColor=white" alt="Discord" />
           </a>
           {landingPageEnabled && (
-            <Link to="/" className="text-sm text-gray-500 hover:text-gray-700 transition-colors">
+            <Link to="/" className="text-sm text-gray-600 hover:text-gray-900 transition-colors">
               ← Back to home
             </Link>
           )}

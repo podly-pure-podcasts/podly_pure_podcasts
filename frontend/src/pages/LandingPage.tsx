@@ -17,7 +17,7 @@ export default function LandingPage() {
   return (
     <div className="min-h-dvh bg-gradient-to-b from-gray-50 to-white overflow-y-auto overflow-x-hidden fixed inset-0">
       {/* Header */}
-      <header className="fixed top-0 left-0 right-0 bg-white/80 backdrop-blur-md border-b border-gray-100 z-50">
+      <header className="fixed top-0 left-0 right-0 bg-surface/80 backdrop-blur-md border-b border-gray-100 z-50">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-2">
@@ -58,7 +58,7 @@ export default function LandingPage() {
           </p>
 
           {/* Live user count */}
-          <div className="inline-flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-6 py-4 shadow-sm mb-8">
+          <div className="inline-flex items-center gap-3 bg-surface border border-gray-200 rounded-xl px-6 py-4 shadow-sm mb-8">
             <div className="flex items-center gap-2">
               <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
               <span className="text-sm font-medium text-gray-700">
@@ -116,7 +116,7 @@ export default function LandingPage() {
             <p className="text-lg text-gray-600 max-w-3xl mx-auto">Podly grabs the feed, finds sponsorship blocks, and gives you a private RSS link so your own players stream the ad-free version.</p>
           </div>
           <div className="grid gap-6 lg:grid-cols-2">
-            <div className="rounded-2xl border border-gray-100 bg-white p-6">
+            <div className="rounded-2xl border border-gray-100 bg-surface p-6">
               <p className="text-sm font-semibold uppercase tracking-wide text-gray-500 mb-4">Listen anywhere</p>
               <ul className="space-y-3 text-sm text-gray-600">
                 <li><strong className="text-gray-900">Apple Podcasts:</strong> Library → Edit → Add Show by URL → paste the Podly link.</li>

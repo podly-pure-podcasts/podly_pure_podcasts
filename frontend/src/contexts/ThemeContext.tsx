@@ -56,9 +56,13 @@ function applyThemeToDocument(
   }
 
   const root = document.documentElement;
+  root.classList.add('theme-switching');
   root.classList.toggle('dark', resolvedTheme === 'dark');
   root.style.colorScheme = resolvedTheme;
   root.dataset.themePreference = preference;
+  // Commit the new palette with transitions off, then re-enable them.
+  void root.offsetHeight;
+  window.requestAnimationFrame(() => root.classList.remove('theme-switching'));
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {

@@ -8,8 +8,11 @@ export default function ProcessingSection() {
 
   return (
     <div className="space-y-6">
-      <Section title="Processing">
-        <Field label="Number of Segments per Prompt">
+      <Section title="Ad detection batching">
+        <Field
+          label="Transcript segments per LLM request"
+          hint="More segments give the model more context per call but use more tokens per request; fewer make more, smaller calls."
+        >
           <input
             className="input"
             type="number"
@@ -22,8 +25,6 @@ export default function ProcessingSection() {
       </Section>
 
       <SaveButton onSave={handleSave} isPending={isSaving} />
-
-      <style>{`.input{width:100%;padding:0.5rem;border:1px solid #e5e7eb;border-radius:0.375rem;font-size:0.875rem}`}</style>
     </div>
   );
 }

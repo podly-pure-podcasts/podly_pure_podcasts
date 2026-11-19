@@ -15,6 +15,16 @@ LLM_MAX_INPUT_TOKENS_PER_MINUTE: int | None = None
 ENABLE_BOUNDARY_REFINEMENT = True
 ENABLE_WORD_LEVEL_BOUNDARY_REFINDER = False
 ENABLE_LLM_CHAPTER_FALLBACK_TAGGING = False
+# litellm `service_tier` kwarg forwarded to providers that support it
+# (currently OpenAI and Google Gemini). "flex" trades latency for ~50% lower
+# cost and surfaces 429/503 under load; "priority" trades cost for speed;
+# "auto" lets the provider choose; "default" leaves the kwarg unset.
+# When set to "flex", the call wrapper retries with exponential backoff and
+# falls back to the standard tier on the final attempt if the tier is
+# exhausted. Non-supported providers (Anthropic, Groq, xAI, ...) are skipped.
+LLM_SERVICE_TIER = "default"
+LLM_SERVICE_TIER_MAX_RETRIES = 3
+LLM_SERVICE_TIER_BASE_DELAY_SEC = 5
 
 # Whisper defaults
 WHISPER_DEFAULT_TYPE = "groq"
@@ -48,6 +58,7 @@ APP_ENABLE_PUBLIC_LANDING_PAGE = False
 APP_USER_LIMIT_TOTAL: int | None = None
 APP_AUTOPROCESS_ON_DOWNLOAD = False
 APP_COST_RATE_PER_HOUR = 0.04
+APP_WHISPER_COST_RATE_PER_HOUR = APP_COST_RATE_PER_HOUR
 
 # Credits defaults
 MINUTES_PER_CREDIT = 60

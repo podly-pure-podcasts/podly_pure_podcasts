@@ -13,6 +13,7 @@ def _build_response(
     content: str,
     finish_reason: str | None,
     prompt_tokens: int = 11,
+    cached_prompt_tokens: int = 3,
     completion_tokens: int = 7,
     total_tokens: int = 18,
 ) -> MagicMock:
@@ -25,6 +26,7 @@ def _build_response(
     response.choices = [choice]
     response.usage = SimpleNamespace(
         prompt_tokens=prompt_tokens,
+        prompt_tokens_details=SimpleNamespace(cached_tokens=cached_prompt_tokens),
         completion_tokens=completion_tokens,
         total_tokens=total_tokens,
     )
@@ -67,7 +69,7 @@ def test_refine_tags_parse_failures_with_finish_reason(
             return_value=("prompt", 42),
         ),
         patch(
-            "podcast_processor.word_boundary_refiner.litellm.completion",
+            "litellm.completion",
             return_value=response,
         ),
         caplog.at_level("DEBUG"),
@@ -88,6 +90,12 @@ def test_refine_tags_parse_failures_with_finish_reason(
     update_calls = cast(MagicMock, refiner._update_model_call).call_args_list
     assert update_calls[0].kwargs["status"] == "received_response"
     assert update_calls[0].kwargs["error_message"] is None
+    assert update_calls[0].kwargs["usage"] == {
+        "prompt_tokens": 11,
+        "cached_prompt_tokens": 3,
+        "completion_tokens": 7,
+        "total_tokens": 18,
+    }
     assert update_calls[1].kwargs["status"] == "success_heuristic"
     assert update_calls[1].kwargs["error_message"] == expected_error
 
@@ -204,3 +212,45 @@ def test_refine_end_uses_segment_seq_without_phrase() -> None:
     assert err is None
     assert changed is True
     assert refined_end == 205.0
+
+
+def test_refine_persists_cost_on_success() -> None:
+    refiner = WordBoundaryRefiner(config=create_standard_test_config())
+    response = _build_response(
+        content='{"refined_start": 10.0, "refined_end": 12.0}', finish_reason="stop"
+    )
+    all_segments = [
+        {
+            "sequence_num": 1,
+            "start_time": 10.0,
+            "end_time": 12.0,
+            "text": "This episode is brought to you by",
+        }
+    ]
+
+    with (
+        patch(
+            "podcast_processor.word_boundary_refiner.render_prompt_and_upsert_model_call",
+            return_value=("prompt", 42),
+        ),
+        patch("litellm.completion", return_value=response),
+        patch(
+            "podcast_processor.llm_model_call_utils.compute_estimated_cost_usd",
+            return_value=0.5,
+        ),
+        patch("podcast_processor.llm_model_call_utils.writer_client") as writer,
+    ):
+        refiner.refine(
+            ad_start=10.0,
+            ad_end=12.0,
+            confidence=0.9,
+            all_segments=all_segments,
+            post_id=99,
+            first_seq_num=1,
+            last_seq_num=1,
+        )
+
+    final = writer.update.call_args_list[-1].args[2]
+    assert final["status"] == "success"
+    assert final["total_tokens"] == 18
+    assert final["estimated_cost_usd"] == 0.5
