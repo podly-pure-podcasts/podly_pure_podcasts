@@ -1,3 +1,10 @@
+## [2.10.5](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.10.4...v2.10.5) (2026-11-19)
+
+
+### Bug Fixes
+
+* pace refiner calls and every retry through the token budget; price legacy cost rows ([cd5c77d](https://github.com/podly-pure-podcasts/podly_pure_podcasts/commit/cd5c77d652438de3b58009bdb946c972a2c0fa1d))
+
 ## [2.10.4](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.10.3...v2.10.4) (2026-11-13)
 
 
