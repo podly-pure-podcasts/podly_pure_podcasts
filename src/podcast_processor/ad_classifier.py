@@ -1,6 +1,7 @@
 import logging
 import math
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
@@ -130,10 +131,14 @@ class AdClassifier:
         self.boundary_refiner: BoundaryRefiner | None = None
         if config.enable_boundary_refinement:
             if getattr(config, "enable_word_level_boundary_refinder", False):
-                self.boundary_refiner = WordBoundaryRefiner(config, self.logger)  # type: ignore[assignment]
+                self.boundary_refiner = WordBoundaryRefiner(
+                    config, self.logger, token_limiter=self.rate_limiter
+                )  # type: ignore[assignment]
                 self.logger.info("Word-level boundary refiner enabled")
             else:
-                self.boundary_refiner = BoundaryRefiner(config, self.logger)
+                self.boundary_refiner = BoundaryRefiner(
+                    config, self.logger, token_limiter=self.rate_limiter
+                )
                 self.logger.info("Boundary refinement enabled")
         else:
             self.logger.info("Boundary refinement disabled via config")
@@ -1212,24 +1217,49 @@ class AdClassifier:
             )
         model_call_obj.service_tier = service_tier
 
+    def _pace_retries(
+        self, completion_args: dict[str, Any]
+    ) -> Callable[[], None] | None:
+        """Pace every provider request after the first.
+
+        ``_prepare_api_call`` already waited for the first request's tokens;
+        Flex retries and the standard-tier fallback each resend the prompt and
+        need their own wait, counted against the model actually in use.
+        """
+        limiter = self.rate_limiter
+        if limiter is None:
+            return None
+        first_attempt = True
+
+        def before_attempt() -> None:
+            nonlocal first_attempt
+            if first_attempt:
+                first_attempt = False
+                return
+            limiter.wait_if_needed(
+                completion_args["messages"], completion_args["model"]
+            )
+
+        return before_attempt
+
     def _complete(
         self, completion_args: dict[str, Any], model_call_id: int | None
     ) -> Any:
         """Run the completion, inside the concurrency limiter when configured."""
+
+        def call() -> Any:
+            return call_litellm_with_tier_retry(
+                completion_args,
+                config=self.config,
+                logger=self.logger,
+                model_call_id=model_call_id,
+                before_attempt=self._pace_retries(completion_args),
+            )
+
         if not self.concurrency_limiter:
-            return call_litellm_with_tier_retry(
-                completion_args,
-                config=self.config,
-                logger=self.logger,
-                model_call_id=model_call_id,
-            )
+            return call()
         with ConcurrencyContext(self.concurrency_limiter, timeout=30.0):
-            return call_litellm_with_tier_retry(
-                completion_args,
-                config=self.config,
-                logger=self.logger,
-                model_call_id=model_call_id,
-            )
+            return call()
 
     def _fail_permanently(
         self, model_call_obj: ModelCall, error: Exception, attempt_num: int

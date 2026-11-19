@@ -6,6 +6,7 @@ Note: We intentionally share some call-setup patterns with BoundaryRefiner.
 import json
 import logging
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -22,6 +23,7 @@ from podcast_processor.llm_model_call_utils import (
     render_prompt_and_upsert_model_call,
     try_update_model_call,
 )
+from podcast_processor.token_rate_limiter import TokenRateLimiter
 from shared.config import Config
 from shared.llm_utils import normalize_completion_args_for_model
 
@@ -45,10 +47,28 @@ class WordBoundaryRefiner:
     timestamps today.
     """
 
-    def __init__(self, config: Config, logger: logging.Logger | None = None):
+    def __init__(
+        self,
+        config: Config,
+        logger: logging.Logger | None = None,
+        token_limiter: TokenRateLimiter | None = None,
+    ):
         self.config = config
         self.logger = logger or logging.getLogger(__name__)
+        self.token_limiter = token_limiter
         self.template = self._load_template()
+
+    def _pace_request(
+        self, completion_args: dict[str, Any]
+    ) -> Callable[[], None] | None:
+        """Wait for the classifier's token budget before each provider request."""
+        limiter = self.token_limiter
+        if limiter is None:
+            return None
+        return lambda: limiter.wait_if_needed(
+            completion_args["messages"],
+            completion_args.get("model", self.config.llm_model),
+        )
 
     def _load_template(self) -> Template:
         path = (
@@ -127,6 +147,7 @@ Return only one JSON object (no markdown/code fences, no analysis text) with:
                 config=self.config,
                 logger=self.logger,
                 model_call_id=model_call_id,
+                before_attempt=self._pace_request(completion_args),
             )
             effective_service_tier = completion_args.get("service_tier")
 

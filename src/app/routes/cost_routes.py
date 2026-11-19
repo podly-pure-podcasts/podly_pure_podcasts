@@ -52,6 +52,23 @@ def _compute_cost_per_subscriber(
     return total_episode_cost / subscriber_count
 
 
+def _has_token_usage(call: ModelCall) -> bool:
+    return bool(
+        call.prompt_tokens or call.cached_prompt_tokens or call.completion_tokens
+    )
+
+
+def _persisted_or_computed_cost(call: ModelCall) -> float:
+    """Cost stored when the call was finalized; legacy rows without one (or with
+    a stale zero despite token usage) are priced from their token usage."""
+    stored = call.estimated_cost_usd
+    if stored is not None and not (stored == 0 and _has_token_usage(call)):
+        return float(stored)
+    if not _has_token_usage(call):
+        return 0.0
+    return _model_call_cost(call)
+
+
 def _is_whisper_call(call: ModelCall) -> bool:
     return _is_whisper_call_by_name(call.model_name, call.prompt)
 
@@ -215,7 +232,7 @@ def api_admin_costs() -> flask.Response:
         for call in post_model_calls:
             if not _is_billable_llm_call(call):
                 continue
-            call_cost = float(call.estimated_cost_usd or 0.0)
+            call_cost = _persisted_or_computed_cost(call)
             tier = (call.service_tier or "default").lower()
             llm_cost += call_cost
             llm_cost_by_tier[tier] = llm_cost_by_tier.get(tier, 0.0) + call_cost
@@ -334,13 +351,11 @@ def api_admin_costs_calls() -> flask.Response:
             "cached_prompt_tokens": c.cached_prompt_tokens,
             "completion_tokens": c.completion_tokens,
             "total_tokens": c.total_tokens,
-            # Read the persisted cost the writer stored at finalize time so
-            # the listing doesn't have to import litellm in the web process.
-            # Legacy rows whose column is NULL appear as 0.0 until the
-            # admin backfill endpoint runs.
+            # Same rule as the dashboard: the stored cost, or one priced from
+            # tokens for legacy rows without a usable one.
             "estimated_cost": (
-                round(float(c.estimated_cost_usd), 8)
-                if c.estimated_cost_usd is not None
+                round(_persisted_or_computed_cost(c), 8)
+                if _is_billable_llm_call(c)
                 else 0.0
             ),
         }
@@ -392,16 +407,19 @@ def api_admin_backfill_estimated_cost() -> flask.Response:
         ModelCall.estimated_cost_usd.is_(None),
         ModelCall.status.like("success%"),
     ).order_by(ModelCall.id.asc())
-    if limit:
-        query = query.limit(limit)
-    targets: list[ModelCall] = query.all()
-
+    # The cap counts rows that change, not rows looked at: unpriceable rows stay
+    # NULL, so a plain LIMIT would revisit the same ones on every run.
+    scanned = 0
     eligible = 0
     updated = 0
     skipped_non_billable = 0
     skipped_no_tokens = 0
     failed_updates = 0
-    for call in targets:
+    changed = 0
+    for call in query.yield_per(200):
+        if limit and changed >= limit:
+            break
+        scanned += 1
         if not _is_billable_llm_call(call):
             skipped_non_billable += 1
             cost = 0.0
@@ -413,6 +431,7 @@ def api_admin_backfill_estimated_cost() -> flask.Response:
         else:
             eligible += 1
             cost = round(_model_call_cost(call), 8)
+        changed += 1
         if not apply:
             continue
         result = writer_client.update(
@@ -428,7 +447,7 @@ def api_admin_backfill_estimated_cost() -> flask.Response:
 
     return jsonify(
         {
-            "scanned": len(targets),
+            "scanned": scanned,
             "eligible": eligible,
             "skipped_non_billable": skipped_non_billable,
             "skipped_no_tokens": skipped_no_tokens,
