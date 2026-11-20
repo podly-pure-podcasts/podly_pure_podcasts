@@ -1,3 +1,10 @@
+## [2.10.6](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.10.5...v2.10.6) (2026-11-20)
+
+
+### Bug Fixes
+
+* **deps:** bump certifi to 2026.10.19 in uv.lite.lock ([#298](https://github.com/podly-pure-podcasts/podly_pure_podcasts/issues/298)) ([156b627](https://github.com/podly-pure-podcasts/podly_pure_podcasts/commit/156b627db27e158f57e5b0438cfb439e7ea6ca2b))
+
 ## [2.10.5](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.10.4...v2.10.5) (2026-11-19)
 
 
