@@ -14,6 +14,7 @@ import feedparser
 import PyRSS2Gen
 from flask import current_app, g, request
 
+from app.episode_filters import is_title_excluded
 from app.extensions import db
 from app.guid_urls import post_stream_path
 from app.models import Feed, Post, User, UserFeed
@@ -362,6 +363,11 @@ def fetch_feed(url: str) -> feedparser.FeedParserDict:
 def _should_whitelist_new_post(
     feed: Feed, post: Post, floor_date: datetime.date | None
 ) -> bool:
+    if is_title_excluded(feed, post.title):
+        logger.debug(
+            "skipping post whose title matches a feed exclusion: %s", post.title
+        )
+        return False
     if floor_date is not None and post.release_date is None:
         logger.debug(
             "skipping post without release_date for existing feed: %s",
@@ -789,7 +795,14 @@ def generate_feed_xml(feed: Feed) -> Any:
     include_unprocessed = getattr(config, "autoprocess_on_download", True)
 
     if include_unprocessed:
-        posts = list(cast(Iterable[Post], feed.posts))
+        # Episodes excluded by title stay out of the feed so a podcast app
+        # cannot trigger processing by downloading them, unless the user
+        # whitelisted them by hand.
+        posts = [
+            post
+            for post in cast(Iterable[Post], feed.posts)
+            if post.whitelisted or not is_title_excluded(feed, post.title)
+        ]
     else:
         posts = (
             Post.query.filter(
