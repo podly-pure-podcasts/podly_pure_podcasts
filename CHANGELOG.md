@@ -1,3 +1,10 @@
+## [2.10.7](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.10.6...v2.10.7) (2026-11-21)
+
+
+### Bug Fixes
+
+* **frontend:** label ModelCall attempts as Attempts, not Retries ([#299](https://github.com/podly-pure-podcasts/podly_pure_podcasts/issues/299)) ([3121739](https://github.com/podly-pure-podcasts/podly_pure_podcasts/commit/312173948ea77bb0c6243501ca3e5717b9beab9a)), closes [#296](https://github.com/podly-pure-podcasts/podly_pure_podcasts/issues/296)
+
 ## [2.10.6](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.10.5...v2.10.6) (2026-11-20)
 
 
