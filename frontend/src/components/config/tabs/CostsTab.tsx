@@ -7,6 +7,11 @@ import { costsApi } from '../../../services/api';
 import type { CostSummary, CallLog, EstimatedCostBackfillResult, TokenBackfillResult } from '../../../types';
 import { formatBackendDateTime } from '../../../utils/datetime';
 import { Section } from '../shared';
+import {
+  ATTEMPTS_COLUMN_LABEL,
+  ATTEMPTS_COLUMN_TITLE,
+  formatModelCallAttempts,
+} from '../../../utils/modelCallAttempts';
 
 function MonthSelector({
   year,
@@ -427,7 +432,9 @@ export default function CostsTab() {
                     <th className="text-left py-2 pr-4 font-medium text-gray-600">Tier</th>
                     <th className="text-right py-2 pr-4 font-medium text-gray-600">Tokens</th>
                     <th className="text-right py-2 pr-4 font-medium text-gray-600">Cost</th>
-                    <th className="text-right py-2 pr-4 font-medium text-gray-600">Retries</th>
+                    <th className="text-right py-2 pr-4 font-medium text-gray-600" title={ATTEMPTS_COLUMN_TITLE}>
+                      {ATTEMPTS_COLUMN_LABEL}
+                    </th>
                     <th className="text-right py-2 font-medium text-gray-600">Timestamp</th>
                   </tr>
                 </thead>
@@ -457,7 +464,12 @@ export default function CostsTab() {
                       <td className="py-2 pr-4 text-right text-gray-600 font-mono">
                         {c.estimated_cost != null ? `$${c.estimated_cost.toFixed(4)}` : '—'}
                       </td>
-                      <td className="py-2 pr-4 text-right text-gray-600">{c.retry_attempts}</td>
+                      <td
+                        className="py-2 pr-4 text-right text-gray-600"
+                        title={formatModelCallAttempts(c.retry_attempts).title}
+                      >
+                        {formatModelCallAttempts(c.retry_attempts).text}
+                      </td>
                       <td className="py-2 text-right text-gray-600 text-xs whitespace-nowrap">
                         {formatBackendDateTime(c.timestamp)}
                       </td>
