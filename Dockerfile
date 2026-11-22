@@ -86,6 +86,16 @@ RUN if [ -f /etc/debian_version ]; then \
     fi ; \
     fi
 
+# The python base image ships pip in its system site-packages. pip below
+# 26.2.2 always trusts its vendored certifi bundle, which still includes the
+# compromised emSign intermediates (https://discuss.python.org/t/109576).
+# The app runs from /app/.venv, which has no pip, but upgrade the system one
+# so the image doesn't ship an affected pip. Other base images (apt pip) are
+# left as they are.
+RUN if [ -x /usr/local/bin/python3 ]; then \
+    /usr/local/bin/python3 -m pip install --no-cache-dir --upgrade "pip>=26.2.2"; \
+    fi
+
 # Copy dependency manifests and lock files
 COPY pyproject.toml pyproject.lite.toml uv.lock uv.lite.lock ./
 
