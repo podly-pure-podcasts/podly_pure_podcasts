@@ -8,6 +8,7 @@ from sqlalchemy.orm import validates
 from app.auth.passwords import hash_password, verify_password
 from app.extensions import db
 from shared import defaults as DEFAULTS
+from shared import model_call_types
 
 
 def generate_uuid() -> str:
@@ -233,6 +234,15 @@ class ModelCall(db.Model):  # type: ignore[name-defined, misc]
     # NULL = LLM/legacy row; set = Whisper row. Doubles as the discriminator
     # for the two partial unique indexes below.
     language = db.Column(db.Text, nullable=True)
+    # What the call was for (see shared/model_call_types.py). Part of the LLM
+    # unique index, so a refinement over the same segment range as a
+    # classification chunk gets its own row.
+    call_type = db.Column(
+        db.String,
+        nullable=False,
+        default=model_call_types.CLASSIFICATION,
+        server_default=model_call_types.CLASSIFICATION,
+    )
     # litellm `service_tier` value sent on the last attempt of this call (e.g.
     # "flex", "priority"). NULL when the call was made at the provider's
     # default tier or against a provider that doesn't accept service_tier
@@ -259,7 +269,7 @@ class ModelCall(db.Model):  # type: ignore[name-defined, misc]
 
     # Two partial unique indexes — whisper rows are keyed by (post, model,
     # language) since the same audio can be transcribed in multiple languages,
-    # while non-whisper (LLM) rows preserve the legacy chunk-based key.
+    # while non-whisper (LLM) rows are keyed by chunk, model and call type.
     __table_args__ = (
         db.Index(
             "ix_model_call_post_chunk_model",
@@ -267,6 +277,7 @@ class ModelCall(db.Model):  # type: ignore[name-defined, misc]
             "first_segment_sequence_num",
             "last_segment_sequence_num",
             "model_name",
+            "call_type",
             unique=True,
             sqlite_where=sa.text("language IS NULL"),
         ),

@@ -37,6 +37,7 @@ from podcast_processor.token_rate_limiter import (
 )
 from podcast_processor.transcribe import Segment
 from podcast_processor.word_boundary_refiner import WordBoundaryRefiner
+from shared import model_call_types
 from shared.config import Config, TestWhisperConfig
 from shared.llm_utils import (
     model_uses_max_completion_tokens,
@@ -737,6 +738,7 @@ class AdClassifier:
                 "first_segment_sequence_num": first_seq_num,
                 "last_segment_sequence_num": last_seq_num,
                 "prompt": user_prompt_str,
+                "call_type": model_call_types.CLASSIFICATION,
             },
             wait=True,
         )

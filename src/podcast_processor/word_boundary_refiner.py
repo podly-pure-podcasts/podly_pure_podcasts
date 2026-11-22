@@ -24,6 +24,7 @@ from podcast_processor.llm_model_call_utils import (
     try_update_model_call,
 )
 from podcast_processor.token_rate_limiter import TokenRateLimiter
+from shared import model_call_types
 from shared.config import Config
 from shared.llm_utils import normalize_completion_args_for_model
 
@@ -116,6 +117,7 @@ Return only one JSON object (no markdown/code fences, no analysis text) with:
             first_seq_num=first_seq_num,
             last_seq_num=last_seq_num,
             model_name=self.config.llm_model,
+            call_type=model_call_types.WORD_BOUNDARY_REFINEMENT,
             logger=self.logger,
             log_prefix="Word boundary refine",
         )

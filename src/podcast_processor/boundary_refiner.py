@@ -22,6 +22,7 @@ from podcast_processor.llm_model_call_utils import (
     try_update_model_call,
 )
 from podcast_processor.token_rate_limiter import TokenRateLimiter
+from shared import model_call_types
 from shared.config import Config
 from shared.llm_utils import normalize_completion_args_for_model
 
@@ -135,6 +136,7 @@ Return JSON: {"refined_start": {{ad_start}}, "refined_end": {{ad_end}}, "start_r
                         "first_segment_sequence_num": first_seq_num,
                         "last_segment_sequence_num": last_seq_num,
                         "prompt": prompt,
+                        "call_type": model_call_types.BOUNDARY_REFINEMENT,
                     },
                     wait=True,
                 )

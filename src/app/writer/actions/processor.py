@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
 from app.models import Identification, ModelCall, TranscriptSegment
+from shared import model_call_types
 
 
 def upsert_model_call_action(params: dict[str, Any]) -> dict[str, Any]:
@@ -17,6 +18,7 @@ def upsert_model_call_action(params: dict[str, Any]) -> dict[str, Any]:
     first_seq = params.get("first_segment_sequence_num")
     last_seq = params.get("last_segment_sequence_num")
     prompt = params.get("prompt")
+    call_type = params.get("call_type", model_call_types.CLASSIFICATION)
 
     if post_id is None or model_name is None or first_seq is None or last_seq is None:
         raise ValueError(
@@ -24,6 +26,8 @@ def upsert_model_call_action(params: dict[str, Any]) -> dict[str, Any]:
         )
     if not isinstance(prompt, str) or not prompt:
         raise ValueError("prompt is required")
+    if call_type not in model_call_types.LLM_CALL_TYPES:
+        raise ValueError(f"unsupported call_type: {call_type!r}")
 
     def _query() -> ModelCall | None:
         return (
@@ -33,6 +37,7 @@ def upsert_model_call_action(params: dict[str, Any]) -> dict[str, Any]:
                 model_name=str(model_name),
                 first_segment_sequence_num=int(first_seq),
                 last_segment_sequence_num=int(last_seq),
+                call_type=call_type,
             )
             .order_by(ModelCall.timestamp.desc())
             .first()
@@ -45,6 +50,7 @@ def upsert_model_call_action(params: dict[str, Any]) -> dict[str, Any]:
             first_segment_sequence_num=int(first_seq),
             last_segment_sequence_num=int(last_seq),
             model_name=str(model_name),
+            call_type=call_type,
             prompt=str(prompt),
             status="pending",
             timestamp=datetime.now(UTC).replace(tzinfo=None),
@@ -126,6 +132,7 @@ def upsert_whisper_model_call_action(params: dict[str, Any]) -> dict[str, Any]:
             last_segment_sequence_num=int(last_seq),
             prompt=str(prompt),
             language=language,
+            call_type=model_call_types.TRANSCRIPTION,
             status=str(reset_fields.get("status") or "pending"),
             retry_attempts=int(reset_fields.get("retry_attempts") or 0),
             error_message=reset_fields.get("error_message"),
