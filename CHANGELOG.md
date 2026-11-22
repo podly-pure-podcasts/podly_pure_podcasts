@@ -1,3 +1,10 @@
+## [2.10.8](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.10.7...v2.10.8) (2026-11-22)
+
+
+### Bug Fixes
+
+* **processor:** key ModelCall rows by call type ([#300](https://github.com/podly-pure-podcasts/podly_pure_podcasts/issues/300)) ([d8d6463](https://github.com/podly-pure-podcasts/podly_pure_podcasts/commit/d8d646328e466e2af40ab0fbde33ea162de941be)), closes [#271](https://github.com/podly-pure-podcasts/podly_pure_podcasts/issues/271)
+
 ## [2.10.7](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.10.6...v2.10.7) (2026-11-21)
 
 
