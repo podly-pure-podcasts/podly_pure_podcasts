@@ -33,6 +33,7 @@ from podcast_processor.llm_model_call_utils import (
     try_upsert_model_call as _try_upsert_model_call,
 )
 from podcast_processor.word_boundary_refiner import WordBoundaryRefiner
+from shared import model_call_types
 from shared.llm_utils import model_uses_max_completion_tokens
 
 # Sentinel (first_seq, last_seq) pairs used when chapter LLM calls are
@@ -492,6 +493,7 @@ def refine_generated_chapter_titles_with_llm(
         last_seq_num=last_seq,
         model_name=llm_model,
         prompt=prompt,
+        call_type=model_call_types.CHAPTER_TITLE,
         logger=log,
         log_prefix="Chapter title refine",
     )
@@ -1015,6 +1017,7 @@ def _request_topic_chapter_plan(
         last_seq_num=last_seq,
         model_name=llm_model,
         prompt=prompt,
+        call_type=model_call_types.TOPIC_PLAN,
         logger=log,
         log_prefix=phase_label,
     )

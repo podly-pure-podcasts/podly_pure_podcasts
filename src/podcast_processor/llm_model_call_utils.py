@@ -257,6 +257,7 @@ def render_prompt_and_upsert_model_call(
     first_seq_num: int | None,
     last_seq_num: int | None,
     model_name: str,
+    call_type: str,
     logger: logging.Logger,
     log_prefix: str,
 ) -> tuple[str, int | None]:
@@ -273,6 +274,7 @@ def render_prompt_and_upsert_model_call(
         last_seq_num=last_seq_num,
         model_name=model_name,
         prompt=prompt,
+        call_type=call_type,
         logger=logger,
         log_prefix=log_prefix,
     )
@@ -287,6 +289,7 @@ def try_upsert_model_call(
     last_seq_num: int | None,
     model_name: str,
     prompt: str,
+    call_type: str,
     logger: logging.Logger,
     log_prefix: str,
 ) -> int | None:
@@ -306,6 +309,7 @@ def try_upsert_model_call(
                 "first_segment_sequence_num": first_seq_num,
                 "last_segment_sequence_num": last_seq_num,
                 "prompt": prompt,
+                "call_type": call_type,
             },
             wait=True,
         )
