@@ -1,3 +1,10 @@
+## [2.10.9](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.10.8...v2.10.9) (2026-11-23)
+
+
+### Bug Fixes
+
+* **docker:** upgrade pip in lite image for emSign CA notice ([#301](https://github.com/podly-pure-podcasts/podly_pure_podcasts/issues/301)) ([ac9cb9d](https://github.com/podly-pure-podcasts/podly_pure_podcasts/commit/ac9cb9da155b63f485dac147dcba64fdbc85e8ea))
+
 ## [2.10.8](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.10.7...v2.10.8) (2026-11-22)
 
 
