@@ -275,14 +275,14 @@ export default function FeedSettingsModal({
               <textarea
                 value={titleExcludeStrings}
                 onChange={(e) => setTitleExcludeStrings(e.target.value)}
-                placeholder="bonus,spit hit*,*(rerun)"
+                placeholder="bonus,trailer*,*(rerun)"
                 rows={2}
                 className="w-full rounded-lg border border-gray-300 bg-surface px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
               />
               <p className="text-xs text-gray-500 mt-1">
                 Comma-separated, case-insensitive. A phrase matches anywhere in
                 the title; use * as a wildcard to match the whole title
-                (spit hit* = starts with, *rerun = ends with). Matching new
+                (trailer* = starts with, *rerun = ends with). Matching new
                 episodes are never auto-whitelisted and are left out of the
                 Podly feed. You can still whitelist one by hand.
               </p>

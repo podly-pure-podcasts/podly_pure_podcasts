@@ -24,29 +24,29 @@ def _feed(exclude: str | None) -> SimpleNamespace:
 def test_parse_title_exclude_strings_trims_and_drops_blanks():
     assert parse_title_exclude_strings(None) == []
     assert parse_title_exclude_strings("") == []
-    assert parse_title_exclude_strings(" Spit Hit , ,BONUS ") == ["spit hit", "bonus"]
+    assert parse_title_exclude_strings(" Trailer , ,BONUS ") == ["trailer", "bonus"]
 
 
 def test_normalize_title_exclude_strings_clears_blank_input():
     assert normalize_title_exclude_strings(None) is None
     assert normalize_title_exclude_strings(" , ") is None
-    assert normalize_title_exclude_strings(" Spit Hit , Bonus ") == "Spit Hit,Bonus"
+    assert normalize_title_exclude_strings(" Trailer , Bonus ") == "Trailer,Bonus"
 
 
 def test_is_title_excluded_matches_case_insensitive_substring():
-    feed = _feed("spit hit,best of")
-    assert is_title_excluded(feed, "SPIT HIT: Tuesday's highlights") is True
+    feed = _feed("trailer,best of")
+    assert is_title_excluded(feed, "TRAILER: Tuesday's highlights") is True
     assert is_title_excluded(feed, "The Best Of 2026") is True
     assert is_title_excluded(feed, "Episode 412 with a guest") is False
     assert is_title_excluded(feed, None) is False
-    assert is_title_excluded(_feed(None), "Spit Hit") is False
+    assert is_title_excluded(_feed(None), "Trailer") is False
 
 
 def test_is_title_excluded_wildcards_match_the_whole_title():
-    feed = _feed("spit hit*,*(rerun),*best*of*")
+    feed = _feed("trailer*,*(rerun),*best*of*")
     # starts with
-    assert is_title_excluded(feed, "Spit Hit: Tuesday") is True
-    assert is_title_excluded(feed, "Episode 12 - spit hit") is False
+    assert is_title_excluded(feed, "Trailer: Tuesday") is True
+    assert is_title_excluded(feed, "Episode 12 - trailer") is False
     # ends with
     assert is_title_excluded(feed, "Episode 300 (Rerun)") is True
     assert is_title_excluded(feed, "(Rerun) Episode 300 extended") is False
@@ -78,11 +78,11 @@ def test_should_whitelist_new_post_skips_excluded_titles():
     feed = Feed(
         title="Comedy",
         rss_url="https://example.com/comedy.xml",
-        episode_title_exclude_strings="spit hit",
+        episode_title_exclude_strings="trailer",
         auto_whitelist_new_episodes_override=True,
     )
     release = datetime.datetime(2026, 11, 1, tzinfo=datetime.UTC)
-    excluded = Post(title="Spit Hit #12", release_date=release)
+    excluded = Post(title="Trailer #12", release_date=release)
     regular = Post(title="Episode 500", release_date=release)
 
     assert _should_whitelist_new_post(feed, excluded, None) is False
@@ -102,7 +102,7 @@ def test_generate_feed_xml_hides_excluded_unwhitelisted_posts(
             feed = Feed(
                 rss_url="http://example.com/comedy",
                 title="Comedy",
-                episode_title_exclude_strings="spit hit",
+                episode_title_exclude_strings="trailer",
             )
             db.session.add(feed)
             db.session.commit()
@@ -116,14 +116,14 @@ def test_generate_feed_xml_hides_excluded_unwhitelisted_posts(
             )
             excluded = Post(
                 feed_id=feed.id,
-                title="Spit Hit #12",
+                title="Trailer #12",
                 guid="excluded",
                 download_url="http://example.com/excluded.mp3",
                 whitelisted=False,
             )
             hand_whitelisted = Post(
                 feed_id=feed.id,
-                title="Spit Hit #13",
+                title="Trailer #13",
                 guid="hand-whitelisted",
                 download_url="http://example.com/hand.mp3",
                 whitelisted=True,
@@ -149,7 +149,7 @@ def test_whitelist_latest_post_skips_excluded_titles(app):
         feed = Feed(
             rss_url="http://example.com/comedy-latest",
             title="Comedy",
-            episode_title_exclude_strings="spit hit",
+            episode_title_exclude_strings="trailer",
         )
         db.session.add(feed)
         db.session.commit()
@@ -164,9 +164,9 @@ def test_whitelist_latest_post_skips_excluded_titles(app):
         )
         newest = Post(
             feed_id=feed.id,
-            title="Spit Hit #12",
-            guid="spit-12",
-            download_url="http://example.com/spit12.mp3",
+            title="Trailer #12",
+            guid="trailer-12",
+            download_url="http://example.com/trailer12.mp3",
             release_date=datetime.datetime(2026, 11, 2),
             whitelisted=False,
         )
@@ -208,10 +208,10 @@ def test_update_feed_settings_stores_normalized_title_exclusions(app):
         mock_writer.update.side_effect = _apply_writer_update
         response = client.patch(
             f"/api/feeds/{feed_id}/settings",
-            json={"episode_title_exclude_strings": " Spit Hit , ,Bonus "},
+            json={"episode_title_exclude_strings": " Trailer , ,Bonus "},
         )
         assert response.status_code == 200
-        assert response.get_json()["episode_title_exclude_strings"] == "Spit Hit,Bonus"
+        assert response.get_json()["episode_title_exclude_strings"] == "Trailer,Bonus"
 
         response = client.patch(
             f"/api/feeds/{feed_id}/settings",
@@ -227,7 +227,7 @@ def test_update_feed_settings_rejects_non_string_title_exclusions(app):
     with mock.patch("app.routes.feed_routes.writer_client") as mock_writer:
         response = client.patch(
             f"/api/feeds/{feed_id}/settings",
-            json={"episode_title_exclude_strings": ["spit hit"]},
+            json={"episode_title_exclude_strings": ["trailer"]},
         )
 
     assert response.status_code == 400

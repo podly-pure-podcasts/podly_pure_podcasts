@@ -2,9 +2,9 @@
 
 Each comma-separated phrase is matched case-insensitively against the title:
 
-* without ``*`` it matches anywhere in the title (``spit hit``);
+* without ``*`` it matches anywhere in the title (``trailer``);
 * with ``*`` it must match the whole title, ``*`` standing for any run of
-  characters, so ``spit hit*`` means "starts with", ``*rerun`` means
+  characters, so ``trailer*`` means "starts with", ``*rerun`` means
   "ends with" and ``*best*of*`` means "contains these in this order".
 
 Only ``*`` is special; every other character, including ``?`` and ``[``,
