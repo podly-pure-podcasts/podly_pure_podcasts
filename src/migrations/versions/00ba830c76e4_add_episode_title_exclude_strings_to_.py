@@ -1,7 +1,7 @@
 """add episode_title_exclude_strings to feed
 
 Revision ID: 00ba830c76e4
-Revises: 9f14d34e725a
+Revises: c3d8e1f0a271
 Create Date: 2026-11-17 14:47:27.743111
 
 """
@@ -11,7 +11,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "00ba830c76e4"
-down_revision = "9f14d34e725a"
+down_revision = "c3d8e1f0a271"
 branch_labels = None
 depends_on = None
 
