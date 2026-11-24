@@ -1,3 +1,10 @@
+# [2.11.0](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.10.9...v2.11.0) (2026-11-24)
+
+
+### Features
+
+* **feeds:** skip episodes by title when auto-whitelisting ([#297](https://github.com/podly-pure-podcasts/podly_pure_podcasts/issues/297)) ([07399fe](https://github.com/podly-pure-podcasts/podly_pure_podcasts/commit/07399fee663572dc3e8dd68b1ed0769ddacfc092)), closes [#155](https://github.com/podly-pure-podcasts/podly_pure_podcasts/issues/155) [#150](https://github.com/podly-pure-podcasts/podly_pure_podcasts/issues/150) [#300](https://github.com/podly-pure-podcasts/podly_pure_podcasts/issues/300)
+
 ## [2.10.9](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.10.8...v2.10.9) (2026-11-23)
 
 
