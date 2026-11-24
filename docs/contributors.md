@@ -227,7 +227,7 @@ See `.env.local.example` for all available environment variables.
 
 Q: What does "whitelisted" mean in the UI?
 
-A: It means an episode is eligible for download and ad removal. By default, new episodes are automatically whitelisted (`automatically_whitelist_new_episodes`), and only a limited number of old episodes are auto-whitelisted (`number_of_episodes_to_whitelist_from_archive_of_new_feed`). Adjust these settings in the Config page (/config).
+A: It means an episode is eligible for download and ad removal. By default, new episodes are automatically whitelisted (`automatically_whitelist_new_episodes`), and only a limited number of old episodes are auto-whitelisted (`number_of_episodes_to_whitelist_from_archive_of_new_feed`). Adjust these settings in the Config page (/config). To keep certain episodes from being auto-whitelisted (for example bonus or clip episodes), open a feed's Feed Settings and list title phrases under "Skip episodes whose title contains" (a phrase matches anywhere in the title; with `*` as a wildcard it must match the whole title, so `trailer*` means "starts with" and `*rerun` means "ends with"); matching new episodes are left out of the Podly feed unless you whitelist them by hand.
 
 Q: How can I enable whisper GPU acceleration?
 
