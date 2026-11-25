@@ -167,7 +167,15 @@ class CommandExecutor:
     def process_command(self, cmd: WriteCommand) -> WriteResult:
         with self.app.app_context():
             try:
-                logger.info(
+                # The job worker polls with dequeue_job every few seconds. The
+                # writer service already keeps those polls out of the INFO log;
+                # do the same here, or they make up nearly all of app.log.
+                is_poll = (
+                    cmd.type == WriteCommandType.ACTION
+                    and cmd.data.get("action") == "dequeue_job"
+                )
+                logger.log(
+                    logging.DEBUG if is_poll else logging.INFO,
                     "[WRITER] Processing command: id=%s type=%s model=%s",
                     cmd.id,
                     cmd.type,
@@ -192,11 +200,7 @@ class CommandExecutor:
                 result = self._execute_single_command(cmd)
                 if result.success:
                     # Suppress commit log for empty dequeue_job actions (polling)
-                    is_polling_noop = (
-                        cmd.type == WriteCommandType.ACTION
-                        and cmd.data.get("action") == "dequeue_job"
-                        and not result.data
-                    )
+                    is_polling_noop = is_poll and not result.data
 
                     if not is_polling_noop:
                         logger.info("[WRITER] Committing single command id=%s", cmd.id)
