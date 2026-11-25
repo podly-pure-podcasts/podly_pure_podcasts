@@ -101,6 +101,37 @@ export default function AppSection() {
         </Field>
       </Section>
 
+      <Section title="Logs" description="Podly writes its log to instance/logs/app.log.">
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field
+            label="Rotate the log at (MB)"
+            hint="When app.log reaches this size it becomes app.log.1 and a new file starts. 0 turns rotation off; blank means the default, 10."
+          >
+            <input
+              className="input"
+              type="number"
+              min={0}
+              value={pending?.app?.log_max_mb ?? ''}
+              onChange={(e) => setField(['app', 'log_max_mb'], numberOrNull(e.target.value))}
+            />
+          </Field>
+          <Field
+            label="Old log files to keep"
+            hint="Rotated files beyond this number are deleted. At least 1; blank means the default, 5."
+          >
+            <input
+              className="input"
+              type="number"
+              min={1}
+              value={pending?.app?.log_backup_count ?? ''}
+              onChange={(e) =>
+                setField(['app', 'log_backup_count'], numberOrNull(e.target.value))
+              }
+            />
+          </Field>
+        </div>
+      </Section>
+
       <Section title="Public site">
         <ToggleField
           label="Show the public landing page"

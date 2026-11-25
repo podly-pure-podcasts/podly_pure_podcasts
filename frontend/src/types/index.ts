@@ -176,6 +176,8 @@ export interface AppConfigUI {
   autoprocess_on_download: boolean;
   cost_rate_per_hour: number;
   whisper_cost_rate_per_hour: number;
+  log_max_mb: number | null;
+  log_backup_count: number | null;
 }
 
 export interface CombinedConfig {
