@@ -1,3 +1,10 @@
+# [2.12.0](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.11.1...v2.12.0) (2026-11-26)
+
+
+### Features
+
+* **logging:** rotate app.log, with limits on the Config page ([#303](https://github.com/podly-pure-podcasts/podly_pure_podcasts/issues/303)) ([f9e3c02](https://github.com/podly-pure-podcasts/podly_pure_podcasts/commit/f9e3c02b9fe940acd8944f5585cced2d9ff6ef0d))
+
 ## [2.11.1](https://github.com/podly-pure-podcasts/podly_pure_podcasts/compare/v2.11.0...v2.11.1) (2026-11-25)
 
 
