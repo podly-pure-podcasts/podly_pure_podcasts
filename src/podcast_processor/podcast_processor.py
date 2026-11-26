@@ -454,10 +454,17 @@ class PodcastProcessor:
             self._classify_ad_segments(post, job, transcript_segments)
         except ClassificationIncompleteError as e:
             self._raise_if_cancelled(job, 3, cancel_callback)
-            self._publish_without_ad_removal(
-                post, job, processed_audio_path, cancel_callback, str(e)
+            if self.config.publish_on_incomplete_ad_detection:
+                self._publish_without_ad_removal(
+                    post, job, processed_audio_path, cancel_callback, str(e)
+                )
+                return
+            self.logger.warning(
+                "Ad detection incomplete for post %s and fallback publishing is disabled: %s",
+                post.id,
+                e,
             )
-            return
+            raise ProcessorException(str(e)) from e
         self._raise_if_cancelled(job, 3, cancel_callback)
 
         # Step 4: Process audio (remove ad segments)

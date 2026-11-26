@@ -174,6 +174,7 @@ export interface AppConfigUI {
   enable_public_landing_page: boolean;
   user_limit_total: number | null;
   autoprocess_on_download: boolean;
+  publish_on_incomplete_ad_detection?: boolean;
   cost_rate_per_hour: number;
   whisper_cost_rate_per_hour: number;
 }

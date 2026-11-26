@@ -154,6 +154,7 @@ def ensure_defaults() -> None:
             "enable_public_landing_page": DEFAULTS.APP_ENABLE_PUBLIC_LANDING_PAGE,
             "user_limit_total": DEFAULTS.APP_USER_LIMIT_TOTAL,
             "autoprocess_on_download": DEFAULTS.APP_AUTOPROCESS_ON_DOWNLOAD,
+            "publish_on_incomplete_ad_detection": DEFAULTS.APP_PUBLISH_ON_INCOMPLETE_AD_DETECTION,
             "cost_rate_per_hour": DEFAULTS.APP_COST_RATE_PER_HOUR,
             "whisper_cost_rate_per_hour": DEFAULTS.APP_WHISPER_COST_RATE_PER_HOUR,
         },
@@ -232,6 +233,7 @@ def read_combined() -> dict[str, Any]:
             "enable_public_landing_page": app_s.enable_public_landing_page,
             "user_limit_total": app_s.user_limit_total,
             "autoprocess_on_download": app_s.autoprocess_on_download,
+            "publish_on_incomplete_ad_detection": app_s.publish_on_incomplete_ad_detection,
             "cost_rate_per_hour": app_s.cost_rate_per_hour,
             "whisper_cost_rate_per_hour": app_s.whisper_cost_rate_per_hour,
         },
@@ -370,6 +372,7 @@ def _update_section_app(data: dict[str, Any]) -> tuple[int | None, int | None]:
         "enable_public_landing_page",
         "user_limit_total",
         "autoprocess_on_download",
+        "publish_on_incomplete_ad_detection",
         "cost_rate_per_hour",
         "whisper_cost_rate_per_hour",
     ]:
@@ -580,6 +583,12 @@ def to_pydantic_config() -> PydanticConfig:
                 DEFAULTS.APP_AUTOPROCESS_ON_DOWNLOAD,
             )
         ),
+        publish_on_incomplete_ad_detection=bool(
+            data["app"].get(
+                "publish_on_incomplete_ad_detection",
+                DEFAULTS.APP_PUBLISH_ON_INCOMPLETE_AD_DETECTION,
+            )
+        ),
         cost_rate_per_hour=float(
             data["app"].get(
                 "cost_rate_per_hour",
@@ -606,6 +615,8 @@ def hydrate_runtime_config_inplace(db_config: PydanticConfig | None = None) -> N
     _log_initial_snapshot(cfg)
 
     _apply_top_level_env_overrides(cfg)
+
+    _apply_app_env_overrides(cfg)
 
     _apply_whisper_env_overrides(cfg)
 
@@ -697,6 +708,15 @@ def _apply_top_level_env_overrides(cfg: PydanticConfig) -> None:
                 "default|flex|priority|auto)",
                 env_service_tier,
             )
+
+
+def _apply_app_env_overrides(cfg: PydanticConfig) -> None:
+    env_publish_incomplete = _parse_bool(
+        os.environ.get("PUBLISH_ON_INCOMPLETE_AD_DETECTION"),
+        env_name="PUBLISH_ON_INCOMPLETE_AD_DETECTION",
+    )
+    if env_publish_incomplete is not None:
+        cfg.publish_on_incomplete_ad_detection = env_publish_incomplete
 
 
 def _apply_remote_whisper_runtime_overrides(whisper: RemoteWhisperConfig) -> None:

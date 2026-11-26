@@ -170,6 +170,14 @@ class Config(BaseModel):
     enable_public_landing_page: bool = DEFAULTS.APP_ENABLE_PUBLIC_LANDING_PAGE
     user_limit_total: int | None = DEFAULTS.APP_USER_LIMIT_TOTAL
     autoprocess_on_download: bool = DEFAULTS.APP_AUTOPROCESS_ON_DOWNLOAD
+    publish_on_incomplete_ad_detection: bool = Field(
+        default=DEFAULTS.APP_PUBLISH_ON_INCOMPLETE_AD_DETECTION,
+        description=(
+            "When enabled, episodes whose LLM ad detection is incomplete after "
+            "retries are published without ad removal (with a spoken notice). "
+            "When disabled, the job fails without publishing audio."
+        ),
+    )
     cost_rate_per_hour: float = DEFAULTS.APP_COST_RATE_PER_HOUR
     whisper_cost_rate_per_hour: float = DEFAULTS.APP_WHISPER_COST_RATE_PER_HOUR
 

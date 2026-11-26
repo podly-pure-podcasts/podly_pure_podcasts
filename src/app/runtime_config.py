@@ -50,4 +50,5 @@ else:
         developer_mode=os.environ.get("DEVELOPER_MODE", "false").lower() == "true",
         autoprocess_on_download=DEFAULTS.APP_AUTOPROCESS_ON_DOWNLOAD,
         llm_service_tier=DEFAULTS.LLM_SERVICE_TIER,
+        publish_on_incomplete_ad_detection=DEFAULTS.APP_PUBLISH_ON_INCOMPLETE_AD_DETECTION,
     )
