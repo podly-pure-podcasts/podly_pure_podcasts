@@ -50,4 +50,6 @@ else:
         developer_mode=os.environ.get("DEVELOPER_MODE", "false").lower() == "true",
         autoprocess_on_download=DEFAULTS.APP_AUTOPROCESS_ON_DOWNLOAD,
         llm_service_tier=DEFAULTS.LLM_SERVICE_TIER,
+        log_max_mb=DEFAULTS.APP_LOG_MAX_MB,
+        log_backup_count=DEFAULTS.APP_LOG_BACKUP_COUNT,
     )

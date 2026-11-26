@@ -8,6 +8,7 @@ from flask import current_app
 
 from app.db_commit import safe_commit
 from app.extensions import db, scheduler
+from app.logger import configure_log_rotation
 from app.models import (
     AppSettings,
     LLMSettings,
@@ -30,6 +31,22 @@ logger = logging.getLogger("global_logger")
 
 def _is_empty(value: Any) -> bool:
     return value is None or value == ""
+
+
+def _int_at_least(value: Any, minimum: int, default: int) -> int:
+    """Coerce a value to an int >= ``minimum``; empty or invalid gives ``default``."""
+    try:
+        return max(minimum, int(value))
+    except (TypeError, ValueError):
+        return default
+
+
+# (minimum, default) per log setting. 0 MB turns rotation off; at least one old
+# file is kept, because RotatingFileHandler never rotates with backupCount=0.
+_LOG_SETTING_LIMITS: dict[str, tuple[int, int]] = {
+    "log_max_mb": (0, DEFAULTS.APP_LOG_MAX_MB),
+    "log_backup_count": (1, DEFAULTS.APP_LOG_BACKUP_COUNT),
+}
 
 
 def _parse_int(val: Any, *, env_name: str = "") -> int | None:
@@ -156,6 +173,8 @@ def ensure_defaults() -> None:
             "autoprocess_on_download": DEFAULTS.APP_AUTOPROCESS_ON_DOWNLOAD,
             "cost_rate_per_hour": DEFAULTS.APP_COST_RATE_PER_HOUR,
             "whisper_cost_rate_per_hour": DEFAULTS.APP_WHISPER_COST_RATE_PER_HOUR,
+            "log_max_mb": DEFAULTS.APP_LOG_MAX_MB,
+            "log_backup_count": DEFAULTS.APP_LOG_BACKUP_COUNT,
         },
     )
 
@@ -234,6 +253,8 @@ def read_combined() -> dict[str, Any]:
             "autoprocess_on_download": app_s.autoprocess_on_download,
             "cost_rate_per_hour": app_s.cost_rate_per_hour,
             "whisper_cost_rate_per_hour": app_s.whisper_cost_rate_per_hour,
+            "log_max_mb": app_s.log_max_mb,
+            "log_backup_count": app_s.log_backup_count,
         },
     }
 
@@ -372,9 +393,15 @@ def _update_section_app(data: dict[str, Any]) -> tuple[int | None, int | None]:
         "autoprocess_on_download",
         "cost_rate_per_hour",
         "whisper_cost_rate_per_hour",
+        "log_max_mb",
+        "log_backup_count",
     ]:
         if key in data:
-            setattr(row, key, data[key])
+            value = data[key]
+            if key in _LOG_SETTING_LIMITS:
+                minimum, default = _LOG_SETTING_LIMITS[key]
+                value = _int_at_least(value, minimum, default)
+            setattr(row, key, value)
     safe_commit(
         db.session,
         must_succeed=True,
@@ -592,6 +619,13 @@ def to_pydantic_config() -> PydanticConfig:
                 DEFAULTS.APP_WHISPER_COST_RATE_PER_HOUR,
             )
         ),
+        log_max_mb=_int_at_least(
+            data["app"].get("log_max_mb"), *_LOG_SETTING_LIMITS["log_max_mb"]
+        ),
+        log_backup_count=_int_at_least(
+            data["app"].get("log_backup_count"),
+            *_LOG_SETTING_LIMITS["log_backup_count"],
+        ),
     )
 
 
@@ -615,6 +649,8 @@ def hydrate_runtime_config_inplace(db_config: PydanticConfig | None = None) -> N
 
     _commit_runtime_config(cfg)
     _log_final_snapshot()
+
+    configure_log_rotation(cfg.log_max_mb, cfg.log_backup_count)
 
 
 def _log_initial_snapshot(cfg: PydanticConfig) -> None:

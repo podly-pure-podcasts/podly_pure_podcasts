@@ -606,6 +606,16 @@ class AppSettings(db.Model):  # type: ignore[name-defined, misc]
         nullable=False,
         default=DEFAULTS.APP_WHISPER_COST_RATE_PER_HOUR,
     )
+    log_max_mb = db.Column(
+        db.Integer,
+        nullable=False,
+        default=DEFAULTS.APP_LOG_MAX_MB,
+    )
+    log_backup_count = db.Column(
+        db.Integer,
+        nullable=False,
+        default=DEFAULTS.APP_LOG_BACKUP_COUNT,
+    )
 
     # Hash of the environment variables used to seed configuration.
     # Used to detect changes in environment variables between restarts.

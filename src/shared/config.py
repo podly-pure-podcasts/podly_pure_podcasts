@@ -172,6 +172,14 @@ class Config(BaseModel):
     autoprocess_on_download: bool = DEFAULTS.APP_AUTOPROCESS_ON_DOWNLOAD
     cost_rate_per_hour: float = DEFAULTS.APP_COST_RATE_PER_HOUR
     whisper_cost_rate_per_hour: float = DEFAULTS.APP_WHISPER_COST_RATE_PER_HOUR
+    log_max_mb: int = Field(
+        default=DEFAULTS.APP_LOG_MAX_MB,
+        description="Rotate app.log when it reaches this size in MB. 0 turns rotation off.",
+    )
+    log_backup_count: int = Field(
+        default=DEFAULTS.APP_LOG_BACKUP_COUNT,
+        description="Number of rotated log files (app.log.1, app.log.2, ...) to keep.",
+    )
 
     def redacted(self) -> Config:
         return self.model_copy(
