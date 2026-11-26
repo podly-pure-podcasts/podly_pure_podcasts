@@ -4,9 +4,11 @@ import { Section, Field, ToggleField, SaveButton } from '../shared';
 const numberOrNull = (value: string) => (value === '' ? null : Number(value));
 
 export default function AppSection() {
-  const { pending, setField, handleSave, isSaving } = useConfigContext();
+  const { pending, setField, getEnvHint, isFieldReadOnly, handleSave, isSaving } = useConfigContext();
 
   if (!pending) return null;
+
+  const publishIncompleteReadOnly = isFieldReadOnly('app.publish_on_incomplete_ad_detection');
 
   return (
     <div className="space-y-6">
@@ -57,6 +59,16 @@ export default function AppSection() {
             hint="Lists every episode in the RSS feed; one that is not enabled is queued for processing when a podcast app first downloads it."
             checked={!!pending?.app?.autoprocess_on_download}
             onChange={(checked) => setField(['app', 'autoprocess_on_download'], checked)}
+          />
+          <ToggleField
+            label="Publish episodes when ad detection is incomplete"
+            hint="When ad detection does not finish after retries, publish the original audio with a spoken notice. Turn off to hold the episode back from the feed and fail the job instead."
+            envMeta={getEnvHint('app.publish_on_incomplete_ad_detection')}
+            checked={pending?.app?.publish_on_incomplete_ad_detection ?? true}
+            onChange={(checked) =>
+              setField(['app', 'publish_on_incomplete_ad_detection'], checked)
+            }
+            disabled={publishIncompleteReadOnly}
           />
         </div>
 

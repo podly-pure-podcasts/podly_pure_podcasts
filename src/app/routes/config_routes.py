@@ -234,6 +234,11 @@ def _hydrate_app_config(data: dict[str, Any]) -> None:
         "autoprocess_on_download",
         app_cfg.get("autoprocess_on_download"),
     )
+    app_cfg["publish_on_incomplete_ad_detection"] = getattr(
+        runtime_config,
+        "publish_on_incomplete_ad_detection",
+        app_cfg.get("publish_on_incomplete_ad_detection"),
+    )
 
 
 def _first_env(env_names: list[str]) -> tuple[str | None, str | None]:
@@ -283,6 +288,18 @@ _SIMPLE_LLM_ENV_MAP: dict[str, str] = {
     "LLM_MAX_INPUT_TOKENS_PER_MINUTE": "llm.llm_max_input_tokens_per_minute",
     "LLM_SERVICE_TIER": "llm.llm_service_tier",
 }
+
+_SIMPLE_APP_ENV_MAP: dict[str, str] = {
+    "PUBLISH_ON_INCOMPLETE_AD_DETECTION": "app.publish_on_incomplete_ad_detection",
+}
+
+
+def _register_app_overrides(overrides: dict[str, Any]) -> None:
+    """Register App-related environment overrides."""
+    for env_key, field_path in _SIMPLE_APP_ENV_MAP.items():
+        val = os.environ.get(env_key)
+        if val:
+            _register_override(overrides, field_path, env_key, val)
 
 
 def _register_llm_overrides(overrides: dict[str, Any]) -> None:
@@ -394,6 +411,7 @@ def _build_env_override_metadata(data: dict[str, Any]) -> dict[str, Any]:
     overrides: dict[str, Any] = {}
 
     _register_llm_overrides(overrides)
+    _register_app_overrides(overrides)
     _register_groq_shared_overrides(overrides)
 
     env_whisper_type = os.environ.get("WHISPER_TYPE")
@@ -469,12 +487,27 @@ def _get_whisper_overridden_fields() -> set[str]:
     return overridden
 
 
+def _get_app_overridden_fields() -> set[str]:
+    """Return set of app field paths overridden by environment variables."""
+    overridden: set[str] = set()
+
+    for env_key, field_path in _SIMPLE_APP_ENV_MAP.items():
+        if os.environ.get(env_key):
+            overridden.add(field_path)
+
+    return overridden
+
+
 def _get_env_overridden_fields() -> set[str]:
     """Return set of field paths that are overridden by environment variables.
 
     These fields should not be modified via the API - env vars are authoritative.
     """
-    return _get_llm_overridden_fields() | _get_whisper_overridden_fields()
+    return (
+        _get_llm_overridden_fields()
+        | _get_whisper_overridden_fields()
+        | _get_app_overridden_fields()
+    )
 
 
 def _strip_env_overridden_fields(
@@ -516,6 +549,16 @@ def _strip_env_overridden_fields(
                 whisper.pop(field_key)
                 stripped.append(field_path)
         cleaned["whisper"] = whisper
+
+    app_payload = cleaned.get("app")
+    if isinstance(app_payload, dict):
+        app_payload = dict(app_payload)
+        for field_path in _SIMPLE_APP_ENV_MAP.values():
+            field_key = field_path.split(".", 1)[1]
+            if field_path in overridden and field_key in app_payload:
+                app_payload.pop(field_key)
+                stripped.append(field_path)
+        cleaned["app"] = app_payload
 
     return cleaned, stripped
 

@@ -438,3 +438,57 @@ class TestConfigUpdateKeepsEnvOverlays:
             assert runtime_config.openai_timeout == 99
             assert runtime_config.llm_model == "env-model"
             assert runtime_config.llm_api_key == "env-api-key"
+
+    def test_publish_on_incomplete_ad_detection_env_override_and_ui_toggle(
+        self, app: Any, monkeypatch: Any
+    ) -> None:
+        """PUBLISH_ON_INCOMPLETE_AD_DETECTION overrides DB; without env var, PUT persists it."""
+        from app.config_store import hydrate_runtime_config_inplace
+        from app.routes.config_routes import config_bp
+        from app.runtime_config import config as runtime_config
+
+        app.register_blueprint(config_bp)
+        with app.app_context():
+            _create_default_settings()
+            original = runtime_config.publish_on_incomplete_ad_detection
+            try:
+                # Default is True; UI PUT can disable it in DB and runtime_config
+                hydrate_runtime_config_inplace()
+                assert runtime_config.publish_on_incomplete_ad_detection is True
+
+                put_resp = app.test_client().put(
+                    "/api/config",
+                    json={"app": {"publish_on_incomplete_ad_detection": False}},
+                )
+                assert put_resp.status_code == 200
+                assert runtime_config.publish_on_incomplete_ad_detection is False
+                app_row = AppSettings.query.get(1)
+                assert app_row is not None
+                assert app_row.publish_on_incomplete_ad_detection is False
+
+                # Env var overrides DB value and is reported read-only / stripped on PUT
+                monkeypatch.setenv("PUBLISH_ON_INCOMPLETE_AD_DETECTION", "true")
+                hydrate_runtime_config_inplace()
+                assert runtime_config.publish_on_incomplete_ad_detection is True
+
+                get_resp = app.test_client().get("/api/config")
+                assert get_resp.status_code == 200
+                get_data = get_resp.get_json()
+                assert (
+                    get_data["config"]["app"]["publish_on_incomplete_ad_detection"]
+                    is True
+                )
+                override = get_data["env_overrides"][
+                    "app.publish_on_incomplete_ad_detection"
+                ]
+                assert override["env_var"] == "PUBLISH_ON_INCOMPLETE_AD_DETECTION"
+                assert override["read_only"] is True
+
+                put_override_resp = app.test_client().put(
+                    "/api/config",
+                    json={"app": {"publish_on_incomplete_ad_detection": False}},
+                )
+                assert put_override_resp.status_code == 200
+                assert runtime_config.publish_on_incomplete_ad_detection is True
+            finally:
+                runtime_config.publish_on_incomplete_ad_detection = original

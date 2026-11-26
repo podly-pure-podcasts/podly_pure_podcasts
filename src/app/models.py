@@ -596,6 +596,11 @@ class AppSettings(db.Model):  # type: ignore[name-defined, misc]
         nullable=False,
         default=DEFAULTS.APP_AUTOPROCESS_ON_DOWNLOAD,
     )
+    publish_on_incomplete_ad_detection = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=DEFAULTS.APP_PUBLISH_ON_INCOMPLETE_AD_DETECTION,
+    )
     cost_rate_per_hour = db.Column(
         db.Float,
         nullable=False,
