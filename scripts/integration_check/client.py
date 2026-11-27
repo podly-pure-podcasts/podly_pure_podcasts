@@ -12,6 +12,8 @@ from urllib.parse import quote
 
 import requests
 
+from shared.user_agent import user_agent_headers
+
 
 def _encoded_guid(guid: str) -> str:
     return quote(guid, safe="")
@@ -47,6 +49,7 @@ class IntegrationTestClient:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.session = requests.Session()
+        self.session.headers.update(user_agent_headers())
 
     def _url(self, path: str) -> str:
         return f"{self.base_url}{path}"

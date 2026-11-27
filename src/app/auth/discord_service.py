@@ -12,6 +12,7 @@ from app.auth.discord_settings import DiscordSettings
 from app.extensions import db
 from app.models import User
 from app.writer.client import writer_client
+from shared.user_agent import user_agent_headers
 
 logger = logging.getLogger("global_logger")
 
@@ -65,7 +66,7 @@ def build_authorization_url(
 
 def exchange_code_for_token(settings: DiscordSettings, code: str) -> dict[str, Any]:
     """Exchange an authorization code for an access token (synchronous)."""
-    with httpx.Client() as client:
+    with httpx.Client(headers=user_agent_headers()) as client:
         response = client.post(
             DISCORD_OAUTH2_TOKEN,
             data={
@@ -84,7 +85,7 @@ def exchange_code_for_token(settings: DiscordSettings, code: str) -> dict[str, A
 
 def get_discord_user(access_token: str) -> DiscordUser:
     """Fetch Discord user info using an access token (synchronous)."""
-    with httpx.Client() as client:
+    with httpx.Client(headers=user_agent_headers()) as client:
         response = client.get(
             f"{DISCORD_API_BASE}/users/@me",
             headers={"Authorization": f"Bearer {access_token}"},
@@ -102,7 +103,7 @@ def check_guild_membership(access_token: str, settings: DiscordSettings) -> bool
     if not settings.guild_ids:
         return True
 
-    with httpx.Client() as client:
+    with httpx.Client(headers=user_agent_headers()) as client:
         response = client.get(
             f"{DISCORD_API_BASE}/users/@me/guilds",
             headers={"Authorization": f"Bearer {access_token}"},
